@@ -312,13 +312,6 @@
                             <h5 class="mt-2">Siêu Thị Thực Phẩm - CH01</h5>
                         </div>
 
-                        <!-- Company Info -->
-                        <div class="row mb-3 text-center">
-                            <div class="col-sm-4"><strong>Địa chỉ:</strong> {{ $config['user']?->address }}</div>
-                            <div class="col-sm-4"><strong>Điện thoại:</strong> {{ $config['user']?->phone }}</div>
-                            <div class="col-sm-4"><strong>Email:</strong> {{ $config['user']?->email }}</div>
-                        </div>
-
                         <hr>
 
                         <!-- Customer Info -->
@@ -345,9 +338,6 @@
 
                                 <!-- Cột phải -->
                                 <div class="col-md-6">
-                                    <div class="mb-2">
-                                        <span class="fw-bolder">Chi nhánh: </span> <span id="branch-name"></span>
-                                    </div>
                                     <div class="mb-2">
                                         <span class="fw-bolder">Thu ngân: </span> {{ Auth::user()->name }}
                                     </div>

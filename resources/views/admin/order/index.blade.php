@@ -6,16 +6,37 @@
 
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <div class="search-container">
-                    <input type="text" id="dateFilter" style="width: 350px" class="form-control search-input"
-                        placeholder="Chọn khoảng ngày">
+                <div class="row g-2 w-100">
+                    <!-- Ô lọc ngày -->
+                    <div class="col-md-3 col-12">
+                        <input type="text" id="dateFilter" class="form-control search-input" placeholder="Chọn khoảng ngày">
+                    </div>
+
+                    <!-- Trạng thái & Phương thức -->
+                    <div class="col-md-4 col-12 d-flex gap-2">
+                        <select id="filter-status" class="form-control">
+                            <option value="">-- Trạng thái --</option>
+                            <option value="1">Đã thanh toán</option>
+                            <option value="0">Công nợ</option>
+                        </select>
+
+                        <select id="filter-payment" class="form-control">
+                            <option value="">-- Phương thức --</option>
+                            <option value="cash">Tiền mặt</option>
+                            <option value="bank_transfer">Chuyển khoản</option>
+                            <option value="debt">Công nợ</option>
+                        </select>
+                    </div>
                 </div>
 
+
                 <div class="d-flex justify-content-end align-items-center">
-                    <input type="search" name="search" class="form-control me-2" style="width: 300px;"
+                    <input type="search" name="search" class="form-control me-2" style="width: 250px;"
                         placeholder="Tìm kiếm...">
 
-                    <button type="button" class="btn" id="btn-reset"> <i class="fa-solid fa-rotate"></i></button>
+                    <button type="button" class="btn" id="btn-reset">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -66,31 +87,40 @@
                 }
             });
 
-            // Hiển thị mặc định trên input khi load
             $('#dateFilter').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
 
-            $('#dateFilter').on('apply.daterangepicker', function(ev, picker) {
-                $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format(
-                    'DD/MM/YYYY'));
+            const fetchOrders = (page = 1, search, dateRange) => {
+                let status = $('#filter-status').val();
+                let paymentMethod = $('#filter-payment').val();
 
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
-            });
+                $.ajax({
+                    url: window.location.pathname,
+                    method: 'GET',
+                    data: {
+                        page,
+                        s: search,
+                        date_range: dateRange,
+                        status: status,
+                        payment_method: paymentMethod
+                    },
+                    success: (res) => {
+                        $('#table-wrapper').html(res.html);
+                    },
+                    error: (xhr) => {
+                        console.log(xhr);
+                    }
+                })
+            }
 
-            $('#dateFilter').on('cancel.daterangepicker', function(ev, picker) {
-                $(this).val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
-
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
+            $('#dateFilter').on('apply.daterangepicker cancel.daterangepicker', function() {
+                fetchOrders(1, searchText, $(this).val());
             });
 
             $(document).on('click', 'a.page-link', function(e) {
                 e.preventDefault();
-
                 let url = $(this).attr('href');
                 let page = new URL(url).searchParams.get("page");
-
-                fetchOrders(page, searchText);
+                fetchOrders(page, searchText, $('#dateFilter').val());
             });
 
             function debounce(fn, delay = 500) {
@@ -103,31 +133,20 @@
 
             $('input[name="search"]').on('input', debounce(function() {
                 searchText = $(this).val();
-                fetchOrders(1, searchText); // reset về page 1 khi search
+                fetchOrders(1, searchText, $('#dateFilter').val());
             }));
+
+            $('#filter-status, #filter-payment').on('change', function() {
+                fetchOrders(1, searchText, $('#dateFilter').val());
+            });
 
             $('#btn-reset').click(function() {
                 $('input[name="search"]').val('');
-                fetchOrders()
-            })
-
-            const fetchOrders = (page = 1, search, dateRange) => {
-                $.ajax({
-                    url: window.location.pathname,
-                    method: 'GET',
-                    data: {
-                        page,
-                        s: search,
-                        date_range: dateRange
-                    },
-                    success: (res) => {
-                        $('#table-wrapper').html(res.html);
-                    },
-                    error: (xhr) => {
-                        console.log(xhr);
-                    }
-                })
-            }
+                $('#filter-status').val('');
+                $('#filter-payment').val('');
+                $('#dateFilter').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+                fetchOrders();
+            });
 
             fetchOrders();
         })

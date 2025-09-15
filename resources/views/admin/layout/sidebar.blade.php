@@ -259,28 +259,37 @@
                     </div>
                 </li>
 
-                @if (Auth::user()->role_id === 1)
-                    <li class="nav-item {{ request()->routeIs('admin.users.index') ? 'active' : '' }}">
-                        <a href="/admin/users">
-                            <i class="fas fa-user-plus"></i>
-                            <p>Tạo tài khoản quản trị</p>
-                        </a>
-                    </li>
-                @endif
-
-                <li class="nav-item {{ request()->routeIs('admin.employees.index') ? 'active' : '' }}">
-                    <a href="{{ route('admin.employees.index') }}">
-                        <i class="fas fa-user-tie"></i>
-                        <p>Quản lý nhân viên</p>
-                    </a>
-                </li>
-
-                <li class="nav-item {{ request()->routeIs('admin.config.form') ? 'active' : '' }}">
-                    <a href="{{ route('admin.config.form') }}">
+                <li
+                    class="nav-item {{ request()->routeIs('admin.users.index', 'admin.employees.index', 'admin.config.form') ? 'active' : '' }}">
+                    <a data-bs-toggle="collapse" href="#config">
                         <i class="fas fa-cog"></i>
                         <p>Cấu hình chung</p>
+                        <span class="caret"></span>
                     </a>
+                    <div class="collapse {{ request()->routeIs('admin.users.index', 'admin.employees.index', 'admin.config.form') ? 'show' : '' }}"
+                        id="config">
+                        <ul class="nav nav-collapse">
+                            @if (Auth::user()->role_id === 1)
+                                <li class="{{ request()->routeIs('admin.users.index') ? 'active' : '' }}">
+                                    <a href="{{ url('/admin/users') }}">
+                                        <span class="sub-item">Tạo chi nhánh cửa hàng</span>
+                                    </a>
+                                </li>
+                            @endif
+                            <li class="{{ request()->routeIs('admin.employees.index') ? 'active' : '' }}">
+                                <a href="{{ route('admin.employees.index') }}">
+                                    <span class="sub-item">Quản lý nhân viên</span>
+                                </a>
+                            </li>
+                            <li class="{{ request()->routeIs('admin.config.form') ? 'active' : '' }}">
+                                <a href="{{ route('admin.config.form') }}">
+                                    <span class="sub-item">Thông tin chung</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </li>
+
             </ul>
         </div>
     </div>

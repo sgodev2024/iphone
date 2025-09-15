@@ -6,7 +6,7 @@
             <th>Nhân viên</th>
             <th>Khách hàng</th>
             <th>SL Sản phẩm</th>
-            <th>Trạng thại thanh toán</th>
+            <th>Phương thức thanh toán</th>
             <th>Trạng thái</th>
             <th class="text-end">Tổng tiền</th>
         </tr>

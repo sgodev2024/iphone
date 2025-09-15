@@ -29,7 +29,7 @@ class ProductRequest extends FormRequest
             'product_unit' => 'required|string|max:50',
             'quantity'     => 'required|integer|min:0',
             'category_id'  => 'required|exists:categories,id',
-            'brand_id'     => 'required|exists:brands,id',
+            'brand_id'     => 'nullable|exists:brands,id',
             'description'  => 'nullable|string',
             'is_featured'  => 'nullable|in:1',
             'status'       => 'required|boolean',

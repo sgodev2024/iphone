@@ -27,7 +27,8 @@ class OrderController extends Controller
             $searchText = $request->query('s');
             $dateRange = $request->query('date_range'); // ví dụ: "12/05/2025 - 12/04/2026"
             $start = $end = null;
-
+            $status         = $request->query('status'); // trạng thái thanh toán
+            $paymentMethod  = $request->query('payment_method'); // phương thức thanh toán
             if (!empty($dateRange)) {
                 $dates = explode(' - ', $dateRange);
                 if (count($dates) === 2) {
@@ -47,6 +48,12 @@ class OrderController extends Controller
                 })
                 ->when($start && $end, function ($query) use ($start, $end) {
                     $query->whereBetween('created_at', [$start, $end]);
+                })
+                ->when(!is_null($status) && $status !== '', function ($query) use ($status) {
+                    $query->where('status', $status);
+                })
+                ->when(!empty($paymentMethod), function ($query) use ($paymentMethod) {
+                    $query->where('payment_method', $paymentMethod);
                 })
                 ->with(['user', 'client', 'creator'])
                 ->withCount('orderDetails')
