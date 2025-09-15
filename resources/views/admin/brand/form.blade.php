@@ -20,22 +20,9 @@
                                     <input type="text" class="form-control" name="name"
                                         value="{{ optional($brand)->name }}" placeholder="Nhập tên thương hiệu">
                                 </div>
-
-                                <div class="col-md-6">
-                                    <label for="email" class="form-label mb-1 fw-bold">Email</label>
-                                    <input type="email" class="form-control" name="email"
-                                        value="{{ optional($brand)->email }}" placeholder="Nhập email">
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label for="phone" class="form-label mb-1 fw-bold">Số điện thoại</label>
-                                    <input type="phone" class="form-control" name="phone"
-                                        value="{{ optional($brand)->phone }}" placeholder="Nhập số điện thoại">
-                                </div>
-
                                 <div class="col-md-12">
-                                    <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
-                                    <textarea name="address" placeholder="Nhập địa chỉ" class="form-control">{{ optional($brand)->address }}</textarea>
+                                    <label for="description" class="form-label mb-1 fw-bold">Mô tả</label>
+                                    <textarea name="description" placeholder="Nhập mô tả" class="form-control">{{ optional($brand)->description }}</textarea>
                                 </div>
                             </div>
                         </div>

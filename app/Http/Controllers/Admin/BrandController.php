@@ -124,16 +124,12 @@ class BrandController extends Controller
     {
         return $this->validate($request, [
             'name' => 'required|max:255|unique:brands,name,' . $id,
-            'email' => 'nullable|email|max:255|unique:brands,email,' . $id,
-            'phone' => 'nullable|regex:/^[0-9]{10,11}$/|unique:brands,phone,' . $id,
-            'address' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:255',
             'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'status' => 'required|in:0,1'
         ], __('request.messages'), [
             'name' => 'Tên thương hiệu',
-            'email' => 'Email',
-            'phone' => 'Số điện thoại',
-            'address' => 'Địa chỉ',
+            'description' => 'Mô tả',
             'logo' => 'Logo',
             'status' => 'Trạng thái'
         ]);

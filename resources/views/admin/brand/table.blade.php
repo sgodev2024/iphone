@@ -5,7 +5,7 @@
             <th style="width: 14%"># | Ngày tạo</th>
             <th style="width: 10%">Logo</th>
             <th style="width: 25%">Thông tin</th>
-            <th>Địa chỉ</th>
+            <th>Mô tả</th>
             <th style="width: 12%">Trạng thái</th>
             <th class="text-center" style="width: 12%">Hành động</th>
         </tr>
@@ -26,12 +26,12 @@
                 </td>
                 <td>
                     <div class="text-muted">{{ $brand->name }}</div>
-                    <div class="text-muted small">{{ $brand->email }}</div>
-                    <div class="text-muted small">{{ $brand->phone }}</div>
+                    {{-- <div class="text-muted small">{{ $brand->email }}</div>
+                    <div class="text-muted small">{{ $brand->phone }}</div> --}}
                 </td>
                 <td>
-                    <div class="text-truncate" style="max-width: 200px;" title="{{ $brand->address }}">
-                        {{ $brand->address ?? '-' }}
+                    <div class="text-truncate" style="max-width: 200px;" title="{{ $brand->description }}">
+                        {{ $brand->description ?? '-' }}
                     </div>
                 </td>
                 <td>
