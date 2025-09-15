@@ -50,6 +50,7 @@ class OrderController extends Controller
                 })
                 ->with(['user', 'client', 'creator'])
                 ->withCount('orderDetails')
+                ->orderBy('created_at', 'desc')
                 ->paginate(10);
 
             return response()->json([

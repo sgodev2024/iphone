@@ -177,7 +177,7 @@ class OrderController extends Controller
         $userId = $user->role_id === 3 ? $user->manager_id : $user->id;
 
         DB::beginTransaction();
-
+        $status = $credentials['customer']['payment'] === 'debt' ? 0 : 1;
         try {
             $order = Order::create([
                 'client_id'      => $credentials['customer']['id'] ?? null,
@@ -192,7 +192,7 @@ class OrderController extends Controller
                 'discount_value'       => $discount,
                 'discount_type'       => $credentials['discountType'],
                 'total_money'    => $grand,
-                'status'         => 1, // Trạng thái đơn hàng, 0 = chờ xử lý
+                'status'         => $status, // Trạng thái đơn hàng, 0 = chờ xử lý
                 'created_by' => $user->id
             ]);
 

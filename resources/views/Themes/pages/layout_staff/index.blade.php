@@ -238,7 +238,7 @@
                                 <select id="paymentMethod" class="form-select">
                                     <option value="cash">Tiền mặt</option>
                                     <option value="bank_transfer">Chuyển khoản</option>
-                                    <option value="cod">Công nợ</option>
+                                    <option value="debt">Công nợ</option>
                                 </select>
                             </div>
                             <input type="hidden" id="custId">

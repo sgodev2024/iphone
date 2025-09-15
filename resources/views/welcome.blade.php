@@ -209,8 +209,8 @@
             </div>
 
             <!-- Charts and Tables -->
-            <div class="row g-4">
-                <div class="col-xl-8">
+            <div class="row g-4 mt-2">
+                <div class="col-xl-6">
                     <div class="chart-card">
                         <div class="chart-title">Doanh thu theo thời gian</div>
                         <div
@@ -223,7 +223,7 @@
                     </div>
                 </div>
 
-                <div class="col-xl-4">
+                <div class="col-xl-6">
                     <div class="table-card">
                         <div class="table-header">
                             <h5 class="table-title">Sản phẩm bán chạy</h5>
@@ -281,6 +281,8 @@
                                                     Tiền mặt
                                                 @elseif($order->payment_method === 'bank_transfer')
                                                     Chuyển khoản
+                                                @elseif($order->payment_method === 'debt')
+                                                    Công nợ
                                                 @else
                                                     {{ ucfirst($order->payment_method) }}
                                                 @endif

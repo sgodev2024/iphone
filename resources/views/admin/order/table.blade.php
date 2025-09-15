@@ -6,6 +6,7 @@
             <th>Nhân viên</th>
             <th>Khách hàng</th>
             <th>SL Sản phẩm</th>
+            <th>Trạng thại thanh toán</th>
             <th>Trạng thái</th>
             <th class="text-end">Tổng tiền</th>
         </tr>
@@ -30,7 +31,17 @@
                 <td>{{ $order->client->name ?? $order->name }}</td>
 
                 <td>{{ $order->order_details_count }}</td>
-
+                <td>
+                    @if ($order->payment_method === 'cash')
+                        Tiền mặt
+                    @elseif($order->payment_method === 'bank_transfer')
+                        Chuyển khoản
+                    @elseif($order->payment_method === 'debt')
+                        Công nợ
+                    @else
+                        {{ ucfirst($order->payment_method) }}
+                    @endif
+                </td>
                 <td>
                     {!! $order->status
                         ? '<span class="badge bg-primary">Đã hoàn thành</span>'
