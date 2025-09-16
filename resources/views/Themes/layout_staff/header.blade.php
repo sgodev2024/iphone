@@ -179,9 +179,10 @@
         <div class="container-fluid">
             <div class="d-flex align-items-center justify-content-between">
                 <!-- Left side: Search bar -->
-                <div class="">
+                <div class="text-center">
                     <a href="{{ route('staff.index') }}">
-                        <img style="width: 100px; height: auto;" src="{{ asset('images/aicrm1.png') }}" alt="logo">
+                        <img src="{{ showImage(optional($config)->logo) ?? asset('images/aicrm1.png') }}" alt="logo"
+                            style="max-width: 120px; height: auto; object-fit: contain;" />
                     </a>
                 </div>
                 <!-- Right side: Icons -->

@@ -17,9 +17,9 @@
                         <div class="card-body">
                             <div class="row gy-4">
                                 <div class="col-md-6">
-                                    <label for="name" class="form-label mb-1 fw-bold">Tên tài khoản</label>
+                                    <label for="name" class="form-label mb-1 fw-bold">Tên tài khoản chi nhánh</label>
                                     <input type="text" class="form-control" name="name"
-                                        value="{{ optional($user)->name }}" placeholder="Nhập tên tài khoản">
+                                        value="{{ optional($user)->name }}" placeholder="Nhập tên tài khoản chi nhánh">
                                 </div>
 
                                 <div class="col-md-6">

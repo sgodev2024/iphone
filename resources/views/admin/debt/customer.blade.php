@@ -19,21 +19,22 @@
         </div>
 
         <div class="card p-3 mb-3 shadow-sm">
-            <div class="row g-3 justify-content-end align-items-center">
-                <div class="col-md-3">
-                    <input type="text" id="dateFilter" name="date_range" class="form-control"
-                        placeholder="Chọn khoảng ngày">
-                </div>
-                <div class="col-md-3">
-                    <input type="text" class="form-control" name="name" placeholder="Tên khách hàng">
-                </div>
-                <div class="col-auto">
-                    <button type="button" id="filter" class="btn btn-primary">
-                        <i class="bi bi-search"></i> Lọc
-                    </button>
-                </div>
-            </div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <!-- Lọc ngày sang trái -->
+        <div class="d-flex align-items-center mb-2">
+            <input type="text" id="dateFilter" name="date_range" class="form-control" placeholder="Chọn khoảng ngày">
         </div>
+
+        <!-- Tên khách hàng và nút Lọc sang phải -->
+        <div class="d-flex align-items-center mb-2">
+            <input type="text" class="form-control me-2" name="name" placeholder="Tên khách hàng">
+            <button type="button" id="filter" class="btn btn-primary">
+                <i class="bi bi-search"></i> Lọc
+            </button>
+        </div>
+    </div>
+</div>
+
 
         <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle text-center mb-0" id="customerDebtTable">

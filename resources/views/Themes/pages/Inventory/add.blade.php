@@ -6,10 +6,6 @@
 
 
     <style>
-        body {
-            background-color: #f8f9fa;
-            padding-top: 20px;
-        }
 
         .container {
             background-color: #fff;

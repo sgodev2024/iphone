@@ -3,8 +3,10 @@
 namespace App\Providers;
 
 use App\Http\View\Composers\NotificationComposer;
+use App\Models\Config;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,6 +25,17 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('admin.layout.header', NotificationComposer::class);
+
+        // Chia sẻ $config cho tất cả view
+        View::composer('*', function ($view) {
+            $config = null;
+            if (Auth::check()) {
+                $config = Config::where('user_id', Auth::id())->first();
+            }
+            $view->with('config', $config);
+        });
+
+        // Set locale cho Carbon
         Carbon::setLocale('vi');
     }
 }

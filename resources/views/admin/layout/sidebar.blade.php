@@ -1,24 +1,27 @@
 <div class="sidebar no-print" data-background-color="dark">
     <div class="sidebar-logo">
-        <!-- Logo Header -->
-        <div class="logo-header" data-background-color="white">
-            <a href="{{ route('admin.dashboard') }}" class="logo">
-                <img src="{{ asset('images/sgovn.png') }}" alt="navbar brand" class="navbar-brand" style="width: 140px;" />
-            </a>
-            <div class="nav-toggle">
-                <button class="btn btn-toggle toggle-sidebar">
-                    <i class="gg-menu-right"></i>
-                </button>
-                <button class="btn btn-toggle sidenav-toggler">
-                    <i class="gg-menu-left"></i>
-                </button>
-            </div>
-            <button class="topbar-toggler more">
-                <i class="gg-more-vertical-alt"></i>
+    <!-- Logo Header -->
+    <div class="logo-header d-flex align-items-center justify-content-between" data-background-color="white">
+        <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
+            <img src="{{ showImage(optional($config)->logo) ?? asset('images/sgovn.png') }}"
+                 alt="navbar brand"
+                 class="navbar-brand"
+                 style="max-width: 140px; max-height: 60px; object-fit: contain;" />
+        </a>
+        <div class="nav-toggle d-flex">
+            <button class="btn btn-toggle toggle-sidebar">
+                <i class="gg-menu-right"></i>
+            </button>
+            <button class="btn btn-toggle sidenav-toggler">
+                <i class="gg-menu-left"></i>
             </button>
         </div>
-        <!-- End Logo Header -->
+        <button class="topbar-toggler more">
+            <i class="gg-more-vertical-alt"></i>
+        </button>
     </div>
+    <!-- End Logo Header -->
+</div>
 
     <div class="sidebar-wrapper scrollbar scrollbar-inner">
         <div class="sidebar-content">
