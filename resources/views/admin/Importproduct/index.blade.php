@@ -5,7 +5,8 @@
 
 <div class="page-inner">
     <div class="page-header">
-        <ul class="breadcrumbs mb-3">
+        <x-breadcrumb :items="[['label' => 'NHẬP HÀNG'], ['label' => 'DANH SÁCH PHIẾU NHẬP']]" />
+        {{-- <ul class="breadcrumbs mb-3">
             <li class="nav-home">
                 <a href="{{ route('admin.dashboard') }}">
                     <i class="icon-home"></i>
@@ -15,15 +16,15 @@
                 <i class="icon-arrow-right"></i>
             </li>
             <li class="nav-item">
-                <a href="#">Nhập hàng</a>
+                <a href="#">NHẬP HÀNG</a>
             </li>
             <li class="separator">
                 <i class="icon-arrow-right"></i>
             </li>
             <li class="nav-item">
-                <a href="#">Danh phiếu nhập</a>
+                <a href="#">DANH SÁCH PHIẾU NHẬP</a>
             </li>
-        </ul>
+        </ul> --}}
     </div>
 
     <div class="row">

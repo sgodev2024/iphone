@@ -3,7 +3,8 @@
 @section('content')
     <div class="page-inner">
         <div class="page-header">
-            <ul class="breadcrumbs mb-3">
+            <x-breadcrumb :items="[['label' => 'BÁO CÁO'],['label' => 'HÔM NAY']]" />
+            {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
                         <i class="icon-home"></i>
@@ -13,15 +14,15 @@
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="#">Báo cáo</a>
+                    <a href="#">BÁO CÁO</a>
                 </li>
                 <li class="separator">
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="#">Hôm nay</a>
+                    <a href="#">HÔM NAY</a>
                 </li>
-            </ul>
+            </ul> --}}
         </div>
 
         <div class="row">

@@ -2,7 +2,8 @@
 
 @section('content')
     <div class="page-inner">
-        <div class="page-header">
+        <x-breadcrumb :items="[['label' => 'Công nợ khách hàng']]" />
+        {{-- <div class="page-header">
             <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
@@ -13,10 +14,10 @@
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <span class="text-muted">công nợ khách hàng</span>
+                    <span class="text-muted">CÔNG NỢ KHÁCH HÀNG</span>
                 </li>
             </ul>
-        </div>
+        </div> --}}
 
         <div class="card p-3 mb-3 shadow-sm">
     <div class="d-flex justify-content-between align-items-center flex-wrap">

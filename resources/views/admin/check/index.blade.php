@@ -5,7 +5,8 @@
 
     <div class="page-inner">
         <div class="page-header">
-            <ul class="breadcrumbs mb-3">
+            <x-breadcrumb :items="[['label' => 'Phiếu kiểm kho', 'url' => route('admin.check.index')], ['label' => 'Danh sách']]" />
+            {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
                         <i class="icon-home"></i>
@@ -15,15 +16,15 @@
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ route('admin.check.index') }}">Phiếu kiểm kho</a>
+                    <a href="{{ route('admin.check.index') }}">PHIẾU KIỂM KHO</a>
                 </li>
                 <li class="separator">
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="{{ route('admin.check.index') }}">Danh sách</a>
+                    <a href="{{ route('admin.check.index') }}">DANH SÁCH</a>
                 </li>
-            </ul>
+            </ul> --}}
         </div>
 
         <div class="row">

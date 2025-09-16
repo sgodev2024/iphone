@@ -97,7 +97,8 @@
 
     <div class="page-inner">
         <div class="page-header">
-            <ul class="breadcrumbs mb-3">
+            <x-breadcrumb :items="[['label' => 'Người đại diện','url' => route('admin.supplier.index', ['company_id' => $company_id])], ['label' => 'Thêm']]" />
+            {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
                         <i class="icon-home"></i>
@@ -115,7 +116,7 @@
                 <li class="nav-item">
                     <a href="#">Thêm</a>
                 </li>
-            </ul>
+            </ul> --}}
         </div>
 
         <div class="row justify-content-center">

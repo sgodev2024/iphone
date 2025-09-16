@@ -3,7 +3,8 @@
 @section('content')
     <div class="page-inner">
         <div class="page-header">
-            <ul class="breadcrumbs mb-3">
+            <x-breadcrumb :items="[['label' => 'BÚT TOÁN']]" />
+            {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
                         <i class="icon-home"></i>
@@ -13,9 +14,9 @@
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <span class="text-muted">Bút toán</span>
+                    <span class="text-muted">BÚT TOÁN</span>
                 </li>
-            </ul>
+            </ul> --}}
         </div>
 
         @if (session('success'))

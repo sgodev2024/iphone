@@ -225,7 +225,7 @@
                         <div class="">
                             <form action="">
                                 <div class="input-group" style="margin-bottom: 20px;">
-                                    <i class="fas fa-search"></i>
+                                    {{-- <i class="fas fa-search"></i> --}}
                                     <input type="text" class="form-control" placeholder="Tìm kiếm sản phẩm"
                                         name="search" id="search" />
                                     <i class="fas fa-list" data-toggle="modal" data-target="#listcategory"></i>

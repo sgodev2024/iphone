@@ -132,7 +132,8 @@
     </style>
     <div class="page-inner">
         <div class="page-header">
-            <ul class="breadcrumbs mb-3">
+            <x-breadcrumb :items="[['label' => 'NGƯỜI ĐẠI DIỆN'], ['label' => 'sửa']]" />
+            {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
                         <i class="icon-home"></i>
@@ -150,7 +151,7 @@
                 <li class="nav-item">
                     <a href="#">Sửa</a>
                 </li>
-            </ul>
+            </ul> --}}
         </div>
         <div class="row">
             <div class="col-md-12">
