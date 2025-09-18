@@ -2,31 +2,8 @@
 
 @section('content')
     <div class="page-inner">
-        {{-- <div class="page-header">
-            <ul class="breadcrumbs mb-3">
-                <li class="nav-home">
-                    <a href="{{ route('admin.dashboard') }}">
-                        <i class="icon-home"></i>
-                    </a>
-                </li>
-                <li class="separator">
-                    <i class="icon-arrow-right"></i>
-                </li>
-                <li class="nav-item">
-                    <a href="/admin/transactions/cash">Thu chi tiền mặt</a>
-                </li>
-                <li class="separator">
-                    <i class="icon-arrow-right"></i>
-                </li>
-                <li class="nav-item">
-                    <span class="text-muted">Tạo phiếu thu chi tiền mặt</span>
-                </li>
-            </ul>
-        </div> --}}
-
         <div class="form-container">
             <form id="myForm">
-
                 @if (!empty($transaction))
                     @method('PUT')
                 @endif
@@ -45,13 +22,14 @@
                                 <div class="col-lg-6">
                                     <label class="form-label">Ngày thu chi</label>
                                     <input type="date" class="form-control" name="transaction_date"
-                                        value="{{ optional($transaction)->transaction_date ? optional($transaction)->transaction_date->format('Y-m-d') : date('Y-m-d') }}">
+                                        value="{{ optional($transaction)->transaction_date ? optional($transaction)->transaction_date->format('Y-m-d') : now()->format('Y-m-d') }}"
+                                        required>
                                 </div>
 
                                 <div class="col-lg-6">
                                     <label class="form-label required">Loại đối tượng</label>
-                                    <select name="obj_type" id="object-type" class="form-select">
-                                        <option value=""></option>
+                                    <select name="obj_type" id="object-type" class="form-select" required>
+                                        <option value="">Chọn loại đối tượng</option>
                                         <option value="client" @selected(optional($contraEntry)->tableable_type === 'App\Models\Client')>Khách hàng</option>
                                         <option value="supplier" @selected(optional($contraEntry)->tableable_type === 'App\Models\Supplier')>Nhà cung cấp</option>
                                     </select>
@@ -59,8 +37,8 @@
 
                                 <div class="col-md-6">
                                     <label class="form-label required">Tài khoản tiền mặt</label>
-                                    <select class="form-select" name="account_id" id="account_id">
-                                        <option value=""></option>
+                                    <select class="form-select" name="account_id" id="account_id" required>
+                                        <option value="">Chọn tài khoản</option>
                                         @foreach ($moneyAccounts as $moneyAccount)
                                             <option value="{{ $moneyAccount->id }}" @selected(optional($mainEntry)->account_id == $moneyAccount->id)>
                                                 {{ "$moneyAccount->code - $moneyAccount->name" }}
@@ -71,28 +49,25 @@
 
                                 <div class="col-md-6">
                                     <div class="position-relative">
-                                        <label class="form-label">Đối tượng</label>
-
+                                        <label class="form-label required">Đối tượng</label>
                                         <input type="text" id="object_code" class="form-control"
                                             placeholder="Nhập 3 ký tự để tìm đối tượng"
-                                            value="{{ !empty($contraEntry) ? $contraEntry->tableable->name . ' - ' : '' }}{{ !empty($contraEntry) ? $contraEntry->tableable->phone : '' }}">
-
-                                        <input type="hidden" name="obj_id"
+                                            value="{{ !empty($contraEntry) ? $contraEntry->tableable->name . ' - ' . $contraEntry->tableable->phone : '' }}"
+                                            required>
+                                        <input type="hidden" name="obj_id" id="object_id"
                                             value="{{ optional($contraEntry)->tableable_id }}">
-
                                         <div id="object-search-result"
                                             class="border bg-white position-absolute w-100 shadow-sm"
-                                            style="z-index: 9999; display: none;">
+                                            style="z-index: 9999; display: none; max-height: 200px; overflow-y: auto;">
                                             <!-- Kết quả sẽ render tại đây -->
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label class="form-label">Loại phiếu <span class="required">*</span></label>
-                                    <select class="form-select" name="type" id="type">
-                                        <option value=""></option>
-
+                                    <label class="form-label required">Loại phiếu</label>
+                                    <select class="form-select" name="type" id="type" required>
+                                        <option value="">Chọn loại phiếu</option>
                                         @if ($type === 'cash')
                                             <option value="income" @selected(optional($transaction)->type === 'income')>Phiếu thu</option>
                                             <option value="expense" @selected(optional($transaction)->type === 'expense')>Phiếu chi</option>
@@ -102,15 +77,11 @@
                                             <option value="credit_notice" @selected(optional($transaction)->type === 'credit_notice')>Báo có (Nộp tiền)
                                             </option>
                                         @endif
-
                                     </select>
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label class="form-label d-flex align-items-center">
-                                        Loại chứng từ
-                                    </label>
-
+                                    <label class="form-label">Loại chứng từ</label>
                                     <input type="text" name="document_type" placeholder="ví dụ: Đơn hàng"
                                         class="form-control" value="{{ optional($transaction)->document_type }}">
                                 </div>
@@ -137,9 +108,7 @@
                                                 </button>
                                             </div>
                                         @endif
-
                                         <div id="filePreviewArea" class="mb-2"></div>
-
                                         <div class="file-upload-text">
                                             Chọn file jpg, jpeg, gif, png, doc,... &lt;= 8MB
                                         </div>
@@ -148,8 +117,7 @@
                                             Chọn File
                                         </button>
                                         <input type="file" class="d-none" name="attachment" id="fileInput"
-                                            accept=".jpg,.jpeg,.gif,.png,.doc,.docx,.pdf">
-
+                                            accept=".jpg,.jpeg,.gif,.png,.doc,.docx,.pdf" maxlength="8">
                                         <input type="hidden" name="remove_attachment" id="removeAttachment"
                                             value="0">
                                     </div>
@@ -168,9 +136,8 @@
                                 <label class="form-label required">Số tiền (USD)</label>
                                 <input type="text" name="amount" class="form-control usd-price-format"
                                     value="{{ $mainEntry ? ($mainEntry->debit_amount > 0 ? formatPrice($mainEntry->debit_amount) : formatPrice($mainEntry->credit_amount)) : '' }}"
-                                    placeholder="0">
+                                    placeholder="0" required>
                             </div>
-
                             <div class="mb-3">
                                 <label class="form-label">Ghi chú</label>
                                 <textarea name="description" class="form-control" rows="3">{{ optional($transaction)->description }}</textarea>
@@ -179,7 +146,6 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons -->
                 @php
                     $backUrl = request()->is('admin/transactions/cash*')
                         ? '/admin/transactions/cash'
@@ -198,7 +164,6 @@
                         </button>
                     </div>
                 </div>
-
             </form>
         </div>
     </div>
@@ -226,109 +191,65 @@
                 let originalValue = $input.val();
                 let cursorPos = $input.prop("selectionStart");
 
-                // Xoá tất cả ký tự không phải số
                 let value = originalValue.replace(/\D/g, "");
-
-                // Format lại theo dấu chấm ngăn cách hàng nghìn
                 let newValue = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
-                // Gán giá trị mới vào input
                 $input.val(newValue);
 
-                // Tính lại vị trí con trỏ
                 if (cursorPos !== null) {
-                    // Đếm số dấu chấm trước và sau khi format
                     let oldDots = (originalValue.slice(0, cursorPos).match(/\./g) || []).length;
                     let newDots = (newValue.slice(0, cursorPos + (newValue.length - originalValue.length)).match(
                         /\./g) || []).length;
-
                     let newCursorPos = cursorPos + (newDots - oldDots);
                     newCursorPos = Math.min(newCursorPos, newValue.length);
-
-                    // Đặt lại vị trí con trỏ
                     $input[0].setSelectionRange(newCursorPos, newCursorPos);
                 }
             }
 
-
             $(document).on("input", ".usd-price-format", function(e) {
-                if (
-                    e.originalEvent.inputType === "insertText" &&
-                    e.originalEvent.data === "."
-                ) {
-                    return;
-                }
+                if (e.originalEvent.inputType === "insertText" && e.originalEvent.data === ".") return;
                 formatPrice($(this));
             });
 
-            // Format lại khi mất focus (blur)
             $(document).on("blur", ".usd-price-format", function() {
                 formatPrice($(this));
             });
 
-            $('#object-type').select2({
-                placeholder: "Chọn loại đối tượng",
-                allowClear: true,
-                width: '100%'
-            });
-
-            $('#type').select2({
-                placeholder: "Chọn loại phiếu",
-                allowClear: true,
-                width: '100%'
-            });
-
-            $('#corresponding-account').select2({
-                placeholder: "Chọn tài khoản đổi ứng",
-                allowClear: true,
-                width: '100%'
-            });
-
-            $('#account_id').select2({
-                placeholder: "Chọn tài khoản",
+            $('#object-type, #type, #account_id').select2({
+                placeholder: function() {
+                    return $(this).attr('placeholder') || "Chọn một tùy chọn";
+                },
                 allowClear: true,
                 width: '100%'
             });
 
             let typingTimer;
-            let doneTypingInterval = 500;
+            const doneTypingInterval = 500;
 
             $('#object-type').on('change', function() {
                 $('#object_code').val('');
-                $('input[name="objectable_id"]').val('');
+                $('#object_id').val('');
                 $('#object-search-result').hide();
-
-                const type = $(this).val();
-                const $correspondingWrapper = $('#corresponding-account-wrapper');
-
-                if (type === 'employee') {
-                    $correspondingWrapper.removeClass('d-none');
-                } else {
-                    $correspondingWrapper.addClass('d-none');
-                    $('#corresponding-account').val(''); // clear giá trị nếu không phải nhân viên
-                }
             });
 
             $('#object_code').on('keyup', function() {
-
                 clearTimeout(typingTimer);
-                let keyword = $(this).val();
+                let keyword = $(this).val().trim();
                 let type = $('#object-type').val();
 
                 if (keyword.length >= 3 && type) {
-                    typingTimer = setTimeout(function() {
-
+                    typingTimer = setTimeout(() => {
                         $.ajax({
                             url: '/admin/transactions/cash/search',
                             data: {
-                                type: type,
-                                keyword: keyword
+                                type,
+                                keyword
                             },
                             success: function(res) {
                                 let html = '';
                                 if (res.length > 0) {
                                     res.forEach(item => {
-                                        html += `<div class="p-2 border-bottom object-item" style="cursor: pointer;" data-id="${item.id}" data-phone="${item.phone}" data-code="${item.code}" data-name="${item.name}">
+                                        html += `<div class="p-2 border-bottom object-item" style="cursor: pointer;" data-id="${item.id}" data-phone="${item.phone}" data-name="${item.name}">
                                             ${item.name} - ${item.phone}
                                         </div>`;
                                     });
@@ -337,6 +258,11 @@
                                         `<div class="p-2 text-muted text-center">Không tìm thấy dữ liệu phù hợp</div>`;
                                 }
                                 $('#object-search-result').html(html).show();
+                            },
+                            error: function() {
+                                $('#object-search-result').html(
+                                    '<div class="p-2 text-muted text-center">Lỗi khi tìm kiếm</div>'
+                                    ).show();
                             }
                         });
                     }, doneTypingInterval);
@@ -349,12 +275,12 @@
                 let name = $(this).data('name');
                 let phone = $(this).data('phone');
                 let id = $(this).data('id');
-                $('#object_code').val(name + ' - ' + phone);
-                $('input[name="obj_id"]').val(id);
+                $('#object_code').val(`${name} - ${phone}`);
+                $('#object_id').val(id).trigger('change'); // Đảm bảo giá trị được cập nhật
                 $('#object-search-result').hide();
             });
 
-            $(document).click(function(e) {
+            $(document).on('click', function(e) {
                 if (!$(e.target).closest('#object-search-result, #object_code').length) {
                     $('#object-search-result').hide();
                 }
@@ -363,21 +289,29 @@
             let basePath = window.location.pathname.includes('/transactions/bank') ?
                 '/admin/transactions/bank' :
                 '/admin/transactions/cash';
-
             let url =
                 '{{ !empty($transaction) && !empty($mainEntry) && !empty($contraEntry) ? 'update' : 'store' }}';
-
             let fullUrl = `${basePath}/${url}`;
 
             $('#myForm').on('submit', function(e) {
                 e.preventDefault();
+                if (!validateForm()) {
+                    alert('Vui lòng điền đầy đủ các trường bắt buộc!');
+                    return;
+                }
 
                 let formData = new FormData(this);
+                // Đảm bảo obj_id được bao gồm
+                let objId = $('#object_id').val();
+                if (!objId) {
+                    alert('Vui lòng chọn một đối tượng hợp lệ!');
+                    return;
+                }
+                formData.set('obj_id', objId);
 
-                // Đảm bảo format lại các giá trị tiền tệ trước khi gửi
                 $(this).find('.usd-price-format').each(function() {
-                    const name = $(this).attr("name");
-                    const rawValue = $(this).val().replace(/\./g, "");
+                    const name = $(this).attr('name');
+                    const rawValue = $(this).val().replace(/\./g, '');
                     formData.set(name, rawValue);
                 });
 
@@ -395,15 +329,22 @@
                             window.location.href = res.redirect;
                         } else {
                             Toast.fire({
-                                icon: "error",
-                                title: 'Đã có lỗi xảy ra, vui lòng thử lại sau!'
+                                icon: 'error',
+                                title: res.message ||
+                                    'Đã có lỗi xảy ra, vui lòng thử lại sau!'
                             });
                         }
                     },
                     error: (xhr) => {
+                        const errors = xhr.responseJSON?.errors || {};
+                        let errorMessage = xhr.responseJSON?.message || 'Có lỗi xảy ra';
+                        if (Object.keys(errors).length > 0) {
+                            errorMessage = Object.values(errors).flat().join('<br>');
+                        }
                         Toast.fire({
-                            icon: "error",
-                            title: xhr.responseJSON.message
+                            icon: 'error',
+                            title: errorMessage,
+                            html: errorMessage
                         });
                     }
                 });
@@ -415,15 +356,10 @@
             const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
             const removeAttachment = document.getElementById('removeAttachment');
 
-            // Click nút chọn file
-            triggerFileInput?.addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            // Preview file mới khi chọn
+            triggerFileInput?.addEventListener('click', () => fileInput.click());
             fileInput?.addEventListener('change', () => {
                 const file = fileInput.files[0];
-                filePreviewArea.innerHTML = ''; // Clear preview
+                filePreviewArea.innerHTML = '';
                 if (!file) return;
 
                 const fileType = file.type;
@@ -448,20 +384,16 @@
                 }
             });
 
-            // Xoá file đính kèm hiện tại
             removeAttachmentBtn?.addEventListener('click', () => {
                 if (confirm('Bạn có chắc chắn muốn xoá file đính kèm này?')) {
                     removeAttachment.value = '1';
-                    removeAttachmentBtn.closest('div').remove(); // Ẩn block file đã có
+                    removeAttachmentBtn.closest('div').remove();
                 }
             });
 
-            // Form validation
-            const form = document.querySelector('form') || document.createElement('form');
-            const requiredFields = document.querySelectorAll('[required]');
-
             function validateForm() {
                 let isValid = true;
+                const requiredFields = document.querySelectorAll('[required]');
                 requiredFields.forEach(field => {
                     if (!field.value.trim()) {
                         field.classList.add('is-invalid');
@@ -472,26 +404,7 @@
                 });
                 return isValid;
             }
-
-            // Add validation on submit
-            document.querySelector('.btn-primary').addEventListener('click', function(e) {
-                if (!validateForm()) {
-                    e.preventDefault();
-                    alert('Vui lòng điền đầy đủ các trường bắt buộc!');
-                }
-            });
-
-            $('#addVoucherTypeBtn').on('click', function(e) {
-                e.preventDefault();
-
-                // Clear toàn bộ input, textarea bên trong form modal
-                $(this).find('input[type="text"], textarea').val('');
-
-                // Nếu muốn focus vào ô đầu tiên
-                $(this).find('input[type="text"]').first().focus();
-                $('#addVoucherTypeModal').modal('show');
-            });
-        })
+        });
     </script>
 @endpush
 
@@ -583,6 +496,10 @@
 
         .section-divider {
             border-left: 1px solid #dee2e6;
+        }
+
+        .is-invalid {
+            border-color: #dc3545;
         }
 
         @media (max-width: 768px) {

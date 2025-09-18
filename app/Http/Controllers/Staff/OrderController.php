@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Staff;
 
-use App\Http\Controllers\Controller;
-use App\Models\Config;
 use App\Models\Order;
+use App\Models\Config;
+use App\Models\Account;
 use App\Models\Product;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Models\TransactionEntry;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -205,6 +208,64 @@ class OrderController extends Controller
                 ]);
 
                 Product::where('id', $i['id'])->decrement('quantity', $i['qty']);
+            }
+            if (in_array($credentials['customer']['payment'], ['cash', 'bank_transfer', 'debt'])) {
+                $transaction = Transaction::create([
+                    'user_id'          => Auth::id(),
+                    'transaction_date' => now(),
+                    'description'      => "Bán hàng đơn {$order->code}",
+                    'type'             => 'income',
+                    'document_type'    => 'order',
+                    'reference_number' => $order->code,
+                    'created_by'       => Auth::id(),
+                ]);
+
+                if (in_array($credentials['customer']['payment'], ['cash', 'bank_transfer'])) {
+                    // --- CASE KHÁCH TRẢ TIỀN NGAY ---
+                    $moneyAccountCode = $credentials['customer']['payment'] === 'cash' ? 'TMCH' : 'tech';
+                    $moneyAccountId   = Account::where('code', $moneyAccountCode)->value('id');
+
+                    if (!$moneyAccountId) {
+                        throw new \Exception("Không tìm thấy tài khoản {$moneyAccountCode}");
+                    }
+
+                    // Nợ TM/Bank
+                    TransactionEntry::create([
+                        'transaction_id' => $transaction->id,
+                        'account_id'     => $moneyAccountId,
+                        'debit_amount'   => $grand,
+                        'credit_amount'  => 0,
+                    ]);
+
+                    // Có 131 – Giảm công nợ khách
+                    $receivableAccountId = Account::where('code', '131')->value('id');
+                    TransactionEntry::create([
+                        'transaction_id' => $transaction->id,
+                        'account_id'     => $receivableAccountId,
+                        'debit_amount'   => 0,
+                        'credit_amount'  => $grand,
+                        'tableable_type' => 'App\\Models\\Client',
+                        'tableable_id'   => $order->client_id,
+                    ]);
+                }
+
+                if ($credentials['customer']['payment'] === 'debt') {
+                    // --- CASE KHÁCH MUA GHI NỢ ---
+                    $receivableAccountId = Account::where('code', '131')->value('id');
+                    if (!$receivableAccountId) {
+                        throw new \Exception("Không tìm thấy tài khoản 131");
+                    }
+
+                    //  Nợ 131 – Phải thu khách hàng
+                    TransactionEntry::create([
+                        'transaction_id' => $transaction->id,
+                        'account_id'     => $receivableAccountId, // luôn là 131 khi công nợ
+                        'debit_amount'   => $grand,
+                        'credit_amount'  => 0,
+                        'tableable_type' => 'App\\Models\\Client',
+                        'tableable_id'   => $order->client_id,
+                    ]);
+                }
             }
 
             DB::commit();

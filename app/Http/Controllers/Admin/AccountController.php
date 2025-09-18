@@ -237,32 +237,40 @@ class AccountController extends Controller
                     GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount ELSE 0 END),0),0) AS opening_debit,
                     GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.credit_amount ELSE 0 END),0),0) AS opening_credit,
 
-                    GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.debit_amount ELSE 0 END),0),0) AS period_debit,
-                    GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.credit_amount ELSE 0 END),0),0) AS period_credit,
+                -- Phát sinh trong kỳ (Ghi Nợ) loại trừ account_id = 21
+                COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND at.id != 21 THEN te.debit_amount ELSE 0 END),0) AS period_debit,
+                -- Phát sinh trong kỳ (Ghi Có) chỉ account_id = 21
+                COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0) AS period_credit,
 
                     GREATEST((
-                        COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount ELSE 0 END),0)
-                        + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.debit_amount ELSE 0 END),0)
-                        - COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.credit_amount ELSE 0 END),0)
-                        - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.credit_amount ELSE 0 END),0)
-                    ),0) AS closing_balance_debit,
+                         -- Nợ trước kỳ (loại trừ account_id = 21)
+                        COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+                         -- Nợ trong kỳ (loại trừ account_id = 21)
+                        + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+                        -- Có trước kỳ (chỉ account_id = 21)
+                        - COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id = 21 THEN te.credit_amount ELSE 0 END),0)
+                        -- Có trong kỳ (chỉ account_id = 21)
+                        - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.credit_amount ELSE 0 END),0)
+                        ),0) AS closing_balance_debit,
 
                     GREATEST((
-                        COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.credit_amount ELSE 0 END),0)
-                        + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.credit_amount ELSE 0 END),0)
-                        - COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount ELSE 0 END),0)
-                        - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN te.debit_amount ELSE 0 END),0)
-                    ),0) AS closing_balance_credit
+                        -- Có trước kỳ (chỉ account_id = 21) => dùng debit_amount
+                        COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0)
+                        -- Có trong kỳ (chỉ account_id = 21) => dùng debit_amount
+                        + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0)
+                        -- Nợ trước kỳ (loại trừ account_id = 21)
+                        - COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+                        -- Nợ trong kỳ (loại trừ account_id = 21)
+                        - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+                        ),0) AS closing_balance_credit
 
                 FROM account_tree at
                     LEFT JOIN transaction_entries te
                         ON te.account_id = at.id
-                        AND te.tableable_type IS NULL
-                        AND te.tableable_id IS NULL
                     LEFT JOIN transactions t
                         ON t.id = te.transaction_id
                         AND t.type != 'other'
-                        AND t.user_id = ?   -- ✅ thêm điều kiện user_id
+                        AND t.user_id = ?   -- lọc theo user_id
                 WHERE (at.code LIKE ? OR at.name LIKE ?)
                 GROUP BY at.id, at.code, at.name, at.level, at.path
                 ORDER BY at.path
