@@ -7,11 +7,14 @@
 
         <div class="card">
             <div class="card-header">
-                <div class="row g-3 justify-content-end align-items-center">
+                <div class="row g-3 align-items-center">
+                    <!-- Lọc ngày sang trái -->
                     <div class="col-md-3">
                         <input type="text" id="dateFilter" class="form-control" placeholder="Chọn khoảng ngày">
                     </div>
-                    <div class="col-md-3">
+
+                    <!-- Khoảng trống hoặc dùng offset nếu muốn -->
+                    <div class="col-md-3 ms-auto">
                         <input type="text" class="form-control" id="searchInput"
                             placeholder="Tìm kiếm mã hoặc tên tài khoản...">
                     </div>

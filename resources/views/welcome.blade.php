@@ -141,10 +141,11 @@
                             <i class="fas fa-users"></i>
                         </div>
                         <div class="metric-title">Khách hàng mới</div>
-                        <div class="metric-value">127</div>
-                        <div class="metric-change positive">
-                            <i class="fas fa-arrow-up"></i>
-                            15.2% so với tuần trước
+                        <div class="metric-value">{{ $newCustomers['today_new'] }}</div>
+                        <div class="metric-change {{ $newCustomers['percent_change'] >= 0 ? 'positive' : 'negative' }}">
+                            <i
+                                class="fas {{ $newCustomers['percent_change'] >= 0 ? 'fa-arrow-up' : 'fa-arrow-down' }}"></i>
+                            {{ abs($newCustomers['percent_change'] ?? 0) }}% so với hôm qua
                         </div>
                     </div>
                 </div>

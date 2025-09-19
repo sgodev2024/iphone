@@ -58,7 +58,7 @@ class UserController extends Controller
 
     public function create(Request $request)
     {
-        $title = "Thêm quản trị";
+        $title = "Thêm chi nhánh";
         $api = '/admin/users';
         $user = null;
         return view('admin.employee.form', compact('title', 'api', 'user'));

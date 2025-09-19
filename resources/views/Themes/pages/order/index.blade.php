@@ -17,7 +17,7 @@
 
                     <div class="d-flex justify-content-end align-items-center">
                         <input type="text" name="search" class="form-control me-2" style="width: 300px;"
-                            placeholder="Nhập tên chi nhánh">
+                            placeholder="Nhập tên hoặc mã đơn hàng...">
 
                         <button type="button" class="btn btn-outline-secondary" id="btn-reset"> <i
                                 class="fa-solid fa-rotate"></i></button>

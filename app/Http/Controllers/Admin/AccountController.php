@@ -310,4 +310,102 @@ class AccountController extends Controller
 
         return view('admin.account.balance');
     }
+    // public function balance(Request $request)
+    // {
+    //     if ($request->ajax()) {
+    //         $dateRange = $request->input('dateRange');
+    //         $searchInput = trim($request->input('searchInput'));
+
+    //         if ($dateRange) {
+    //             [$start, $end] = explode(' - ', $dateRange);
+    //             $startDate = Carbon::createFromFormat('d/m/Y', $start)->startOfDay();
+    //             $endDate = Carbon::createFromFormat('d/m/Y', $end)->endOfDay();
+    //         } else {
+    //             $endDate = Carbon::now()->endOfDay();
+    //             $startDate = $endDate->copy()->subMonth()->startOfDay();
+    //         }
+
+    //         $query = "
+    //         WITH RECURSIVE account_tree AS (
+    //             SELECT ma.id, ma.code, ma.name, ma.parent_id, ma.level, CAST(ma.code AS CHAR(255)) AS path
+    //             FROM accounts ma
+    //             WHERE ma.parent_id IS NULL
+
+    //             UNION ALL
+
+    //             SELECT child.id, child.code, child.name, child.parent_id, child.level, CONCAT(parent.path, '-', child.code) AS path
+    //             FROM accounts child
+    //             JOIN account_tree parent ON child.parent_id = parent.id
+    //         )
+    //         SELECT
+    //             at.id AS account_id,
+    //             at.code AS account_code,
+    //             at.name AS account_name,
+    //             at.level,
+    //             at.path,
+
+    //             GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount ELSE 0 END),0),0) AS opening_debit,
+    //             GREATEST(COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.credit_amount ELSE 0 END),0),0) AS opening_credit,
+
+    //             COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND at.id != 21 THEN te.debit_amount ELSE 0 END),0) AS period_debit,
+    //             COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0) AS period_credit,
+
+    //             GREATEST((
+    //                 COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+    //                 + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+    //                 - COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id = 21 THEN te.credit_amount ELSE 0 END),0)
+    //                 - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.credit_amount ELSE 0 END),0)
+    //             ),0) AS closing_balance_debit,
+
+    //             GREATEST((
+    //                 COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0)
+    //                 + COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id = 21 THEN te.debit_amount ELSE 0 END),0)
+    //                 - COALESCE(SUM(CASE WHEN t.transaction_date < ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+    //                 - COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? AND te.account_id != 21 THEN te.debit_amount ELSE 0 END),0)
+    //             ),0) AS closing_balance_credit
+
+    //         FROM account_tree at
+    //             LEFT JOIN transaction_entries te
+    //                 ON te.account_id = at.id
+    //             LEFT JOIN transactions t
+    //                 ON t.id = te.transaction_id
+    //                 AND (t.type IS NULL OR t.type != 'other')  -- vẫn loại trừ type 'other'
+    //         WHERE (at.code LIKE ? OR at.name LIKE ?)
+    //         GROUP BY at.id, at.code, at.name, at.level, at.path
+    //         ORDER BY at.path
+    //     ";
+
+    //         $bindings = [
+    //             $startDate,
+    //             $startDate,
+    //             $startDate,
+    //             $endDate,
+    //             $startDate,
+    //             $endDate,
+    //             $startDate,
+    //             $startDate,
+    //             $endDate,
+    //             $startDate,
+    //             $startDate,
+    //             $endDate,
+    //             $startDate,
+    //             $startDate,
+    //             $endDate,
+    //             $startDate,
+    //             $startDate,
+    //             $endDate,
+    //             "%{$searchInput}%",
+    //             "%{$searchInput}%"
+    //         ];
+
+    //         $accounts = DB::select($query, $bindings);
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'html' => view('admin.account.balance_table', compact('accounts'))->render()
+    //         ]);
+    //     }
+
+    //     return view('admin.account.balance');
+    // }
 }

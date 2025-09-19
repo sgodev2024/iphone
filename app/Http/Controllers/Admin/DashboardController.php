@@ -33,7 +33,7 @@ class DashboardController extends Controller
         $topSellingProducts = $this->getTopSellingProducts($startDate, $endDate);
         $lowStockProducts   = $this->getLowStockProducts();
         $latestOrders = $this->getLatestOrders();
-
+        $newCustomers       = $this->getNewCustomers($startDate, $endDate);
         return view('welcome', compact(
             'stats',
             'orderStats',
@@ -42,7 +42,8 @@ class DashboardController extends Controller
             'aovStats',
             'topSellingProducts',
             'lowStockProducts',
-            'latestOrders'
+            'latestOrders',
+            'newCustomers'
         ));
     }
 
@@ -234,5 +235,42 @@ class DashboardController extends Controller
             ->limit($limit)
             ->get()
             ->toArray();
+    }
+    private function getNewCustomers($startDate = null, $endDate = null): array
+    {
+        // Lấy khách hàng có đơn đầu tiên trong khoảng startDate -> endDate
+        $firstOrdersQuery = DB::table('orders as o')
+            ->select('o.client_id', DB::raw('MIN(o.created_at) as first_order_date'))
+            ->groupBy('o.client_id');
+
+        $newCustomerIds = DB::table(DB::raw("({$firstOrdersQuery->toSql()}) as t"))
+            ->mergeBindings($firstOrdersQuery)
+            ->whereBetween(DB::raw('DATE(first_order_date)'), [$startDate, $endDate])
+            ->pluck('client_id');
+
+        $count = $newCustomerIds->count();
+
+        // Hôm nay
+        $todayCount = DB::table(DB::raw("({$firstOrdersQuery->toSql()}) as t"))
+            ->mergeBindings($firstOrdersQuery)
+            ->whereDate('first_order_date', now()->toDateString())
+            ->count();
+        // Hôm qua
+        $yesterdayCount = DB::table(DB::raw("({$firstOrdersQuery->toSql()}) as t"))
+            ->mergeBindings($firstOrdersQuery)
+            ->whereDate('first_order_date', now()->subDay()->toDateString())
+            ->count();
+
+        $percentChange = null;
+        if ($yesterdayCount > 0) {
+            $percentChange = round(($todayCount - $yesterdayCount) / $yesterdayCount * 100, 2);
+        }
+
+        return [
+            'total_new'      => $count,
+            'today_new'      => $todayCount,
+            'yesterday_new'  => $yesterdayCount,
+            'percent_change' => $percentChange,
+        ];
     }
 }
