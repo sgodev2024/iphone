@@ -250,16 +250,23 @@ class OrderController extends Controller
                 }
 
                 if ($credentials['customer']['payment'] === 'debt') {
-                    // --- CASE KHÁCH MUA GHI NỢ ---
-                    $receivableAccountId = Account::where('code', '131')->value('id');
-                    if (!$receivableAccountId) {
-                        throw new \Exception("Không tìm thấy tài khoản 131");
+                    // --- CASE KHÁCH MUA CHỊU ---
+                    $receivableAccountId = Account::where('code', '131')->value('id'); // TK 131 - phải thu KH
+                    $revenueAccountId    = Account::where('code', '5111')->value('id'); // TK 511 - doanh thu
+                    if (!$receivableAccountId || !$revenueAccountId) {
+                        throw new \Exception("Không tìm thấy tài khoản 131 hoặc 511");
                     }
-
-                    //  Nợ 131 – Phải thu khách hàng
+                    // 1. Có 131 – Phải thu khách hàng
                     TransactionEntry::create([
                         'transaction_id' => $transaction->id,
-                        'account_id'     => $receivableAccountId, // luôn là 131 khi công nợ
+                        'account_id'     => $receivableAccountId,
+                        'debit_amount'   => 0,
+                        'credit_amount'  => $grand,
+                    ]);
+                    // 2. Nợ 5111 – Doanh thu bán hàng
+                    TransactionEntry::create([
+                        'transaction_id' => $transaction->id,
+                        'account_id'     => $revenueAccountId,
                         'debit_amount'   => $grand,
                         'credit_amount'  => 0,
                         'tableable_type' => 'App\\Models\\Client',

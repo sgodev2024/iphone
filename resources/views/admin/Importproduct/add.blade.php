@@ -118,10 +118,11 @@
                                                 <li data-id="{{ $item->id }}" class="product_inventory">
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
-                                                            <img style="width: 80px ; height: 70px;"
-                                                                src="{{ !empty($item->images) && isset($item->images[0]->image_path) ? asset($item->images[0]->image_path) : '' }}"
-                                                                alt="">
-
+                                                            <img style="width:80px; height:70px;"
+                                                                src="{{ !empty($item->images) && isset($item->images[0]->image_path)
+                                                                        ? asset('storage/' . $item->images[0]->image_path)
+                                                                        : asset('images/default.png') }}"
+                                                                        alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">
                                                             <p class="txtB ng-binding">{{ $item->name }} <span
@@ -215,7 +216,11 @@
                                                 </tr>
                                             </thead>
                                             <tbody id="import-data-product">
-
+                                                <tr>
+                                                    <td colspan="7" class="text-center text-muted">
+                                                        Vui lòng nhập để tìm kiếm sản phẩm
+                                                    </td>
+                                                </tr>
                                             </tbody>
                                         </table>
 
@@ -252,10 +257,12 @@
                                                         </div>
                                                         <div class="pull-right">
                                                             <input type="datetime-local" class="form-control"
-                                                                id="datetime" name="datetime" class="datetime-input"
-                                                                value="2024-07-18T16:24">
+                                                                id="datetime" name="datetime"
+                                                                value="{{ now()->format('Y-m-d\TH:i') }}">
                                                         </div>
                                                     </div>
+
+                                                    <!-- Nhà cung cấp -->
                                                     <div class="form-group mt-2">
                                                         <div class="pull-left user-created control-label ng-binding">
                                                             <span><i class="fa fa-user-circle-o"
@@ -266,15 +273,15 @@
                                                             <select name="supplier" class="form-control" id="supplier"
                                                                 style="width: 195px;">
                                                                 <option value="">--- Chọn nhà cung cấp ---</option>
-                                                                @foreach ($supplier as $key => $value)
+                                                                @foreach ($supplier as $value)
                                                                     <option value="{{ $value->id }}">
                                                                         {{ $value->name }}</option>
                                                                 @endforeach
                                                             </select>
-
-
                                                         </div>
                                                     </div>
+
+                                                    <!-- Kho hàng -->
                                                     <div class="form-group mt-3">
                                                         <div class="pull-left user-created control-label ng-binding">
                                                             <span><i class="fa fa-user-circle-o"
@@ -285,22 +292,23 @@
                                                             <select name="storage" class="form-control" id="storage"
                                                                 style="width: 195px;">
                                                                 <option value="">--- Chọn nhà kho hàng ---</option>
-                                                                @foreach ($storage as $key => $value)
+                                                                @foreach ($storage as $value)
                                                                     <option value="{{ $value->id }}">
                                                                         {{ $value->name }}</option>
                                                                 @endforeach
                                                             </select>
-
-
                                                         </div>
                                                     </div>
+
                                                     <div class="form-group" style="margin: 0px; padding: 0;">
-                                                        <div class="col-lg-12"><span
-                                                                class="invalid-feedback d-block pull-right"
+                                                        <div class="col-lg-12">
+                                                            <span class="invalid-feedback d-block pull-right"
                                                                 style="font-weight: 500; text-align: end"
-                                                                id="supplier_error"></span></div>
+                                                                id="supplier_error"></span>
+                                                        </div>
                                                     </div>
 
+                                                    <!-- Tổng tiền hàng -->
                                                     <div class="form-group">
                                                         <div class="pull-left user-created control-label ng-binding">
                                                             <span><i class="fa fa-user-circle-o"
@@ -311,6 +319,8 @@
                                                             100000
                                                         </div>
                                                     </div>
+
+                                                    <!-- Cần trả nhà cung cấp -->
                                                     <div class="form-group">
                                                         <div class="pull-left user-created control-label ng-binding">
                                                             <span><i class="fa fa-user-circle-o"
@@ -325,8 +335,8 @@
                                                         style="display: none;">
                                                     <div class="form-group">
                                                         <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
+                                                            <span><i class="fa fa-money"
+                                                                    title="Tiền trả nhà cung cấp"></i></span>
                                                             Tiền trả nhà cung cấp
                                                         </div>
                                                         <div class="pull-right" style="width: 80px;">
@@ -342,8 +352,7 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-primary"
-                                                    onclick="submitadd(event)">Lưu
-                                                </button>
+                                                    onclick="submitadd(event)">Lưu</button>
                                             </div>
                                         </form>
                                     </div>
@@ -368,6 +377,30 @@
                     }
                 }, ]
             },
+        }
+
+        function checkRequired(value) {
+            return value !== null && value.trim() !== "";
+        }
+
+        function validateAllFields(fields) {
+            let isValid = true;
+
+            for (let key in fields) {
+                let field = fields[key];
+                let value = field.element.value.trim();
+
+                field.validations.forEach(rule => {
+                    if (!rule.func(value)) {
+                        field.error.innerText = "Trường này bắt buộc!";
+                        isValid = false;
+                    } else {
+                        field.error.innerText = "";
+                    }
+                });
+            }
+
+            return isValid;
         }
 
         function submitadd(event) {
@@ -620,21 +653,31 @@
                 }
                 importhtml.empty();
 
-                if (importproduct.length === 0) {
-
-                } else {
+                if (importproduct.length === 0) {} else {
                     $.each(importproduct, function(index, item) {
                         var productHtml = `
-                        <tr data-id='${item.id}'  data-product='12'>
-                            <td class='delete'><i class="fas fa-trash-alt"></i></td>
-                            <td>${ index + 1 }</td>
-                            <td>123</td>
-                            <td>${item.product.name}</td>
-                            <td><input style='text-align: center;' type="number" class="numberInput" name="quantity" value='${item.quantity !== null ? item.quantity : ''}' oninput="this.value = this.value.replace(/[^0-9]/g, '');" ></td>
-                            <td class="giaban" contenteditable="true" oninput="this.innerText = this.innerText.replace(/[^0-9.]/g, '')">${item.price !== null ? item.price : ''}</td>
-                            <td class="total">${item.total !== null ? item.total : ''}</td>
-                        </tr>
-                    `;
+                <tr data-id='${item.id}' data-product='${item.product_id ?? ""}'>
+                    <td class='delete'><i class="fas fa-trash-alt"></i></td>
+                    <td>${ index + 1 }</td>
+                    <td>${ item.code
+                            ? item.code
+                            : (item.product && item.product.code ? item.product.code : "") }
+                    </td>
+                    <td>${ item.product && item.product.name ? item.product.name : "" }</td>
+                    <td>
+                        <input style='text-align: center;' type="number"
+                            class="numberInput"
+                            name="quantity"
+                            value='${item.quantity !== null ? item.quantity : ""}'
+                            oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                    </td>
+                    <td class="giaban" contenteditable="true"
+                        oninput="this.innerText = this.innerText.replace(/[^0-9.]/g, '')">
+                        ${item.price !== null ? item.price : ""}
+                    </td>
+                    <td class="total">${item.total !== null ? item.total : ""}</td>
+                </tr>
+            `;
                         importhtml.append(productHtml);
                     });
                 }

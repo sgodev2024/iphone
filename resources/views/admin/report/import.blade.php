@@ -75,10 +75,10 @@
                                                                 href="{{ route('admin.importproduct.importCoupon.detail', ['id' => $import->id]) }}">{{ $import->coupon_code }}</a>
                                                         </td>
                                                         <td>
-                                                            <a style="color:black"
+                                                            {{-- <a style="color:black"
                                                                 href="{{ route('admin.staff.edit', ['id' => $import->user->id]) }}">
                                                                 {{ $import->user->name ?? '' }}
-                                                            </a>
+                                                            </a> --}}
                                                         </td>
                                                         <td>{{ $import->created_at->format('d/m/Y') }}</td>
                                                         <td>
