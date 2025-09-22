@@ -119,10 +119,8 @@
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width:80px; height:70px;"
-                                                                src="{{ !empty($item->images) && isset($item->images[0]->image_path)
-                                                                        ? asset('storage/' . $item->images[0]->image_path)
-                                                                        : asset('images/default.png') }}"
-                                                                        alt="Sản phẩm">
+                                                                src="{{ !empty($item->thumbnail) ? asset('storage/' . $item->thumbnail) : asset('images/default.png') }}"
+                                                                alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">
                                                             <p class="txtB ng-binding">{{ $item->name }} <span

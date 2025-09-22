@@ -28,15 +28,16 @@ class ImportProductController extends Controller
         $this->companyService = $companyService;
         $this->storageService = $storageService;
     }
-    public function index()
+    public function index(Request $request)
     {
-        
         $title = 'Nhập hàng';
-        $import = $this->importProductService->getImportCoupon();
-        return view('admin.Importproduct.index', compact('title', 'import'));
+        $search = $request->input('search');
+        $import = $this->importProductService->getImportCoupon(10, $search);
+        return view('admin.Importproduct.index', compact('title', 'import', 'search'));
     }
 
-    public function importdetail($id){
+    public function importdetail($id)
+    {
         $title = 'Thông tin hóa đơn';
         $importdetail = $this->importProductService->getImportCouponByid($id);
         return view('admin.Importproduct.detail', compact('title', 'importdetail'));
@@ -44,13 +45,13 @@ class ImportProductController extends Controller
 
     public function add()
     {
-         $title = 'Nhập hàng';
+        $title = 'Nhập hàng';
         $products = $this->productService->getProductAll_Staff();
         $category = $this->categoryService->getCategoryAllStaff();
         $supplier = $this->companyService->getCompany();
         $storage = $this->storageService->getAllStorage();
         $user = Auth::user();
-        return view('admin.Importproduct.add', compact('products', 'user', 'supplier','category', 'storage' , 'title'));
+        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'title'));
     }
 
     public function importadd(Request $request)
@@ -82,15 +83,15 @@ class ImportProductController extends Controller
         $id = $request->dataId;
         $value = $request->value;
         $import = Import::find($id);
-        if($value !== null){
+        if ($value !== null) {
             $import->update([
                 'quantity' => $value,
-                'total' =>  $import->price * $value ,
+                'total' =>  $import->price * $value,
             ]);
-        }else{
+        } else {
             $import->update([
                 'quantity' => $value,
-                'total' =>  null ,
+                'total' =>  null,
             ]);
         }
         $imports = Import::get();
@@ -104,19 +105,20 @@ class ImportProductController extends Controller
         ]);
     }
 
-    public function importupdateprice(Request $request){
+    public function importupdateprice(Request $request)
+    {
         $id = $request->dataId;
         $value = $request->value;
         $import = Import::find($id);
-        if($value !== null){
+        if ($value !== null) {
             $import->update([
                 'price' => $value,
-                'total' =>  $import->quantity * $value ,
+                'total' =>  $import->quantity * $value,
             ]);
-        }else{
+        } else {
             $import->update([
                 'price' => $value,
-                'total' =>  null ,
+                'total' =>  null,
             ]);
         }
         $imports = Import::get();
@@ -130,7 +132,8 @@ class ImportProductController extends Controller
         ]);
     }
 
-    public function importdelete(Request $request){
+    public function importdelete(Request $request)
+    {
         $id = $request->id;
         $import = Import::find($id);
         $import->delete();
@@ -160,10 +163,11 @@ class ImportProductController extends Controller
         ]);
     }
 
-    public function addCategory(Request $request){
+    public function addCategory(Request $request)
+    {
         $list_id = $request->selectedValues;
         $imports = Import::get();
-        foreach($list_id as $item){
+        foreach ($list_id as $item) {
             $product = $this->productService->getProductByCategory($item);
             foreach ($product as $key => $value) {
 
