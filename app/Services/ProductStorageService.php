@@ -118,7 +118,7 @@ class ProductStorageService
                         $soldQuantity = $this->orderDetail->whereHas('order', function ($query) use ($latestImport) {
                             $query->where('created_at', '>', $latestImport->created_at);
                         })->where('product_id', $currentProductId)
-                            ->sum('quantity');
+                            ->sum('p_quantity');
 
                         //Tính số lượng trước khi nhập hàng
                         $quantityBeforeImport = $currentQuantity + $soldQuantity - $importedQuantity;
