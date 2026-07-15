@@ -119,7 +119,7 @@
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width:80px; height:70px;"
-                                                                src="{{ !empty($item->thumbnail) ? asset('storage/' . $item->thumbnail) : asset('images/default.png') }}"
+                                                                src="{{ showImage($item->thumbnail) }}"
                                                                 alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">

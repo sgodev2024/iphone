@@ -253,7 +253,7 @@
                                     </div>
                                     <div class="form-group">
                                         <img id="profileImage"
-                                            src="{{ isset($data->logo) && !empty($data->logo) ? asset($data->logo) : asset('images/avatar2.jpg') }}"
+                                            src="{{ isset($data->logo) && !empty($data->logo) ? showImage($data->logo) : asset('images/avatar2.jpg') }}"
                                             alt="image profile" class="avatar">
                                     </div>
                                 </div>

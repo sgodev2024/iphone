@@ -238,8 +238,8 @@
                                                     <div class="mr-4">
 
                                                         <img style="width: 80px ; height: 70px;"
-                                                            src="{{ !empty($item->images) && isset($item->images[0]->image_path) ? asset($item->images[0]->image_path) : '' }}"
-                                                            alt="">
+                                                            src="{{ !empty($item->images) && isset($item->images[0]->image_path) ? showImage($item->images[0]->image_path) : asset('assets/img/default-image.jpg') }}"
+                                                            alt="Sản phẩm">
 
                                                     </div>
                                                     <div class="ovh">

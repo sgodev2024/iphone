@@ -88,7 +88,9 @@ Route::middleware('guest')->group(function () {
 // Route::get('/employee', function () {
 //     return view('Themes.pages.employee.index');
 // })->name('employee');
-
+Route::get('/', function () {
+    return redirect()->route('auth.login');
+});
 Route::middleware(['auth'])
     ->prefix('admin')
     ->name('admin.')
@@ -303,7 +305,7 @@ Route::middleware(['auth'])
                 Route::post('/import/update/price', [ImportProductController::class, 'importupdateprice'])->name('import.update.price');
                 Route::get('/import/delete', [ImportProductController::class, 'importdelete'])->name('import.delete');
                 Route::post('/import/addCategory', [ImportProductController::class, 'addCategory'])->name('import.addCategory');
-                
+
                 // tạo phiếu
                 Route::post('/importCoupon', [importCouponController::class, 'add'])->name('importCoupon.add');
                 Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])->name('importCoupon.detail');
