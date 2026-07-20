@@ -58,28 +58,53 @@ class ProductController extends Controller
 
     public function product(Request $request)
     {
-        // $user = Auth::user();
-        // $storage_id = $user->storage_id;
-        // $productStorages = ProductStorage::with('product')
-        //     ->where('storage_id', $storage_id)
-        //     ->where('quantity', '>', 0)
-        //     ->orderByDesc('created_at')
-        //     ->get();
         $user = Auth::user();
-        $userId = $user->id;
+        $storageId = $user->storage_id;
 
-        if ($user->role_id === 3) {
-            $userId = $user->manager_id;
+        if (!$storageId) {
+            return response()->json([
+                'message' => 'Nhân viên chưa được gán kho bán hàng.',
+            ], 422);
         }
+
+        $userId = $user->role_id === 3 ? ($user->manager_id ?? $user->id) : $user->id;
 
         $searchText = $request->input('searchText');
 
-        $products = Product::query()
-            ->where('user_id', $userId)
-            ->when(!empty($searchText), function ($query) use ($searchText) {
-                $query->where('name', 'like', "%$searchText%");
+        $productStorages = ProductStorage::query()
+            ->with('product')
+            ->where('storage_id', $storageId)
+            ->where('quantity', '>', 0)
+            ->whereHas('product', function ($query) use ($searchText, $userId) {
+                $query->where('user_id', $userId)
+                    ->where('status', true)
+                    ->when(!empty($searchText), function ($query) use ($searchText) {
+                        $query->where(function ($query) use ($searchText) {
+                            $query->where('name', 'like', "%$searchText%")
+                                ->orWhere('code', 'like', "%$searchText%");
+                        });
+                    });
             })
+            ->orderByDesc('created_at')
             ->get();
+
+        $products = $productStorages->map(function (ProductStorage $stock) {
+            $product = $stock->product;
+
+            if (!$product) {
+                return null;
+            }
+
+            $data = $product->toArray();
+            $data['id'] = $product->id;
+            $data['product_id'] = $product->id;
+            $data['quantity'] = (int) $stock->quantity;
+            $data['available_quantity'] = (int) $stock->quantity;
+            $data['storage_id'] = (int) $stock->storage_id;
+            $data['images'] = $product->images;
+
+            return $data;
+        })->filter()->values();
 
         return response()->json($products);
     }
@@ -244,11 +269,22 @@ class ProductController extends Controller
 
         $user = Auth::user();
         $storage_id = $user->storage_id;
+
+        if (!$storage_id) {
+            return response()->json([
+                'message' => 'Nhân viên chưa được gán kho bán hàng.',
+            ], 422);
+        }
+
+        $userId = $user->role_id === 3 ? ($user->manager_id ?? $user->id) : $user->id;
+
         $productStorages = ProductStorage::with('product')
             ->where('storage_id', $storage_id)
             ->where('quantity', '>', 0)
-            ->whereHas('product', function ($query) use ($name) {
-                $query->where('name', 'like', "%{$name}%");
+            ->whereHas('product', function ($query) use ($name, $userId) {
+                $query->where('user_id', $userId)
+                    ->where('status', true)
+                    ->where('name', 'like', "%{$name}%");
             })
             ->orderByDesc('created_at')
             ->get();
@@ -260,9 +296,12 @@ class ProductController extends Controller
 
             $products[] = [
                 'id' => $product->id,
+                'product_id' => $product->id,
                 'name' => $product->name,
                 'price_buy' => $product->price_buy,
                 'quantity' => $storage->quantity,
+                'available_quantity' => (int) $storage->quantity,
+                'storage_id' => (int) $storage->storage_id,
                 'product_unit' => $product->product_unit,
                 'images' => $product->images
             ];

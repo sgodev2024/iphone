@@ -11,7 +11,7 @@ use App\Models\ClientDebtsDetail;
 use App\Models\Config;
 use App\Models\Order;
 use App\Models\OrderDetail;
-use App\Models\Product;
+use App\Models\ProductStorage;
 use App\Models\ReceiptDetail;
 use App\Services\ClientService;
 use App\Services\DebtKHService;
@@ -129,8 +129,26 @@ class ClientController extends Controller
 
         foreach ($cartItems as $key => $item) {
             $sum += $item->price * $item->amount;
-            // $this->productService->updateProductAmount($item->product_id, ['quantity' => $item->product->quantity - $item->amount]);
-            $productupdate = Product::find($item->product_id)->update(['quantity' => $item->product->quantity - $item->amount]);
+
+            $stock = ProductStorage::query()
+                ->where('product_id', $item->product_id)
+                ->where('storage_id', $storageId)
+                ->with('product')
+                ->first();
+
+            if (!$stock) {
+                return response()->json([
+                    'message' => "Sản phẩm {$item->product->name} không có trong kho đang bán.",
+                ], HttpFoundationResponse::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            if ((int) $stock->quantity < (int) $item->amount) {
+                $productName = $stock->product->name ?? $item->product->name;
+
+                return response()->json([
+                    'message' => "Sản phẩm {$productName} chỉ còn {$stock->quantity} sản phẩm trong kho, không đủ bán {$item->amount} sản phẩm.",
+                ], HttpFoundationResponse::HTTP_UNPROCESSABLE_ENTITY);
+            }
         }
 
         if ($listphone->contains($request->phone)) {

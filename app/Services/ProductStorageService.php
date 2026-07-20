@@ -50,20 +50,29 @@ class ProductStorageService
     {
         DB::beginTransaction();
         try {
-            // Tìm kiếm productStorage dựa trên product_id và storage_id
             $productStorage = $this->productStorage->where([
                 ['product_id', '=', $productId],
                 ['storage_id', '=', $storageId],
-            ])->first();
+            ])
+                ->with('product')
+                ->lockForUpdate()
+                ->first();
 
-            // Kiểm tra nếu không tìm thấy kết quả
             if (!$productStorage) {
                 throw new Exception('Product storage not found.');
             }
 
-            // Giảm số lượng và lưu lại
-            $productStorage->quantity -= $amount;
-            $productStorage->save();
+            if ((int) $amount <= 0) {
+                throw new Exception('Product amount must be greater than zero.');
+            }
+
+            if ((int) $productStorage->quantity < (int) $amount) {
+                $productName = $productStorage->product->name ?? "#{$productId}";
+                throw new Exception("Sản phẩm {$productName} chỉ còn {$productStorage->quantity} sản phẩm trong kho, không đủ bán {$amount} sản phẩm.");
+            }
+
+            $productStorage->decrement('quantity', (int) $amount);
+            $this->syncProductTotalQuantity((int) $productId);
 
             DB::commit();
             return $productStorage;
@@ -72,6 +81,14 @@ class ProductStorageService
             Log::error('Failed to update products amount: ' . $e->getMessage());
             throw new Exception('Failed to update products amount');
         }
+    }
+
+    private function syncProductTotalQuantity(int $productId): void
+    {
+        DB::statement(
+            'UPDATE products SET quantity = (SELECT COALESCE(SUM(quantity), 0) FROM product_storage WHERE product_id = ?), updated_at = ? WHERE id = ?',
+            [$productId, now()->toDateTimeString(), $productId]
+        );
     }
 
     public function inventoryReport($storage_id)
