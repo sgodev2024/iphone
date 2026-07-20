@@ -41,10 +41,10 @@ Generated at: 2026-07-20 11:12 +07:00
 ## Schema dump
 
 - Ran `php artisan schema:dump`.
-- Result: failed because `mysqldump` is not installed or not available in `PATH`.
-- Checked common Windows install locations for MySQL, MariaDB, XAMPP, and Laragon; no `mysqldump.exe` was found.
-- Because the official Laravel command failed, no trusted `database/schema/mysql-schema.sql` was produced.
-- Artifact with full error: `storage/app/schema-sync/schema-dump.txt`.
+- Earlier run in this Codex process failed because `mysqldump` was not available in `PATH`.
+- `database/schema/mysql-schema.sql` now exists and contains 55 `CREATE TABLE` statements.
+- Re-running `php artisan schema:dump` from this Codex process still fails because the current process environment has not picked up `mysqldump`.
+- Artifact with the latest Codex-side error: `storage/app/schema-sync/schema-dump-rerun.txt`.
 
 ## Commands run
 

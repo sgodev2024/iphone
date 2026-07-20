@@ -160,12 +160,74 @@
             }
         }
 
+        function clearValidationErrors($form) {
+            $form.find(".is-invalid").removeClass("is-invalid");
+            $form.find(".js-validation-error, .server-validation-error").remove();
+        }
+
+        function findFormField($form, name) {
+            const candidates = [name];
+
+            if (name.includes(".")) {
+                candidates.push(name.replace(/\.(\w+)/g, "[$1]"));
+            }
+
+            for (const candidate of candidates) {
+                const escaped = candidate.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+                const $field = $form.find(`[name="${escaped}"]`).first();
+
+                if ($field.length) {
+                    return $field;
+                }
+            }
+
+            return $();
+        }
+
+        function renderValidationErrors($form, errors) {
+            let $firstField = null;
+
+            Object.entries(errors || {}).forEach(([field, messages]) => {
+                const $field = findFormField($form, field);
+                const message = Array.isArray(messages) ? messages[0] : messages;
+
+                if (!$field.length || !message) {
+                    return;
+                }
+
+                $field.addClass("is-invalid");
+
+                const $feedback = $("<span />", {
+                    class: "invalid-feedback d-block js-validation-error",
+                    text: message,
+                });
+                const $insertAfter = $field.closest(".input-group").length ?
+                    $field.closest(".input-group") :
+                    $field;
+
+                $feedback.insertAfter($insertAfter);
+
+                if (!$firstField) {
+                    $firstField = $field;
+                }
+            });
+
+            if ($firstField?.length) {
+                $firstField[0].scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+                $firstField.trigger("focus");
+            }
+        }
+
         function handleSubmit(formId, successCallback, url = null, errorCallback = null) {
 
             $(formId).on("submit", function(e) {
                 e.preventDefault();
 
                 const $form = $(this);
+                clearValidationErrors($form);
 
                 // ✅ Validate toàn bộ form dùng formValidator
                 if (
@@ -173,7 +235,6 @@
                     typeof formValidator.validate === "function"
                 ) {
                     if (!formValidator.validate()) {
-                        $btn.prop("disabled", false).html(originalText);
                         return;
                     }
                 }
@@ -220,8 +281,20 @@
                             return;
                         }
 
+                        if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                            renderValidationErrors($form, xhr.responseJSON.errors);
+                            datgin?.warning(
+                                xhr.responseJSON?.message ||
+                                "Vui lòng kiểm tra lại thông tin."
+                            );
+                            return;
+                        }
+
                         if (typeof errorCallback === "function") {
-                            errorCallback(xhr);
+                            const handled = errorCallback(xhr, $form);
+                            if (handled === false) {
+                                return;
+                            }
                         }
 
                         datgin?.error(

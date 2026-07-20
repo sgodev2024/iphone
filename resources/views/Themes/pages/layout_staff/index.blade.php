@@ -861,7 +861,11 @@
                         renderProductResults(res)
                     },
                     error: (xhr) => {
-                        alert('Đã có lỗi xảy ra. Vui lòng thử lại sau!')
+                        Toast.fire({
+                            icon: "error",
+                            title: xhr.responseJSON?.message ||
+                                'Đã có lỗi xảy ra. Vui lòng thử lại sau!'
+                        });
                     }
                 });
             }
