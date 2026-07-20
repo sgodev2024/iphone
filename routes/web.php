@@ -43,9 +43,6 @@ use App\Http\Controllers\Admin\SupportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\BulkController;
 use App\Http\Controllers\MultipleController;
-use App\Http\Controllers\SuperAdmin\CampaignController;
-use App\Http\Controllers\SuperAdmin\ZnsMessageController;
-use App\Http\Controllers\SuperAdmin\ZaloController;
 use App\Http\Middleware\CheckLogin;
 use App\Http\Middleware\CheckLoginSuperAdmin;
 use Illuminate\Support\Facades\Route;
@@ -419,30 +416,6 @@ Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staf
 Route::get('super-dang-nhap', [SuperAdminController::class, 'loginForm'])->name('super.dang.nhap');
 Route::post('super-dang-nhap', [SuperAdminController::class, 'login'])->name('super.login.submit');
 Route::middleware(CheckLoginSuperAdmin::class)->prefix('super-admin')->name('super.')->group(function () {
-    Route::prefix('campaign')->name('campaign.')->group(function () {
-        Route::get('add', [CampaignController::class, 'add'])->name('add');
-        Route::get('', [CampaignController::class, 'index'])->name('index');
-        Route::get('fetch', [CampaignController::class, 'fetch'])->name('fetch');
-        Route::post('store', [CampaignController::class, 'store'])->name('store');
-        Route::get('detail/{id}', [CampaignController::class, 'edit'])->name('detail');
-        Route::post('update/{id}', [CampaignController::class, 'update'])->name('update');
-        Route::delete('delete/{id}', [CampaignController::class, 'delete'])->name('delete');
-        Route::post('update-status/{id}', [CampaignController::class, 'updateStatus'])->name('updateStatus');
-    });
-    Route::prefix('zalo')->name('zalo.')->group(function () {
-        Route::get('zns', [ZaloController::class, 'index'])->name('zns');
-        Route::get('/get-active-oa-name', [ZaloController::class, 'getActiveOaName'])->name('getActiveOaName');
-        Route::post('/update-oa-status/{oaId}', [ZaloController::class, 'updateOaStatus'])->name('updateOaStatus');
-        Route::post('/refresh-access-token', [ZaloController::class, 'refreshAccessToken'])->name('refreshAccessToken');
-    });
-    Route::prefix('message')->name('message.')->group(function () {
-        Route::get('', [ZnsMessageController::class, 'znsMessage'])->name('znsMessage');
-        Route::get('/quota', [ZnsMessageController::class, 'znsQuota'])->name('znsQuota');
-        Route::get('template', [ZnsMessageController::class, 'templateIndex'])->name('znsTemplate');
-        Route::get('refresh', [ZnsMessageController::class, 'refreshTemplates'])->name('znsTemplateRefresh');
-        Route::get('detail', [ZnsMessageController::class, 'getTemplateDetail'])->name('znsTemplateDetail');
-        Route::get('test', [ZnsMessageController::class, 'test'])->name('test');
-    });
     Route::get('/detail/{id}', [SuperAdminController::class, 'getSuperAdminInfor'])->name('detail');
     Route::post('/update/{id}', [SuperAdminController::class, 'updateSuperAdminInfo'])->name('update');
     Route::post('logout', [SuperAdminController::class, 'logout'])->name('logout');

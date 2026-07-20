@@ -8,8 +8,6 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\UserInfo;
 use App\Models\Storage;
-use App\Models\Campaign;
-use App\Models\CampaignDetail;
 
 class User extends Authenticatable
 {
@@ -73,25 +71,6 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Roles::class, 'role_id');
     }
-    // Relationship with CampaignDetail
-    public function campaignDetails()
-    {
-        return $this->hasMany(CampaignDetail::class, 'user_id');
-    }
-
-    // Access Campaigns through CampaignDetail
-    public function campaigns()
-    {
-        return $this->hasManyThrough(
-            Campaign::class,          // Target model
-            CampaignDetail::class,    // Intermediate model
-            'user_id',                // Foreign key on CampaignDetail table
-            'id',                     // Foreign key on Campaign table (assumes campaign_id)
-            'id',                     // Local key on User table
-            'campaign_id'             // Local key on CampaignDetail table
-        );
-    }
-
     public function transaction()
     {
         return $this->hasMany(Transaction::class, 'user_id');

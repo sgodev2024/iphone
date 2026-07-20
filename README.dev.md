@@ -1,4 +1,4 @@
-
+﻿
 composer require tymon/jwt-auth --ignore-platform-req=ext-ftp
 &&
 composer require tymon/jwt-auth
@@ -24,18 +24,18 @@ php artisan queue:table + migrate
 php artisan queue:work
 
 //server
-Chạy Nền (Background):
+Cháº¡y Ná»n (Background):
 
-Để đảm bảo rằng worker queue luôn hoạt động, bạn có thể chạy lệnh này dưới dạng một process nền. Trên server Linux, bạn có thể sử dụng các công cụ như screen hoặc tmux để chạy lệnh này trong một phiên nền.
-Ví dụ, dùng screen:
+Äá»ƒ Ä‘áº£m báº£o ráº±ng worker queue luÃ´n hoáº¡t Ä‘á»™ng, báº¡n cÃ³ thá»ƒ cháº¡y lá»‡nh nÃ y dÆ°á»›i dáº¡ng má»™t process ná»n. TrÃªn server Linux, báº¡n cÃ³ thá»ƒ sá»­ dá»¥ng cÃ¡c cÃ´ng cá»¥ nhÆ° screen hoáº·c tmux Ä‘á»ƒ cháº¡y lá»‡nh nÃ y trong má»™t phiÃªn ná»n.
+VÃ­ dá»¥, dÃ¹ng screen:
 
 bash
 Copy code
 screen -dmS laravel-worker php artisan queue:work
-Sử dụng Supervisor:
+Sá»­ dá»¥ng Supervisor:
 
-Để quản lý và tự động khởi động worker queue khi server khởi động hoặc khi worker bị dừng, bạn nên sử dụng công cụ quản lý process như supervisor.
-Ví dụ cấu hình supervisor:
+Äá»ƒ quáº£n lÃ½ vÃ  tá»± Ä‘á»™ng khá»Ÿi Ä‘á»™ng worker queue khi server khá»Ÿi Ä‘á»™ng hoáº·c khi worker bá»‹ dá»«ng, báº¡n nÃªn sá»­ dá»¥ng cÃ´ng cá»¥ quáº£n lÃ½ process nhÆ° supervisor.
+VÃ­ dá»¥ cáº¥u hÃ¬nh supervisor:
 
 ini
 Copy code
@@ -48,7 +48,7 @@ user=www-data
 numprocs=1
 redirect_stderr=true
 stdout_logfile=/var/log/supervisor/laravel-worker.log
-Sau khi cấu hình supervisor, bạn có thể khởi động nó bằng lệnh:
+Sau khi cáº¥u hÃ¬nh supervisor, báº¡n cÃ³ thá»ƒ khá»Ÿi Ä‘á»™ng nÃ³ báº±ng lá»‡nh:
 
 bash
 Copy code

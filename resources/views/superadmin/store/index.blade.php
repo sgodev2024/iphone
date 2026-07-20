@@ -130,35 +130,6 @@
             margin-right: 0.5rem;
         }
 
-        /* Accordion styles */
-        .accordion-button {
-            cursor: pointer;
-            text-align: left;
-            border: none;
-            outline: none;
-            background: #f8f9fa;
-            padding: 0.5rem;
-            width: 100%;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        .accordion-content {
-            display: none;
-            padding: 0.5rem;
-            border-top: 1px solid #dee2e6;
-            background: #fff;
-        }
-
-        .accordion-content ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .accordion-content ul li {
-            padding: 0.25rem 0;
-        }
     </style>
     <div class="page-inner">
         <div class="page-header">
@@ -214,7 +185,6 @@
                                                     <th>Tên chủ</th>
                                                     <th>Ngày tạo</th>
                                                     <th>Ngày hết hạn</th>
-                                                    <th>Chiến dịch</th>
                                                     <th style="text-align: center">Hành động</th>
                                                 </tr>
                                             </thead>
@@ -233,24 +203,6 @@
                                                                 </td>
                                                                 <td>{{ isset($value->created_at)? \Carbon\Carbon::parse($value->created_at)->addMonths(6)->format('d/m/Y'): '' }}
                                                                 </td>
-                                                                <td>
-                                                                    {{-- Accordion for campaigns --}}
-                                                                    @if ($value->campaignDetails && $value->campaignDetails->isNotEmpty())
-                                                                        <button class="accordion-button">
-                                                                            Xem chiến dịch
-                                                                        </button>
-                                                                        <div class="accordion-content">
-                                                                            <ul>
-                                                                                @foreach ($value->campaignDetails as $campaignDetail)
-                                                                                    <li>{{ $campaignDetail->campaign->name ?? 'Không có tên chiến dịch' }}
-                                                                                    </li>
-                                                                                @endforeach
-                                                                            </ul>
-                                                                        </div>
-                                                                    @else
-                                                                        Không có chiến dịch
-                                                                    @endif
-                                                                </td>
                                                                 <td style="text-align:center">
                                                                     <a class="btn btn-warning"
                                                                         href="{{ route('super.store.detail', ['id' => $value->id]) }}">Chi
@@ -264,7 +216,7 @@
                                                     @endforeach
                                                 @else
                                                     <tr>
-                                                        <td class="text-center" colspan="7">
+                                                        <td class="text-center" colspan="6">
                                                             <div class="">
                                                                 Chưa có cửa hàng
                                                             </div>
@@ -290,12 +242,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-notify/0.2.0/js/bootstrap-notify.min.js"></script>
     <script>
         $(document).ready(function() {
-            // Accordion functionality
-            $('.accordion-button').click(function() {
-                $(this).next('.accordion-content').slideToggle();
-                $(this).toggleClass('active');
-            });
-
             // Notify functionality
             @if (session('success'))
                 $.notify({

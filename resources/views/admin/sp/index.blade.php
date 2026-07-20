@@ -54,20 +54,6 @@
             color: #333;
         }
 
-        .zalo-link {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
-        }
-
-        .zalo-link:hover {
-            background-color: #0056b3;
-        }
-
         .btn {
             padding: 5px 10px;
             border: none;
@@ -128,10 +114,6 @@
                 <div class="contact-item">
                     <h2>Email</h2>
                     <p>support@example.com</p>
-                </div>
-                <div class="contact-item">
-                    <h2>Zalo</h2>
-                    <p><a class="zalo-link" href="https://zalo.me/tentkhoan">Zalo của tôi</a></p>
                 </div>
             </div>
             <div style="margin: 10px 10px;">
