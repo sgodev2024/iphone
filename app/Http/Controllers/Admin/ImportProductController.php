@@ -10,8 +10,12 @@ use App\Services\CompanyService;
 use App\Services\ImportProductService;
 use App\Services\ProductService;
 use App\Services\StorageService;
+use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class ImportProductController extends Controller
 {
@@ -34,6 +38,48 @@ class ImportProductController extends Controller
         $search = $request->input('search');
         $import = $this->importProductService->getImportCoupon(10, $search);
         return view('admin.Importproduct.index', compact('title', 'import', 'search'));
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        if (!Auth::check() || !in_array((int) Auth::user()->role_id, [1, 2, 4], true)) {
+            return response()->json([
+                'message' => 'Bạn không có quyền xóa phiếu nhập.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:import_coupon,id'],
+        ]);
+
+        $ids = collect($validated['ids'])
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        try {
+            $deletedCount = $this->importProductService->deleteImportCoupons($ids, Auth::user());
+
+            return response()->json([
+                'message' => "Đã xóa thành công {$deletedCount} phiếu nhập.",
+            ]);
+        } catch (DomainException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (Throwable $exception) {
+            Log::error('Failed to bulk delete import coupons.', [
+                'ids' => $ids,
+                'user_id' => Auth::id(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Đã có lỗi xảy ra. Vui lòng thử lại sau!',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     public function importdetail($id)

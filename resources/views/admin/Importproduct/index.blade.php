@@ -11,16 +11,33 @@
                 <div class="card">
                     {{-- Header --}}
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        {{-- Form tìm kiếm --}}
-                        <form method="GET" action="{{ route('admin.importproduct.index') }}"
-                            class="d-flex align-items-center">
-                            <!-- Ô tìm kiếm -->
-                            <input type="search" name="search" value="{{ request('search') }}" class="form-control me-2"
-                                style="width: 250px;" placeholder="Tìm kiếm...">
-                            <!-- Nút reset -->
-                            <button type="button" class="btn" id="btn-reset"> <i
-                                    class="fa-solid fa-rotate"></i></button>
-                        </form>
+                        <div class="d-flex justify-content-between align-items-center gap-2">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    Thao tác
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="#" id="bulk-delete">
+                                            <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            {{-- Form tìm kiếm --}}
+                            <form method="GET" action="{{ route('admin.importproduct.index') }}"
+                                class="d-flex align-items-center">
+                                <!-- Ô tìm kiếm -->
+                                <input type="search" name="search" value="{{ request('search') }}"
+                                    class="form-control me-2" style="width: 300px;" placeholder="Tìm kiếm...">
+                                <!-- Nút reset -->
+                                <button type="button" class="btn" id="btn-reset">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                            </form>
+                        </div>
                         {{-- Nút nhập hàng --}}
                         <a class="btn btn-success" href="{{ route('admin.importproduct.add') }}">
                             <i class="fa-solid fa-plus"></i> Nhập hàng
@@ -32,7 +49,7 @@
                             <table id="basic-datatables" class="display table table-striped table-hover">
                                 <thead>
                                     <tr>
-                                        <th><input type="checkbox" id="check-all"></th>
+                                        <th><input type="checkbox" id="select-all"></th>
                                         <th>STT</th>
                                         <th>Mã đơn hàng</th>
                                         <th>Nhân viên</th>
@@ -46,7 +63,8 @@
                                     @forelse ($import as $key => $item)
                                         <tr>
                                             <td>
-                                                <input type="checkbox" class="product-checkbox" value="{{ $item->id }}">
+                                                <input type="checkbox" class="row-checkbox" name="ids[]"
+                                                    value="{{ $item->id }}">
                                             </td>
                                             <td>{{ $import->firstItem() + $key }}</td>
                                             <td>
@@ -81,24 +99,84 @@
             </div>
         </div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-notify/0.2.0/js/bootstrap-notify.min.js"></script>
-    @if (session('success'))
-        <script>
-            $(document).ready(function() {
-                $.notify({
-                    icon: 'icon-bell',
-                    title: 'Sản phẩm',
-                    message: '{{ session('success') }}',
-                }, {
-                    type: 'secondary',
-                    placement: {
-                        from: "bottom",
-                        align: "right"
-                    },
-                    time: 1000,
+@endsection
+
+@push('script')
+    <script>
+        $(function() {
+            const $selectAll = $('#select-all');
+            const bulkDeleteUrl = @json(route('admin.importproduct.bulk-delete'));
+            const indexUrl = @json(route('admin.importproduct.index'));
+
+            const getRowCheckboxes = () => $('.row-checkbox');
+
+            const updateSelectAllState = () => {
+                const $rows = getRowCheckboxes();
+                const total = $rows.length;
+                const checked = $rows.filter(':checked').length;
+
+                $selectAll.prop('checked', total > 0 && checked === total);
+                $selectAll.prop('indeterminate', false);
+            };
+
+            $selectAll.on('change', function() {
+                getRowCheckboxes().prop('checked', $(this).prop('checked'));
+                updateSelectAllState();
+            });
+
+            $(document).on('change', '.row-checkbox', updateSelectAllState);
+
+            $('#bulk-delete').on('click', function(e) {
+                e.preventDefault();
+
+                const ids = getRowCheckboxes()
+                    .filter(':checked')
+                    .map((i, el) => $(el).val())
+                    .get();
+
+                if (ids.length <= 0) {
+                    return datgin.warning('Vui lòng chọn ít nhất một phiếu nhập cần xóa.');
+                }
+
+                Swal.fire({
+                    title: 'Xác nhận xóa?',
+                    text: 'Bạn có chắc chắn muốn xóa các phiếu nhập đã chọn không?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Vâng, xóa ngay!',
+                    cancelButtonText: 'Hủy'
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    $.ajax({
+                        url: bulkDeleteUrl,
+                        method: 'POST',
+                        data: {
+                            ids
+                        },
+                        success: (res) => {
+                            datgin.success(res.message);
+                            getRowCheckboxes().prop('checked', false);
+                            updateSelectAllState();
+                            window.location.reload();
+                        },
+                        error: (xhr) => {
+                            datgin.error(xhr.responseJSON?.message ||
+                                'Đã có lỗi xảy ra. Vui lòng thử lại sau!');
+                        }
+                    });
                 });
             });
-        </script>
-    @endif
-@endsection
+
+            $('#btn-reset').on('click', function() {
+                window.location.href = indexUrl;
+            });
+
+            updateSelectAllState();
+        });
+    </script>
+@endpush

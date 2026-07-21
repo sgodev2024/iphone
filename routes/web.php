@@ -296,6 +296,7 @@ Route::middleware(['auth'])
             Route::prefix('importproduct')->name('importproduct.')->group(function () {
                 Route::get('/', [ImportProductController::class, 'index'])->name('index');
                 Route::get('/add', [ImportProductController::class, 'add'])->name('add');
+                Route::post('/bulk-delete', [ImportProductController::class, 'bulkDelete'])->name('bulk-delete');
                 Route::get('/import', [ImportProductController::class, 'listImport'])->name('import');
                 Route::post('/import/add', [ImportProductController::class, 'importadd'])->name('import.add');
                 Route::post('/import/update', [ImportProductController::class, 'importupdate'])->name('import.update');
