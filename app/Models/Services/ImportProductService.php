@@ -51,7 +51,6 @@ class ImportProductService
     public function addImportDetail($data){
         try {
             Log::info('Fetching add importDetail');
-            // dd($data);
             $importDetail  = $this->importDetail->create($data);
             return $importDetail;
         } catch (Exception $e) {

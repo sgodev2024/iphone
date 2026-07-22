@@ -126,7 +126,6 @@ class ClientController extends Controller
         try {
             $title = 'Nhóm khách hàng';
             $clientgroup = $this->clientGroupService->getAllClientGroup();
-            // dd($clientgroup);
             return view('admin.client.group.index', compact('clientgroup', 'title'));
         } catch (Exception $e) {
             Log::error('Failed to list clientgroup: ' . $e->getMessage());

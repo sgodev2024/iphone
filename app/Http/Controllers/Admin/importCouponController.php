@@ -72,15 +72,36 @@ class importCouponController extends Controller
         $user = $request->user();
         $supplierId = (int) $request->validated('supplier');
         $storageId = (int) $request->validated('storage');
+        $ownerIds = collect([$user?->id, $user?->manager_id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
         $imports = Import::query()
             ->with('product')
             ->where('quantity', '>', 0)
+            ->whereHas('product', function ($query) use ($ownerIds) {
+                $query->whereIn('user_id', $ownerIds);
+            })
             ->lockForUpdate()
             ->get();
 
         if ($imports->isEmpty()) {
             throw ValidationException::withMessages([
                 'items' => 'Phiếu nhập phải có ít nhất một sản phẩm.',
+            ]);
+        }
+
+        $duplicatedProductId = $imports->pluck('product_id')
+            ->duplicates()
+            ->first();
+
+        if ($duplicatedProductId !== null) {
+            $productName = $imports->firstWhere('product_id', $duplicatedProductId)?->product?->name ?? "#{$duplicatedProductId}";
+
+            throw ValidationException::withMessages([
+                'items' => "Sản phẩm {$productName} đang bị lặp trong phiếu nhập.",
             ]);
         }
 
@@ -116,6 +137,7 @@ class importCouponController extends Controller
         foreach ($imports as $import) {
             $product = Product::query()
                 ->whereKey($import->product_id)
+                ->whereIn('user_id', $ownerIds)
                 ->lockForUpdate()
                 ->firstOrFail();
 

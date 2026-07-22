@@ -81,7 +81,6 @@ class SupplierController extends Controller
 
     public function store(Request $request)
     {
-        // dd($request->all());
         try {
             $supplier = $this->supplierService->addSupplier($request->all());
             session()->flash('success', 'Thêm người đại diện thành công');

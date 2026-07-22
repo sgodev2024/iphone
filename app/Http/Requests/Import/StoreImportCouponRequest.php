@@ -63,9 +63,18 @@ class StoreImportCouponRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $ownerIds = collect([$this->user()?->id, $this->user()?->manager_id])
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
             $imports = Import::query()
                 ->with('product')
                 ->where('quantity', '>', 0)
+                ->whereHas('product', function ($query) use ($ownerIds) {
+                    $query->whereIn('user_id', $ownerIds);
+                })
                 ->get();
 
             if ($imports->isEmpty()) {
@@ -76,6 +85,14 @@ class StoreImportCouponRequest extends FormRequest
 
             $submitted = (array) $this->input('imeis', []);
             $knownIds = $imports->pluck('id')->map(fn ($id) => (string) $id);
+            $duplicatedProductId = $imports->pluck('product_id')
+                ->duplicates()
+                ->first();
+
+            if ($duplicatedProductId !== null) {
+                $productName = $imports->firstWhere('product_id', $duplicatedProductId)?->product?->name ?? "#{$duplicatedProductId}";
+                $validator->errors()->add('items', "Sản phẩm {$productName} đang bị lặp trong phiếu nhập.");
+            }
 
             foreach (array_keys($submitted) as $importId) {
                 if (! $knownIds->contains((string) $importId)) {

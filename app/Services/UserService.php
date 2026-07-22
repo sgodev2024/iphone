@@ -32,7 +32,6 @@ class UserService
 
     public function authenticateUser($credentials)
     {
-        // dd($credentials);
         $user = User::where('email', $credentials['email'])->orwhere('phone',$credentials['email'])->first();
         if (!$user) {
             throw new Exception('Not an User');

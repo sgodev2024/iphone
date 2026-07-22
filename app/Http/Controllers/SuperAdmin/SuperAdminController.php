@@ -39,14 +39,10 @@ class SuperAdminController extends Controller
     {
         try {
             $sa = $this->adminService->updateSuperAdmin($id, $request->all());
-            // dd($sa);
             $authUser = session('authSuper');
             $authUser->name = $sa->name;
-            // dd($authUser->name);
             $authUser->email =  $sa->email;
-            // dd($authUser->email);
             // $authUser->user_info->img_url = $sa->user_info->img_url;
-            // dd($authUser);
             session(['authSuper' => $authUser]);
             Log::info('Successfully updated super admin profile');
             session()->flash('success', 'Thay đổi thông tin thành công');

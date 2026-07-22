@@ -73,7 +73,6 @@ class CashTransactionController extends Controller
                 return !in_array($entry->account_id, $moneyAccountIds);
             });
 
-            // dd($mainEntry, $contraEntry);
         }
 
         return view('admin.cash-bank.form', compact(

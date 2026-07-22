@@ -42,7 +42,6 @@ class ProductService
         try {
             Log::info('Fetching all products');
             $product = $this->product->orderBy('created_at', 'desc')->get();
-            // dd($product[0]->images[0]->image_path);
             return $product;
         } catch (Exception $e) {
             Log::error('Failed to fetch products: ' . $e->getMessage());
@@ -167,7 +166,6 @@ class ProductService
             DB::commit();
             return $product;
         } catch (Exception $e) {
-            dd($e->getMessage());
             DB::rollBack();
             Log::error("Failed to update product: {$e->getMessage()}");
             throw new Exception('Failed to update product');
@@ -223,7 +221,6 @@ class ProductService
     {
         try {
             $products = $this->product->where('name', 'LIKE', '%' . $name . '%')->paginate(10);
-            // dd($products);
             return $products;
         } catch (Exception $e) {
             Log::error("Failed to search products: {$e->getMessage()}");
@@ -235,7 +232,6 @@ class ProductService
     {
         try {
             $products = $this->product->where('name', 'LIKE', '%' . $name . '%')->orderByDesc('created_at')->get();
-            // dd($products);
             return $products;
         } catch (Exception $e) {
             Log::error("Failed to search products: {$e->getMessage()}");

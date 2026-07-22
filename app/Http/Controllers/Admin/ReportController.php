@@ -159,7 +159,6 @@ class ReportController extends Controller
             $storage = Storage::first();
             $storage_id = $storage->id;
             $profits = $this->profitService->profitReport(1, $storage_id);
-            // dd($profits);
             return view('admin.profit.index', compact('title', 'profits', 'storages'));
         } catch (Exception $e) {
             Log::error('Failed to get Profit Report: ' . $e->getMessage());

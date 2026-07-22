@@ -76,6 +76,63 @@ class ImportImeiWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_product_query_resets_stale_staging_and_initial_ajax_contains_product_details(): void
+    {
+        $staleProduct = Product::create([
+            'user_id' => $this->admin->id,
+            'code' => 'OLD',
+            'name' => 'Old import row',
+            'price' => 100000,
+            'price_buy' => 0,
+            'quantity' => 0,
+            'status' => true,
+        ]);
+        ImportItem::create([
+            'product_id' => $staleProduct->id,
+            'quantity' => 2,
+            'price' => 100000,
+            'total' => 200000,
+        ]);
+
+        $this->product->update(['price' => 2000000]);
+
+        $this->actingAs($this->admin)
+            ->get("/admin/importproduct/add?product_id={$this->product->id}")
+            ->assertOk();
+
+        $this->assertDatabaseCount('import', 1);
+        $this->assertDatabaseHas('import', [
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+        ]);
+        $this->assertDatabaseMissing('import', ['product_id' => $staleProduct->id]);
+
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/importproduct/import');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'import')
+            ->assertJsonPath('import.0.product_id', $this->product->id)
+            ->assertJsonPath('import.0.product.code', 'IP16')
+            ->assertJsonPath('import.0.product.name', 'iPhone 16');
+        $this->assertSame(2000000, $response->json('total'));
+    }
+
+    public function test_adding_same_product_again_does_not_create_duplicate_staging_row(): void
+    {
+        $this->createImportItem(quantity: 1);
+
+        $response = $this->actingAs($this->admin)
+            ->post('/admin/importproduct/import/add', [
+                'product' => $this->product->id,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'import')
+            ->assertJsonPath('import.0.product_id', $this->product->id);
+        $this->assertDatabaseCount('import', 1);
+    }
+
     public function test_missing_or_invalid_product_query_opens_normal_form_without_preselection(): void
     {
         $otherAdmin = User::create([
@@ -107,6 +164,36 @@ class ImportImeiWorkflowTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseCount('import', 0);
+    }
+
+    public function test_duplicate_product_rows_are_rejected_before_confirmation(): void
+    {
+        $firstItem = $this->createImportItem(quantity: 1);
+        $secondItem = ImportItem::create([
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'price' => 0,
+            'total' => 0,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', [
+                'supplier' => $this->company->id,
+                'storage' => $this->storage->id,
+                'total' => 0,
+                'totalncc' => 0,
+                'imeis' => [
+                    $firstItem->id => ['123456789012345'],
+                    $secondItem->id => ['223456789012345'],
+                ],
+            ]);
+
+        $response->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHasErrors('items');
+        $this->assertDatabaseCount('import_coupon', 0);
+        $this->assertDatabaseCount('import_detail', 0);
+        $this->assertDatabaseCount('product_imeis', 0);
     }
 
     public function test_confirming_import_creates_exact_imeis_linked_to_detail_and_increases_stock(): void

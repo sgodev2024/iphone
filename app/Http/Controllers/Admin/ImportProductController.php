@@ -101,6 +101,7 @@ class ImportProductController extends Controller
     {
         $title = 'Nhập hàng';
         $ownerIds = $this->inventoryOwnerIds();
+        $productQueryWarning = null;
         $products = Product::query()
             ->whereIn('user_id', $ownerIds)
             ->latest()
@@ -110,22 +111,28 @@ class ImportProductController extends Controller
         $storage = $this->storageService->getAllStorage();
         $user = Auth::user();
 
-        $preselectedProduct = Product::query()
-            ->whereIn('user_id', $ownerIds)
-            ->find($request->integer('product_id'));
+        if ($request->query->has('product_id')) {
+            $this->clearCurrentImportItems();
 
-        if ($preselectedProduct) {
-            Import::query()->firstOrCreate(
-                ['product_id' => $preselectedProduct->id],
-                [
-                    'quantity' => 1,
-                    'price' => $preselectedProduct->price,
-                    'total' => $preselectedProduct->price,
-                ]
-            );
+            $preselectedProduct = Product::query()
+                ->whereIn('user_id', $ownerIds)
+                ->find($request->integer('product_id'));
+
+            if ($preselectedProduct) {
+                Import::query()->updateOrCreate(
+                    ['product_id' => $preselectedProduct->id],
+                    [
+                        'quantity' => 1,
+                        'price' => $preselectedProduct->price,
+                        'total' => $preselectedProduct->price,
+                    ]
+                );
+            } else {
+                $productQueryWarning = 'Sản phẩm cần nhập không tồn tại hoặc bạn không có quyền nhập sản phẩm này.';
+            }
         }
 
-        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'title'));
+        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'title', 'productQueryWarning'));
     }
 
     public function importadd(Request $request)
@@ -144,7 +151,9 @@ class ImportProductController extends Controller
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $products = Import::where('product_id', $productId)->first();
+        $products = $this->stagingImportQuery()
+            ->where('product_id', $productId)
+            ->first();
         if (! $products) {
             Import::create([
                 'product_id' => $productId,
@@ -153,16 +162,8 @@ class ImportProductController extends Controller
                 'total' => $product->price,
             ]);
         }
-        $import = Import::get();
-        $sum = 0;
-        foreach ($import as $item) {
-            $sum += $item->total;
-        }
 
-        return response()->json([
-            'import' => $import,
-            'total' => $sum,
-        ]);
+        return response()->json($this->currentImportPayload());
     }
 
     public function importupdate(Request $request)
@@ -171,21 +172,15 @@ class ImportProductController extends Controller
             'dataId' => ['required', 'integer', 'exists:import,id'],
             'value' => ['required', 'integer', 'min:1', 'max:1000'],
         ]);
-        $import = Import::findOrFail($validated['dataId']);
+        $import = $this->stagingImportQuery()
+            ->whereKey($validated['dataId'])
+            ->firstOrFail();
         $import->update([
             'quantity' => $validated['value'],
             'total' => $import->price * $validated['value'],
         ]);
-        $imports = Import::get();
-        $sum = 0;
-        foreach ($imports as $item) {
-            $sum += $item->total;
-        }
 
-        return response()->json([
-            'import' => $imports,
-            'total' => $sum,
-        ]);
+        return response()->json($this->currentImportPayload());
     }
 
     public function importupdateprice(Request $request)
@@ -194,84 +189,103 @@ class ImportProductController extends Controller
             'dataId' => ['required', 'integer', 'exists:import,id'],
             'value' => ['required', 'numeric', 'min:0'],
         ]);
-        $import = Import::findOrFail($validated['dataId']);
+        $import = $this->stagingImportQuery()
+            ->whereKey($validated['dataId'])
+            ->firstOrFail();
         $import->update([
             'price' => $validated['value'],
             'total' => $import->quantity * $validated['value'],
         ]);
-        $imports = Import::get();
-        $sum = 0;
-        foreach ($imports as $item) {
-            $sum += $item->total;
-        }
 
-        return response()->json([
-            'import' => $imports,
-            'total' => $sum,
-        ]);
+        return response()->json($this->currentImportPayload());
     }
 
     public function importdelete(Request $request)
     {
         $id = $request->id;
-        $import = Import::find($id);
-        $import->delete();
-        $imports = Import::get();
-        $sum = 0;
-        foreach ($imports as $item) {
-            $sum += $item->total;
+        $import = $this->stagingImportQuery()
+            ->whereKey($id)
+            ->first();
+
+        if (! $import) {
+            return response()->json([
+                'error' => 'Dòng sản phẩm không hợp lệ hoặc đã được xóa.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        return response()->json([
-            'import' => $imports,
-            'total' => $sum,
-        ]);
+        $import->delete();
+
+        return response()->json($this->currentImportPayload());
     }
 
     public function listImport()
     {
-        $import = Import::get();
         $category = $this->categoryService->getCategoryAllStaff();
-        $sum = 0;
-        foreach ($import as $item) {
-            $sum += $item->total;
-        }
+        $payload = $this->currentImportPayload();
 
         return response()->json([
-            'import' => $import,
+            'import' => $payload['import'],
             'category' => $category,
-            'total' => $sum,
+            'total' => $payload['total'],
         ]);
     }
 
     public function addCategory(Request $request)
     {
-        $list_id = $request->selectedValues;
-        $imports = Import::get();
-        foreach ($list_id as $item) {
-            $product = $this->productService->getProductByCategory($item);
-            foreach ($product as $key => $value) {
+        $validated = $request->validate([
+            'selectedValues' => ['required', 'array', 'min:1'],
+            'selectedValues.*' => ['required', 'integer', 'exists:categories,id'],
+        ]);
+        $imports = $this->stagingImportQuery()->get();
+        $products = Product::query()
+            ->whereIn('user_id', $this->inventoryOwnerIds())
+            ->whereIn('category_id', $validated['selectedValues'])
+            ->get();
 
-                if (! $imports->contains('product_id', $value->id)) {
-                    Import::create([
-                        'product_id' => $value->id,
-                        'quantity' => 1,
-                        'price' => $value->price,
-                        'total' => $value->price,
-                    ]);
-                }
+        foreach ($products as $product) {
+            if (! $imports->contains('product_id', $product->id)) {
+                Import::create([
+                    'product_id' => $product->id,
+                    'quantity' => 1,
+                    'price' => $product->price,
+                    'total' => $product->price,
+                ]);
             }
         }
-        $import = Import::get();
-        $sum = 0;
-        foreach ($import as $item) {
-            $sum += $item->total;
-        }
 
-        return response()->json([
-            'import' => $import,
-            'total' => $sum,
-        ]);
+        return response()->json($this->currentImportPayload());
+    }
+
+    private function stagingImportQuery()
+    {
+        return Import::query()
+            ->with('product')
+            ->whereHas('product', function ($query) {
+                $query->whereIn('user_id', $this->inventoryOwnerIds());
+            })
+            ->orderBy('id');
+    }
+
+    private function currentImportPayload(): array
+    {
+        $imports = $this->stagingImportQuery()->get();
+
+        return [
+            'import' => $imports,
+            'total' => (float) $imports->sum(fn (Import $import) => (float) $import->total),
+        ];
+    }
+
+    private function clearCurrentImportItems(): void
+    {
+        Import::query()
+            ->where(function ($query) {
+                $query->whereDoesntHave('product')
+                    ->orWhereHas('product', function ($productQuery) {
+                        $productQuery->whereIn('user_id', $this->inventoryOwnerIds());
+                    });
+            })
+            ->delete();
     }
 
     private function inventoryOwnerIds(): array

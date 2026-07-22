@@ -78,12 +78,24 @@
 
         .imei-entry-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 260px));
+            gap: 8px 12px;
         }
 
         .imei-counter.is-incomplete {
             color: #dc3545;
+        }
+
+        .imei-entry-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 16px;
+            font-size: 13px;
+        }
+
+        .money-input {
+            max-width: 150px;
+            text-align: right;
         }
     </style>
 
@@ -129,6 +141,11 @@
                                 </ul>
                             </div>
                         @endif
+                        @if (! empty($productQueryWarning))
+                            <div class="alert alert-warning">
+                                {{ $productQueryWarning }}
+                            </div>
+                        @endif
                         <div class="" style="min-height: 400px">
                             <div>
                                 <form action="">
@@ -157,7 +174,7 @@
                                                             <p class="ng-binding">
                                                                 <span class="ng-binding"> <span
                                                                         style="padding-right: 20px">{{ $item->code }}</span>Giá
-                                                                    : {{ $item->price }}</span>
+                                                                    : {{ formatPrice($item->price) }} ₫</span>
                                                             </p> <span class="ng-binding">Tồn: {{ $item->quantity }}</span>
                                                             <span class="split txtC"></span>
                                                         </div>
@@ -455,6 +472,29 @@
     <script>
         var $j = jQuery.noConflict();
 
+        function parseMoneyValue(value) {
+            if (value === null || value === undefined) {
+                return 0;
+            }
+
+            const text = String(value).trim();
+            if (text === '') {
+                return 0;
+            }
+
+            if (text.includes('₫') || /^\d{1,3}(\.\d{3})+/.test(text)) {
+                return Number(text.replace(/\D/g, '')) || 0;
+            }
+
+            return Number(text.replace(/,/g, '')) || 0;
+        }
+
+        function formatMoneyValue(value) {
+            const amount = Math.round(parseMoneyValue(value));
+
+            return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`;
+        }
+
         $j(document).ready(function() {
             const imeiValues = {};
             Object.entries(initialImeiValues || {}).forEach(([importId, values]) => {
@@ -468,14 +508,7 @@
                     updateimport(data.import, data.total);
                     var category = $j('#checkboxForm_category');
                     category.empty();
-                    var cantra = $j('.cantra');
-                    var tientra = $j('#tientra');
-                    var payment = $j('#payment');
-                    payment.val(data.total);
-                    cantra.empty();
-                    cantra.html(data.total);
-                    tientra.empty();
-                    tientra.html(data.total);
+                    updateReceiptTotal(data.total);
                     var list_category = data.category;
                     list_category.forEach(function(item, index) {
                         var categoryHtml = `
@@ -490,13 +523,26 @@
                     });
                 },
                 error: function(xhr, status, error) {
-                    console.log('AJAX Error: ' + status + error);
+                    alert('Không thể tải danh sách sản phẩm đang nhập. Vui lòng thử lại.');
                 }
             });
 
             $j('.product_inventory').click(function(e) {
                 e.preventDefault();
                 var product = $(this).data('id');
+                var existingRow = $j(`#import-data-product tr[data-product="${product}"]`);
+
+                if (existingRow.length) {
+                    existingRow.addClass('table-warning');
+                    existingRow.find('.numberInput').focus();
+                    setTimeout(function() {
+                        existingRow.removeClass('table-warning');
+                    }, 1200);
+
+                    $('#search').val('');
+                    $j('#results').hide();
+                    return;
+                }
 
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.add') }}',
@@ -509,16 +555,7 @@
                         $('#search').val('');
                         $j('#results').hide();
                         updateimport(data.import, data.total);
-                        var cantra = $j('.cantra');
-                        var tientra = $j('#tientra');
-                        cantra.empty();
-                        cantra.html(data.total);
-                        tientra.empty();
-                        tientra.html(data.total);
-                        var total_input = $('#total_input');
-                        total_input.val(data.total);
-                        var payment = $j('#payment');
-                        payment.val(data.total);
+                        updateReceiptTotal(data.total);
                     },
                     error: function(xhr) {
                         alert(xhr.responseJSON.error);
@@ -568,17 +605,7 @@
                     },
                     success: function(data) {
                         updateimport(data.import, data.total);
-
-                        var total_input = $('#total_input');
-                        total_input.val(data.total);
-                        var cantra = $j('.cantra');
-                        var tientra = $j('#tientra');
-                        cantra.empty();
-                        cantra.html(data.total);
-                        tientra.empty();
-                        tientra.html(data.total);
-                        var payment = $j('#payment');
-                        payment.val(data.total);
+                        updateReceiptTotal(data.total);
 
                     },
                 });
@@ -633,16 +660,7 @@
                         },
                         success: function(data) {
                             updateimport(data.import, data.total);
-                            var total_input = $('#total_input');
-                            total_input.val(data.total);
-                            var cantra = $j('.cantra');
-                            var tientra = $j('#tientra');
-                            cantra.empty();
-                            cantra.html(data.total);
-                            tientra.empty();
-                            tientra.html(data.total);
-                            var payment = $j('#payment');
-                            payment.val(data.total);
+                            updateReceiptTotal(data.total);
 
                         },
                     });
@@ -661,7 +679,6 @@
                 $j('#checkboxForm_category input[type="checkbox"]:checked').each(function() {
                     selectedValues.push($(this).val());
                 });
-                console.log(selectedValues);
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.addCategory') }}',
                     method: 'POST',
@@ -671,24 +688,28 @@
                     },
                     success: function(data) {
                         $('input[type="checkbox"]').prop('checked', false);
-                        updateimport(data.import);
-                        var cantra = $j('.cantra');
-                        var tientra = $j('#tientra');
-                        cantra.empty();
-                        cantra.html(data.total);
-                        tientra.empty();
-                        tientra.html(data.total);
-                        var payment = $j('#payment');
-                        payment.val(data.total);
+                        updateimport(data.import, data.total);
+                        updateReceiptTotal(data.total);
                     },
                 });
 
             });
 
+            $j(document).on('focus', '.giaban', function() {
+                $j(this).val(String(Math.round(parseMoneyValue($j(this).data('raw-value')))));
+            });
+
             $j(document).on('input', '.giaban', function() {
-                var dataId = $j(this).closest('tr').data('id');
-                var productId = $j(this).closest('tr').data('product');
-                var value = parseInt($(this).text(), 10);
+                this.value = this.value.replace(/\D/g, '');
+            });
+
+            $j(document).on('change', '.giaban', function() {
+                var input = $j(this);
+                var dataId = input.closest('tr').data('id');
+                var value = Math.max(Math.round(parseMoneyValue(input.val())), 0);
+
+                input.data('raw-value', value);
+                input.val(formatMoneyValue(value));
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.update.price') }}',
                     method: 'POST',
@@ -699,30 +720,27 @@
                     },
                     success: function(data) {
                         updateimport(data.import, data.total);
-
-                        var total_input = $('#total_input');
-                        total_input.val(data.total);
-                        var cantra = $j('.cantra');
-                        var tientra = $j('#tientra');
-                        cantra.empty();
-                        cantra.html(data.total);
-                        tientra.empty();
-                        tientra.html(data.total);
-                        var payment = $j('#payment');
-                        payment.val(data.total);
+                        updateReceiptTotal(data.total);
 
                     },
                 });
 
             });
 
+            function updateReceiptTotal(total) {
+                const rawTotal = Math.round(parseMoneyValue(total));
+                $('#total_input').val(rawTotal);
+                $j('#payment').val(rawTotal);
+                $j('.cantra').text(formatMoneyValue(rawTotal));
+                $j('#tientra').text(formatMoneyValue(rawTotal));
+            }
+
             function updateimport(importproduct, total) {
                 captureImeiValues();
                 var importhtml = $j('#import-data-product');
                 var tieptuc = $j('#tieptuc');
-                var total_input = $('#total_input');
-                total_input.val(total);
-                if (total <= 0) {
+                updateReceiptTotal(total || 0);
+                if (parseMoneyValue(total) <= 0) {
                     tieptuc.css('display', 'none');
                 } else {
                     tieptuc.css('display', 'block');
@@ -731,15 +749,22 @@
 
                 if (importproduct.length === 0) {} else {
                     $.each(importproduct, function(index, item) {
+                        const product = item.product || {};
+                        const productCode = product.code || item.code || '';
+                        const productName = product.name || '';
+                        const price = parseMoneyValue(item.price);
+                        const rowTotal = parseMoneyValue(item.total);
                         var productHtml = `
                 <tr data-id='${item.id}' data-product='${item.product_id ?? ""}'>
-                    <td class='delete'><i class="fas fa-trash-alt"></i></td>
-                    <td>${ index + 1 }</td>
-                    <td>${ item.code
-                            ? item.code
-                            : (item.product && item.product.code ? item.product.code : "") }
+                    <td class='delete'>
+                        <input type="hidden" form="addimport" name="items[${item.id}][product_id]" value="${item.product_id ?? ''}">
+                        <input type="hidden" form="addimport" name="items[${item.id}][quantity]" value="${item.quantity ?? ''}">
+                        <input type="hidden" form="addimport" name="items[${item.id}][import_price]" value="${price}">
+                        <i class="fas fa-trash-alt"></i>
                     </td>
-                    <td>${ item.product && item.product.name ? item.product.name : "" }</td>
+                    <td>${ index + 1 }</td>
+                    <td>${escapeHtml(productCode)}</td>
+                    <td>${escapeHtml(productName)}</td>
                     <td>
                         <input style='text-align: center;' type="number" min="1" max="1000"
                             class="numberInput"
@@ -748,11 +773,11 @@
                             value='${item.quantity !== null ? item.quantity : ""}'
                             oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     </td>
-                    <td class="giaban" contenteditable="true"
-                        oninput="this.innerText = this.innerText.replace(/[^0-9.]/g, '')">
-                        ${item.price !== null ? item.price : ""}
+                    <td>
+                        <input type="text" class="form-control form-control-sm money-input giaban"
+                            data-raw-value="${price}" value="${formatMoneyValue(price)}">
                     </td>
-                    <td class="total">${item.total !== null ? item.total : ""}</td>
+                    <td class="total" data-raw-value="${rowTotal}">${formatMoneyValue(rowTotal)}</td>
                 </tr>
                 ${buildImeiPanel(item)}
             `;
@@ -765,6 +790,10 @@
             function buildImeiPanel(item) {
                 const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
                 const values = imeiValues[item.id] || [];
+                const product = item.product || {};
+                const productName = product.name || `#${item.product_id || ''}`;
+                const productCode = product.code || '';
+                const productUnit = product.product_unit || '';
                 const fields = [];
 
                 for (let index = 0; index < quantity; index++) {
@@ -792,8 +821,13 @@
                         <td colspan="6">
                             <div class="imei-entry-panel">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <strong>Danh sách IMEI – ${escapeHtml(item.product?.name || '')}</strong>
+                                    <strong>Danh sách IMEI - ${escapeHtml(productName)}</strong>
                                     <span class="imei-counter" data-import-id="${item.id}">Đã nhập 0/${quantity} IMEI</span>
+                                </div>
+                                <div class="imei-entry-meta text-muted mb-2">
+                                    <span>Sản phẩm: <strong class="text-dark">${escapeHtml(productName)}</strong></span>
+                                    ${productCode ? `<span>Mã sản phẩm: <strong class="text-dark">${escapeHtml(productCode)}</strong></span>` : ''}
+                                    <span>Số lượng: <strong class="text-dark">${quantity}${productUnit ? ` ${escapeHtml(productUnit)}` : ''}</strong></span>
                                 </div>
                                 <div class="imei-entry-grid">${fields.join('')}</div>
                             </div>
@@ -838,23 +872,18 @@
             });
         });
 
-        document.getElementById('tientra').addEventListener('input', function(e) {
-            const selection = window.getSelection();
-            const range = document.createRange();
-            let caretPos = selection.getRangeAt(0).startOffset;
-
-            this.innerText = this.innerText.replace(/[^0-9]/g, '');
-
-            range.setStart(this.firstChild, Math.min(caretPos, this.innerText.length));
-            range.setEnd(this.firstChild, Math.min(caretPos, this.innerText.length));
-            selection.removeAllRanges();
-            selection.addRange(range);
+        document.getElementById('tientra').addEventListener('focus', function() {
+            this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
         });
 
-
         document.getElementById('tientra').addEventListener('input', function() {
-            var tientraValue = this.innerText;
-            document.getElementById('payment').value = tientraValue;
+            this.innerText = this.innerText.replace(/\D/g, '');
+            document.getElementById('payment').value = Math.round(parseMoneyValue(this.innerText));
+        });
+
+        document.getElementById('tientra').addEventListener('blur', function() {
+            document.getElementById('payment').value = Math.round(parseMoneyValue(this.innerText));
+            this.innerText = formatMoneyValue(this.innerText);
         });
     </script>
 @endsection

@@ -69,7 +69,6 @@ class ImportProductService
     {
         try {
             Log::info('Fetching add importDetail');
-            // dd($data);
             $importDetail = $this->importDetail->create($data);
 
             return $importDetail;
