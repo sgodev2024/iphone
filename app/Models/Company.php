@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
@@ -49,5 +50,10 @@ class Company extends Model
     public function product()
     {
         return $this->belongsToMany(Product::class, 'company_product');
+    }
+
+    public function importCoupons(): HasMany
+    {
+        return $this->hasMany(ImportCoupon::class, 'companies_id');
     }
 }

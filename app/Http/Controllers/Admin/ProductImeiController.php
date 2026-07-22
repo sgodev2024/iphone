@@ -3,13 +3,84 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Product;
+use App\Models\ProductImei;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class ProductImeiController extends Controller
 {
+    public function globalIndex(Request $request): View
+    {
+        $filters = [
+            'imei' => trim((string) $request->query('imei', '')),
+            'product' => trim((string) $request->query('product', '')),
+            'status' => trim((string) $request->query('status', '')),
+            'company_id' => trim((string) $request->query('company_id', '')),
+            'coupon_code' => trim((string) $request->query('coupon_code', '')),
+            'from_date' => trim((string) $request->query('from_date', '')),
+            'to_date' => trim((string) $request->query('to_date', '')),
+        ];
+
+        [$fromDate, $toDate, $filterWarning] = $this->resolveDateRange($filters['from_date'], $filters['to_date']);
+
+        $statistics = ProductImei::query()
+            ->selectRaw(
+                'COUNT(*) as total, '
+                .'COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) as in_stock, '
+                .'COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) as sold',
+                [ProductImei::STATUS_IN_STOCK, ProductImei::STATUS_SOLD]
+            )
+            ->first();
+
+        $statistics = [
+            'total' => (int) ($statistics->total ?? 0),
+            'in_stock' => (int) ($statistics->in_stock ?? 0),
+            'sold' => (int) ($statistics->sold ?? 0),
+        ];
+        $statistics['other'] = $statistics['total'] - $statistics['in_stock'] - $statistics['sold'];
+
+        $imeis = ProductImei::query()
+            ->with([
+                'product:id,code,name',
+                'importDetail:id,import_id,price',
+                'importDetail.import:id,companies_id,coupon_code,created_at',
+                'importDetail.import.companyRelation:id,name',
+            ]);
+
+        $this->applyGlobalFilters($imeis, $filters, $fromDate, $toDate);
+
+        $imeis = $imeis
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        $companies = Company::query()
+            ->whereHas('importCoupons.details.imeis')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $statusOptions = [
+            ProductImei::STATUS_IN_STOCK => 'Đang tồn kho',
+            ProductImei::STATUS_SOLD => 'Đã bán',
+        ];
+        $title = 'Quản lý IMEI';
+
+        return view('admin.imeis.index', compact(
+            'title',
+            'filters',
+            'statistics',
+            'imeis',
+            'companies',
+            'statusOptions',
+            'filterWarning'
+        ));
+    }
+
     public function index(Request $request, Product $product): View
     {
         $this->ensureProductBelongsToCurrentUser($product);
@@ -36,5 +107,91 @@ class ProductImeiController extends Controller
     private function ensureProductBelongsToCurrentUser(Product $product): void
     {
         abort_unless((int) $product->user_id === (int) Auth::id(), 404);
+    }
+
+    private function applyGlobalFilters(Builder $query, array $filters, ?string $fromDate, ?string $toDate): void
+    {
+        if ($filters['imei'] !== '') {
+            $imei = $filters['imei'];
+            $isExactImei = preg_match('/^\d{15}$/', $imei) === 1;
+
+            if ($isExactImei) {
+                $query->where('imei', $imei);
+            } else {
+                $query->where('imei', 'like', "%{$imei}%");
+            }
+        }
+
+        if ($filters['product'] !== '') {
+            $product = $filters['product'];
+            $query->whereHas('product', function (Builder $productQuery) use ($product) {
+                $productQuery
+                    ->where('code', 'like', "%{$product}%")
+                    ->orWhere('name', 'like', "%{$product}%");
+            });
+        }
+
+        if ($filters['status'] !== '') {
+            $query->where('status', $filters['status']);
+        }
+
+        if ($filters['company_id'] !== '' && ctype_digit($filters['company_id'])) {
+            $query->whereHas('importDetail.import.companyRelation', function (Builder $companyQuery) use ($filters) {
+                $companyQuery->whereKey((int) $filters['company_id']);
+            });
+        }
+
+        if ($filters['coupon_code'] !== '') {
+            $couponCode = $filters['coupon_code'];
+            $query->whereHas('importDetail.import', function (Builder $importQuery) use ($couponCode) {
+                $importQuery->where('coupon_code', 'like', "%{$couponCode}%");
+            });
+        }
+
+        if ($fromDate || $toDate) {
+            $query->whereHas('importDetail.import', function (Builder $importQuery) use ($fromDate, $toDate) {
+                if ($fromDate) {
+                    $importQuery->whereDate('created_at', '>=', $fromDate);
+                }
+
+                if ($toDate) {
+                    $importQuery->whereDate('created_at', '<=', $toDate);
+                }
+            });
+        }
+    }
+
+    private function resolveDateRange(string $fromDate, string $toDate): array
+    {
+        $parsedFromDate = $this->parseDate($fromDate);
+        $parsedToDate = $this->parseDate($toDate);
+        $filterWarning = null;
+
+        if (($fromDate !== '' && ! $parsedFromDate) || ($toDate !== '' && ! $parsedToDate)) {
+            $filterWarning = 'Ngày lọc không hợp lệ. Vui lòng chọn ngày theo định dạng hợp lệ.';
+        }
+
+        if ($parsedFromDate && $parsedToDate && $parsedFromDate > $parsedToDate) {
+            $filterWarning = 'Từ ngày phải nhỏ hơn hoặc bằng đến ngày.';
+            $parsedFromDate = null;
+            $parsedToDate = null;
+        }
+
+        return [$parsedFromDate, $parsedToDate, $filterWarning];
+    }
+
+    private function parseDate(string $value): ?string
+    {
+        if ($value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('Y-m-d', $value);
+
+            return $date->format('Y-m-d') === $value ? $value : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

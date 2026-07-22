@@ -127,6 +127,8 @@ Route::middleware(['auth'])
                     Route::get('export', 'export')->name('export');
                 });
 
+            Route::get('imeis', [ProductImeiController::class, 'globalIndex'])->name('imeis.index');
+
             Route::prefix('users')
                 ->controller(UserController::class)
                 ->name('users.')

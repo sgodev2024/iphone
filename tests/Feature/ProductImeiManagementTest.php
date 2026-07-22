@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Company;
+use App\Models\ImportCoupon;
+use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -137,6 +141,118 @@ class ProductImeiManagementTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 
+    public function test_admin_can_browse_and_filter_all_imeis_with_historical_import_data(): void
+    {
+        $product = $this->createProduct($this->admin, [
+            'code' => 'IP16',
+            'name' => 'iPhone 16 Pro',
+        ]);
+        $company = Company::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Apple Việt Nam',
+        ]);
+        $coupon = ImportCoupon::create([
+            'user_id' => $this->admin->id,
+            'companies_id' => $company->id,
+            'total' => 2000000,
+        ]);
+        $coupon->forceFill(['created_at' => Carbon::parse('2026-07-10 09:30:00')])->save();
+        $detail = ImportDetail::create([
+            'import_id' => $coupon->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 2000000,
+            'old_price' => 1900000,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'import_detail_id' => $detail->id,
+            'imei' => '123456789012345',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'imei' => '123456789012346',
+            'status' => ProductImei::STATUS_SOLD,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'imei' => '123456789012347',
+            'status' => 'returned',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.imeis.index', [
+            'imei' => '123456789012345',
+            'product' => 'IP16',
+            'status' => ProductImei::STATUS_IN_STOCK,
+            'company_id' => $company->id,
+            'coupon_code' => $coupon->coupon_code,
+            'from_date' => '2026-07-10',
+            'to_date' => '2026-07-10',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Quản lý IMEI')
+            ->assertSee('123456789012345')
+            ->assertDontSee('123456789012346')
+            ->assertSee('IP16')
+            ->assertSee('iPhone 16 Pro')
+            ->assertSee($coupon->coupon_code)
+            ->assertSee('Apple Việt Nam')
+            ->assertSee('2.000.000 đ')
+            ->assertSee('10/07/2026')
+            ->assertSee(route('admin.products.imeis.index', $product), false)
+            ->assertSee(route('admin.importproduct.importCoupon.detail', $coupon->id), false)
+            ->assertViewHas('statistics', fn (array $statistics) => $statistics === [
+                'total' => 3,
+                'in_stock' => 1,
+                'sold' => 1,
+                'other' => 1,
+            ]);
+    }
+
+    public function test_global_imei_page_handles_missing_relations_invalid_dates_and_keeps_pagination_filters(): void
+    {
+        ProductImei::create([
+            'product_id' => 999999,
+            'imei' => '900000000000000',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+
+        foreach (range(1, 10) as $number) {
+            ProductImei::create([
+                'product_id' => 999999,
+                'imei' => str_pad((string) $number, 15, '0', STR_PAD_LEFT),
+                'status' => ProductImei::STATUS_IN_STOCK,
+            ]);
+        }
+
+        $response = $this->actingAs($this->admin)->get(route('admin.imeis.index', [
+            'status' => ProductImei::STATUS_IN_STOCK,
+            'from_date' => '2026-07-11',
+            'to_date' => '2026-07-10',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Từ ngày phải nhỏ hơn hoặc bằng đến ngày.')
+            ->assertSee('Sản phẩm không tồn tại')
+            ->assertSee('Chưa xác định')
+            ->assertViewHas('imeis', function ($imeis) {
+                return $imeis->perPage() === 10
+                    && str_contains($imeis->url(2), 'status=in_stock');
+            });
+    }
+
+    public function test_warehouse_role_cannot_access_global_imei_management(): void
+    {
+        $warehouseUser = $this->createAdmin('warehouse@example.com');
+        $warehouseUser->update(['role_id' => 4]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('admin.imeis.index'))
+            ->assertForbidden();
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -174,6 +290,36 @@ class ProductImeiManagementTest extends TestCase
             $table->decimal('price_buy', 15, 2)->default(0);
             $table->string('quantity')->nullable()->default('0');
             $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('companies', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('import_coupon', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('companies_id')->nullable();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('supplier_id')->nullable();
+            $table->integer('total')->nullable();
+            $table->integer('payment_ncc')->nullable();
+            $table->string('status')->nullable();
+            $table->string('coupon_code')->nullable()->unique();
+            $table->unsignedBigInteger('storage_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('import_detail', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('import_id');
+            $table->unsignedBigInteger('product_id');
+            $table->integer('quantity');
+            $table->integer('price');
+            $table->integer('old_price')->nullable();
             $table->timestamps();
         });
 

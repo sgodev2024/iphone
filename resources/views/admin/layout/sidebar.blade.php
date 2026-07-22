@@ -1,27 +1,25 @@
 <div class="sidebar no-print" data-background-color="dark">
     <div class="sidebar-logo">
-    <!-- Logo Header -->
-    <div class="logo-header d-flex align-items-center justify-content-between" data-background-color="white">
-        <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
-            <img src="{{ showImage(optional($config)->logo) ?? asset('images/sgovn.png') }}"
-                 alt="navbar brand"
-                 class="navbar-brand"
-                 style="max-width: 140px; max-height: 60px; object-fit: contain;" />
-        </a>
-        <div class="nav-toggle d-flex">
-            <button class="btn btn-toggle toggle-sidebar">
-                <i class="gg-menu-right"></i>
-            </button>
-            <button class="btn btn-toggle sidenav-toggler">
-                <i class="gg-menu-left"></i>
+        <!-- Logo Header -->
+        <div class="logo-header d-flex align-items-center justify-content-between" data-background-color="white">
+            <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
+                <img src="{{ showImage(optional($config)->logo) ?? asset('images/sgovn.png') }}" alt="navbar brand"
+                    class="navbar-brand" style="max-width: 140px; max-height: 60px; object-fit: contain;" />
+            </a>
+            <div class="nav-toggle d-flex">
+                <button class="btn btn-toggle toggle-sidebar">
+                    <i class="gg-menu-right"></i>
+                </button>
+                <button class="btn btn-toggle sidenav-toggler">
+                    <i class="gg-menu-left"></i>
+                </button>
+            </div>
+            <button class="topbar-toggler more">
+                <i class="gg-more-vertical-alt"></i>
             </button>
         </div>
-        <button class="topbar-toggler more">
-            <i class="gg-more-vertical-alt"></i>
-        </button>
+        <!-- End Logo Header -->
     </div>
-    <!-- End Logo Header -->
-</div>
 
     <div class="sidebar-wrapper scrollbar scrollbar-inner">
         <div class="sidebar-content">
@@ -33,18 +31,24 @@
                     </a>
                 </li>
                 <li
-                    class="nav-item {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'active' : '' }}">
+                    class="nav-item {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'active' : '' }}">
                     <a data-bs-toggle="collapse" href="#product">
                         <i class="fas fa-box"></i>
                         <p>Sản phẩm</p>
                         <span class="caret"></span>
                     </a>
-                    <div class="collapse {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.category.detail', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'show' : '' }}"
+                    <div class="collapse {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.category.detail', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'show' : '' }}"
                         id="product">
                         <ul class="nav nav-collapse">
-                            <li class=" {{ request()->routeIs('admin.products.index', 'admin.products.imeis.*') ? 'active' : '' }}">
+                            <li
+                                class=" {{ request()->routeIs('admin.products.index', 'admin.products.imeis.*') ? 'active' : '' }}">
                                 <a href="{{ route('admin.products.index') }}">
                                     <span class="sub-item">Quản lý sản phẩm</span>
+                                </a>
+                            </li>
+                            <li class=" {{ request()->routeIs('admin.imeis.*') ? 'active' : '' }}">
+                                <a href="{{ route('admin.imeis.index') }}">
+                                    <span class="sub-item">Quản lý IMEI</span>
                                 </a>
                             </li>
                             <li class=" {{ request()->routeIs('admin.category.index') ? 'active' : '' }}">
