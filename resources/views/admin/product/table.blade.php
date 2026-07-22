@@ -25,13 +25,17 @@
                 {{-- <td>{{ $product->code }}</td> mã sp
                 <td>{{ $product->category?->name }}</td> --}}
                 <td>{{ number_format($product->price_buy, 0, ',', '.') }}</td>
-                <td>{{ $product->quantity }}</td>
+                <td>{{ $product->imei_stock_count }}</td>
                 <td>
                     {!! $product->status
                         ? '<span class="badge bg-success">Kích hoạt</span>'
                         : '<span class="badge bg-danger">Không kích hoạt</span>' !!}
                 </td>
                 <td class="text-center">
+                    <a href="{{ route('admin.products.imeis.index', $product) }}" class="btn btn-info btn-sm"
+                        title="Quản lý IMEI" aria-label="Quản lý IMEI">
+                        <i class="fa-solid fa-barcode"></i>
+                    </a>
                     <a href="/admin/products/{{ $product->id }}/edit" class="btn btn-primary btn-sm">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </a>

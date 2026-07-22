@@ -10,39 +10,40 @@ use App\Http\Controllers\Admin\CategorieController;
 use App\Http\Controllers\Admin\CheckInventoryController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CompanyController;
-use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\EmployeeController;
-use App\Http\Controllers\Admin\OrderController;
-use App\Http\Controllers\Admin\ProductController;
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\Staff\ClientController as StaffClientController;
-use App\Http\Controllers\Staff\OrderController as StaffOrderController;
-use App\Http\Controllers\Staff\ProductController as StaffProductController;
 use App\Http\Controllers\Admin\ConfigController;
 use App\Http\Controllers\Admin\DailyReportController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DebtClientController;
 use App\Http\Controllers\Admin\DebtController;
 use App\Http\Controllers\Admin\DebtNccController;
+use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\importCouponController;
 use App\Http\Controllers\Admin\ImportProductController;
 use App\Http\Controllers\Admin\JournalEntryController;
+use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ProductImeiController;
 use App\Http\Controllers\Admin\ReceiptController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReportdebtController;
 use App\Http\Controllers\Admin\StorageController;
-use App\Http\Controllers\Client\SignUpController;
-use App\Http\Controllers\Staff\CheckInventoryController as staffcheckController;
-use App\Http\Controllers\Staff\WareHomeController;
-use App\Http\Controllers\SuperAdmin\StoreController;
-use App\Http\Controllers\SuperAdmin\SuperAdminController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\SupportController;
 use App\Http\Controllers\Admin\TransactionController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BulkController;
+use App\Http\Controllers\Client\SignUpController;
 use App\Http\Controllers\MultipleController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Staff\CheckInventoryController as staffcheckController;
+use App\Http\Controllers\Staff\ClientController as StaffClientController;
+use App\Http\Controllers\Staff\OrderController as StaffOrderController;
+use App\Http\Controllers\Staff\ProductController as StaffProductController;
+use App\Http\Controllers\Staff\WareHomeController;
+use App\Http\Controllers\SuperAdmin\StoreController;
+use App\Http\Controllers\SuperAdmin\SuperAdminController;
 use App\Http\Middleware\CheckLogin;
 use App\Http\Middleware\CheckLoginSuperAdmin;
 use Illuminate\Support\Facades\Route;
@@ -111,13 +112,19 @@ Route::middleware(['auth'])
                 ->controller(ProductController::class)
                 ->name('products.')
                 ->group(function () {
-                    Route::get('/',  'index')->name('index');
-                    Route::get('create',  'create')->name('create');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}/edit',  'edit')->name('edit');
-                    Route::put('{id}',  'update')->name('update');
-                    Route::post('import',  'import')->name('import');
-                    Route::get('export',  'export')->name('export');
+                    Route::get('/', 'index')->name('index');
+                    Route::get('create', 'create')->name('create');
+                    Route::post('/', 'store')->name('store');
+                    Route::prefix('{product}/imeis')
+                        ->controller(ProductImeiController::class)
+                        ->name('imeis.')
+                        ->group(function () {
+                            Route::get('/', 'index')->name('index');
+                        });
+                    Route::get('{id}/edit', 'edit')->name('edit');
+                    Route::put('{id}', 'update')->name('update');
+                    Route::post('import', 'import')->name('import');
+                    Route::get('export', 'export')->name('export');
                 });
 
             Route::prefix('users')
@@ -135,11 +142,11 @@ Route::middleware(['auth'])
                 ->controller(CompanyController::class)
                 ->name('company.')
                 ->group(function () {
-                    Route::get("/",  'index')->name('index');
-                    Route::get('create',  'create')->name('create');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}/edit',  'edit')->name('edit');
-                    Route::put('{id}',  'update')->name('update');
+                    Route::get('/', 'index')->name('index');
+                    Route::get('create', 'create')->name('create');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}/edit', 'edit')->name('edit');
+                    Route::put('{id}', 'update')->name('update');
                 });
 
             Route::prefix('profit')->name('profit.')->group(function () {
@@ -160,45 +167,45 @@ Route::middleware(['auth'])
                 ->name('category.')
                 ->group(function () {
                     Route::get('/', 'index')->name('index');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}',  'show')->name('show');
-                    Route::put('{id}',  'update')->name('update');
-                    Route::delete('delete/{id}',  'destroy')->name('destroy');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}', 'show')->name('show');
+                    Route::put('{id}', 'update')->name('update');
+                    Route::delete('delete/{id}', 'destroy')->name('destroy');
                 });
 
             Route::prefix('employees')
                 ->controller(EmployeeController::class)
                 ->name('employees.')
                 ->group(function () {
-                    Route::get('/',  'index')->name('index');
-                    Route::get('create',  'create')->name('create');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}/edit',  'edit')->name('edit');
-                    Route::put('{id}',  'update')->name('update');
+                    Route::get('/', 'index')->name('index');
+                    Route::get('create', 'create')->name('create');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}/edit', 'edit')->name('edit');
+                    Route::put('{id}', 'update')->name('update');
                 });
 
             Route::prefix('branchs')
                 ->controller(BranchController::class)
                 ->name('branchs.')
                 ->group(function () {
-                    Route::get('/',  'index')->name('index');
-                    Route::get('create',  'create')->name('create');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}/show',  'show')->name('show');
-                    Route::put('{id}',  'update')->name('update');
-                    Route::delete('/',  'destroy')->name('destroy');
-                    Route::patch('change-status',  'changeStatus')->name('status.update');
+                    Route::get('/', 'index')->name('index');
+                    Route::get('create', 'create')->name('create');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}/show', 'show')->name('show');
+                    Route::put('{id}', 'update')->name('update');
+                    Route::delete('/', 'destroy')->name('destroy');
+                    Route::patch('change-status', 'changeStatus')->name('status.update');
                 });
 
             Route::prefix('brand')
                 ->controller(BrandController::class)
                 ->name('brand.')
                 ->group(function () {
-                    Route::get('',  'index')->name('index');
-                    Route::get('create',  'create')->name('create');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}/edit',  'edit')->name('edit');
-                    Route::put('{id}',  'update')->name('update');
+                    Route::get('', 'index')->name('index');
+                    Route::get('create', 'create')->name('create');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}/edit', 'edit')->name('edit');
+                    Route::put('{id}', 'update')->name('update');
                 });
 
             Route::prefix('client')->name('client.')->group(function () {
@@ -211,9 +218,8 @@ Route::middleware(['auth'])
                 Route::get('export', [ClientController::class, 'export'])->name('export');
             });
 
-
             Route::prefix('supplier')->name('supplier.')->group(function () {
-                Route::get("/{company_id}", [SupplierController::class, 'index'])->name('index');
+                Route::get('/{company_id}', [SupplierController::class, 'index'])->name('index');
                 Route::get('/findByPhone', [SupplierController::class, 'findByPhone'])->name('findByPhone');
                 Route::get('/add/{company_id}', [SupplierController::class, 'add'])->name('add');
                 Route::post('/store', [SupplierController::class, 'store'])->name('store');
@@ -230,17 +236,14 @@ Route::middleware(['auth'])
                 ->controller(ConfigController::class)
                 ->name('config.')
                 ->group(function () {
-                    Route::get('/',  'index')->name('form');
-                    Route::post('/',  'save')->name('save');
+                    Route::get('/', 'index')->name('form');
+                    Route::post('/', 'save')->name('save');
                 });
-
 
             Route::prefix('support')->name('support.')->group(function () {
                 Route::get('/', [SupportController::class, 'contact'])->name('lienhe');
                 Route::post('/', [SupportController::class, 'feedback'])->name('feedback');
             });
-
-
 
             Route::prefix('quanlythuchi')->name('quanlythuchi.')->group(function () {
                 Route::prefix('receipts')->name('receipts.')->group(function () { // phiếu thu
@@ -276,10 +279,6 @@ Route::middleware(['auth'])
             Route::post('/delete-multiple', [MultipleController::class, 'deleteMultiple'])->name('delete-multiple');
         });
 
-
-
-
-
         // kho
         Route::middleware(['role:4'])->group(function () {
             Route::prefix('checkInventory')->name('check.')->group(function () {
@@ -313,14 +312,14 @@ Route::middleware(['auth'])
                 ->controller(StorageController::class)
                 ->name('storage.')
                 ->group(function () {
-                    Route::get('/',  'index')->name('index');
-                    Route::post('/',  'store')->name('store');
-                    Route::get('{id}',  'show')->name('show');
-                    Route::put('{id}',  'update')->name('update');
-                    Route::get('/products/{id}',  'detail')->name('products');
+                    Route::get('/', 'index')->name('index');
+                    Route::post('/', 'store')->name('store');
+                    Route::get('{id}', 'show')->name('show');
+                    Route::put('{id}', 'update')->name('update');
+                    Route::get('/products/{id}', 'detail')->name('products');
                 });
         });
-        //end kho
+        // end kho
 
         // kế toán
         Route::middleware(['role:3'])->group(function () {

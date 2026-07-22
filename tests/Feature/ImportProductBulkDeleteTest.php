@@ -317,6 +317,15 @@ class ImportProductBulkDeleteTest extends TestCase
             $table->integer('old_price')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('product_imeis', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->string('imei', 15)->unique();
+            $table->string('status', 30)->default('in_stock');
+            $table->timestamps();
+        });
     }
 
     private function createUser(int $roleId, string $email = 'warehouse@example.com'): User

@@ -33,16 +33,16 @@
                     </a>
                 </li>
                 <li
-                    class="nav-item {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.category.index', 'admin.category.create', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'active' : '' }}">
+                    class="nav-item {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'active' : '' }}">
                     <a data-bs-toggle="collapse" href="#product">
                         <i class="fas fa-box"></i>
                         <p>Sản phẩm</p>
                         <span class="caret"></span>
                     </a>
-                    <div class="collapse {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.category.index', 'admin.category.create', 'admin.category.detail', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'show' : '' }}"
+                    <div class="collapse {{ request()->routeIs('admin.products.index', 'admin.products.create', 'admin.products.edit', 'admin.products.imeis.*', 'admin.category.index', 'admin.category.create', 'admin.category.detail', 'admin.brand.index', 'admin.brand.create', 'admin.brand.edit', 'admin.company.index', 'admin.company.create', 'admin.company.edit') ? 'show' : '' }}"
                         id="product">
                         <ul class="nav nav-collapse">
-                            <li class=" {{ request()->routeIs('admin.products.index') ? 'active' : '' }}">
+                            <li class=" {{ request()->routeIs('admin.products.index', 'admin.products.imeis.*') ? 'active' : '' }}">
                                 <a href="{{ route('admin.products.index') }}">
                                     <span class="sub-item">Quản lý sản phẩm</span>
                                 </a>

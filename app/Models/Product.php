@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
-use App\Models\Cart;
-use App\Models\ProductImages;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
@@ -24,7 +23,7 @@ class Product extends Model
         'quantity',
         'description',
         'is_featured',
-        'status'
+        'status',
     ];
 
     protected $casts = [
@@ -36,10 +35,12 @@ class Product extends Model
     {
         return ProductImages::where('product_id', $this->attributes['id'])->get();
     }
+
     public function getCategoryAttribute()
     {
         return Categories::where('id', $this->attributes['category_id'])->first();
     }
+
     public function getBrandsAttribute()
     {
         return Brand::where('id', $this->attributes['brands_id'])->first();
@@ -49,10 +50,12 @@ class Product extends Model
     {
         return $this->belongsTo(Brand::class);
     }
+
     public function carts()
     {
         return $this->belongsToMany(Cart::class);
     }
+
     public function category()
     {
         return $this->belongsTo(Categories::class);
@@ -66,6 +69,11 @@ class Product extends Model
     public function productImages()
     {
         return $this->hasMany(ProductImages::class);
+    }
+
+    public function imeis(): HasMany
+    {
+        return $this->hasMany(ProductImei::class);
     }
 
     public function storages()

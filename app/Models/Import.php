@@ -4,11 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Import extends Model
 {
     use HasFactory;
+
     protected $table = 'import';
+
     protected $fillable = [
         'product_id',
         'quantity',
@@ -16,9 +19,8 @@ class Import extends Model
         'total',
     ];
 
-    protected $appends = ['product'];
-    public function getProductAttribute(){
-        return Product::where('id',$this->attributes['product_id'])->first();
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
-
 }

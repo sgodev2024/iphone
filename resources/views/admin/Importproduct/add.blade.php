@@ -68,6 +68,23 @@
         .form-wrapper {
             padding: 20px;
         }
+
+        .imei-entry-panel {
+            background: #f8f9fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .imei-entry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 10px;
+        }
+
+        .imei-counter.is-incomplete {
+            color: #dc3545;
+        }
     </style>
 
     <div class="page-inner">
@@ -102,6 +119,16 @@
                     </div>
 
                     <div class="card-body">
+                        @if ($errors->any())
+                            <div class="alert alert-danger">
+                                <strong>Phiếu nhập chưa được lưu.</strong>
+                                <ul class="mb-0 mt-2">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
                         <div class="" style="min-height: 400px">
                             <div>
                                 <form action="">
@@ -272,7 +299,8 @@
                                                                 style="width: 195px;">
                                                                 <option value="">--- Chọn nhà cung cấp ---</option>
                                                                 @foreach ($supplier as $value)
-                                                                    <option value="{{ $value->id }}">
+                                                                    <option value="{{ $value->id }}"
+                                                                        @selected((string) old('supplier') === (string) $value->id)>
                                                                         {{ $value->name }}</option>
                                                                 @endforeach
                                                             </select>
@@ -291,7 +319,8 @@
                                                                 style="width: 195px;">
                                                                 <option value="">--- Chọn nhà kho hàng ---</option>
                                                                 @foreach ($storage as $value)
-                                                                    <option value="{{ $value->id }}">
+                                                                    <option value="{{ $value->id }}"
+                                                                        @selected((string) old('storage') === (string) $value->id)>
                                                                         {{ $value->name }}</option>
                                                                 @endforeach
                                                             </select>
@@ -350,7 +379,7 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-primary"
-                                                    onclick="submitadd(event)">Lưu</button>
+                                                    onclick="submitadd(event)">Xác nhận nhập kho</button>
                                             </div>
                                         </form>
                                     </div>
@@ -365,6 +394,9 @@
         </div>
     </div>
     <script>
+        const initialImeiValues = @json(old('imeis', []));
+        const imeiValidationErrors = @json($errors->toArray());
+
         var validateorder = {
             'supplier': {
                 'element': document.getElementById('supplier'),
@@ -403,6 +435,15 @@
 
         function submitadd(event) {
             event.preventDefault();
+
+            const firstMissingImei = Array.from(document.querySelectorAll('.imei-input'))
+                .find(input => input.value.trim() === '');
+            if (firstMissingImei) {
+                firstMissingImei.focus();
+                alert('Vui lòng nhập đầy đủ IMEI trước khi lưu phiếu nhập.');
+                return;
+            }
+
             if (validateAllFields(validateorder)) {
                 document.getElementById('addimport').submit();
             }
@@ -415,11 +456,16 @@
         var $j = jQuery.noConflict();
 
         $j(document).ready(function() {
+            const imeiValues = {};
+            Object.entries(initialImeiValues || {}).forEach(([importId, values]) => {
+                imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
+            });
+
             $j.ajax({
                 url: '{{ route('admin.importproduct.import') }}',
                 type: 'GET',
                 success: function(data) {
-                    // updateimport(data.import, data.total);
+                    updateimport(data.import, data.total);
                     var category = $j('#checkboxForm_category');
                     category.empty();
                     var cantra = $j('.cantra');
@@ -480,12 +526,38 @@
                 });
             });
 
-            $j(document).on('input', '.numberInput', function(e) {
+            $j(document).on('change', '.numberInput', function(e) {
                 e.preventDefault();
-                var value = $j(this).val();
+                captureImeiValues();
+
+                var input = $j(this);
+                var value = parseInt(input.val(), 10);
                 var tr = $j(this).closest('tr');
                 var dataId = tr.data('id');
-                var total = tr.find('.total');
+                var previousQuantity = parseInt(input.data('previous-quantity'), 10) || 1;
+                var currentValues = imeiValues[dataId] || [];
+
+                if (!Number.isInteger(value) || value < 1 || value > 1000) {
+                    input.val(previousQuantity);
+                    alert('Số lượng nhập phải từ 1 đến 1000.');
+                    return;
+                }
+
+                var removedValues = currentValues.slice(value).filter(imei => imei.trim() !== '');
+
+                if (value < previousQuantity && removedValues.length > 0) {
+                    var shouldReduce = confirm(
+                        'Giảm số lượng sẽ xóa các ô IMEI đã có dữ liệu. Bạn có chắc chắn muốn tiếp tục?'
+                    );
+
+                    if (!shouldReduce) {
+                        input.val(previousQuantity);
+                        return;
+                    }
+                }
+
+                imeiValues[dataId] = currentValues.slice(0, value);
+
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.update') }}',
                     method: 'POST',
@@ -511,6 +583,12 @@
                     },
                 });
 
+            });
+
+            $j(document).on('input', '.imei-input', function() {
+                this.value = this.value.replace(/\D/g, '');
+                captureImeiValues();
+                updateImeiCounter($j(this).data('import-id'));
             });
 
             $j("#search").on("keyup", function() {
@@ -639,7 +717,7 @@
             });
 
             function updateimport(importproduct, total) {
-                console.log(importproduct);
+                captureImeiValues();
                 var importhtml = $j('#import-data-product');
                 var tieptuc = $j('#tieptuc');
                 var total_input = $('#total_input');
@@ -663,9 +741,10 @@
                     </td>
                     <td>${ item.product && item.product.name ? item.product.name : "" }</td>
                     <td>
-                        <input style='text-align: center;' type="number"
+                        <input style='text-align: center;' type="number" min="1" max="1000"
                             class="numberInput"
                             name="quantity"
+                            data-previous-quantity="${item.quantity}"
                             value='${item.quantity !== null ? item.quantity : ""}'
                             oninput="this.value = this.value.replace(/[^0-9]/g, '');">
                     </td>
@@ -675,10 +754,78 @@
                     </td>
                     <td class="total">${item.total !== null ? item.total : ""}</td>
                 </tr>
+                ${buildImeiPanel(item)}
             `;
                         importhtml.append(productHtml);
+                        updateImeiCounter(item.id);
                     });
                 }
+            }
+
+            function buildImeiPanel(item) {
+                const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
+                const values = imeiValues[item.id] || [];
+                const fields = [];
+
+                for (let index = 0; index < quantity; index++) {
+                    const value = values[index] || '';
+                    const errorKey = `imeis.${item.id}.${index}`;
+                    const error = imeiValidationErrors[errorKey]?.[0] || '';
+
+                    fields.push(`
+                        <div>
+                            <label class="form-label mb-1">Máy ${index + 1} – IMEI</label>
+                            <input type="text" inputmode="numeric" maxlength="15" autocomplete="off"
+                                form="addimport" name="imeis[${item.id}][]"
+                                data-import-id="${item.id}"
+                                class="form-control imei-input ${error ? 'is-invalid' : ''}"
+                                value="${escapeHtml(value)}"
+                                placeholder="Nhập IMEI gồm 15 chữ số">
+                            ${error ? `<div class="invalid-feedback">${escapeHtml(error)}</div>` : ''}
+                        </div>
+                    `);
+                }
+
+                return `
+                    <tr class="imei-detail-row" data-import-id="${item.id}">
+                        <td></td>
+                        <td colspan="6">
+                            <div class="imei-entry-panel">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>Danh sách IMEI – ${escapeHtml(item.product?.name || '')}</strong>
+                                    <span class="imei-counter" data-import-id="${item.id}">Đã nhập 0/${quantity} IMEI</span>
+                                </div>
+                                <div class="imei-entry-grid">${fields.join('')}</div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            function captureImeiValues() {
+                $j('.imei-input').each(function() {
+                    const importId = String($j(this).data('import-id'));
+                    const inputs = $j(`.imei-input[data-import-id="${importId}"]`);
+                    imeiValues[importId] = inputs.map((index, input) => input.value).get();
+                });
+            }
+
+            function updateImeiCounter(importId) {
+                const inputs = $j(`.imei-input[data-import-id="${importId}"]`);
+                const entered = inputs.filter((index, input) => input.value.trim() !== '').length;
+                const counter = $j(`.imei-counter[data-import-id="${importId}"]`);
+
+                counter.text(`Đã nhập ${entered}/${inputs.length} IMEI`);
+                counter.toggleClass('is-incomplete', entered !== inputs.length);
+            }
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
             }
         });
     </script>

@@ -38,25 +38,25 @@
                                         <tr>
                                             <th scope="row"><i class="fas fa-user"></i> Tên khách hàng</th>
                                             <td>
-                                                <div class="nowrap">{{ $importdetail->company->name }}</div>
+                                                <div class="nowrap">{{ $importdetail->companyRelation->name }}</div>
                                             </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-phone"></i> Số điện thoại</th>
                                             <td>
-                                                <div class="nowrap">{{ $importdetail->company->phone }}</div>
+                                                <div class="nowrap">{{ $importdetail->companyRelation->phone }}</div>
                                             </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-envelope"></i> Email</th>
                                             <td>
-                                                <div class="nowrap">{{ $importdetail->company->email }}</div>
+                                                <div class="nowrap">{{ $importdetail->companyRelation->email }}</div>
                                             </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-map-marker-alt"></i> Địa chỉ </th>
                                             <td>
-                                                <div class="nowrap">{{ $importdetail->company->address }}</div>
+                                                <div class="nowrap">{{ $importdetail->companyRelation->address }}</div>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -111,17 +111,25 @@
                                             <th>Số lượng nhập</th>
                                             <th>Đơn giá cũ</th>
                                             <th>Đơn giá mới</th>
+                                            <th>IMEI</th>
                                             <th>Tổng tiền</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @foreach ($importdetail->detail as $detail)
+                                        @foreach ($importdetail->details as $detail)
                                             <tr>
                                                 <td>{{ $detail->product ? $detail->product->code : '' }}</td>
                                                 <td>{{ $detail->product ? $detail->product->name : '' }}</td>
                                                 <td>{{ $detail->quantity }}</td>
                                                 <td>{{ number_format($detail->old_price) }}</td>
                                                 <td>{{ number_format($detail->price) }}</td>
+                                                <td>
+                                                    @forelse ($detail->imeis as $imei)
+                                                        <div class="font-monospace">{{ $imei->imei }}</div>
+                                                    @empty
+                                                        <span class="text-muted">Dữ liệu cũ</span>
+                                                    @endforelse
+                                                </td>
                                                 <td>{{ number_format($detail->price * $detail->quantity) }}</td>
 
                                             </tr>
@@ -144,4 +152,3 @@
         </div>
     </div>
 @endsection
-

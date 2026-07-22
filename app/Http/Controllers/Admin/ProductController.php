@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Models\Categories;
-use Exception;
-use App\Models\Product;
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\ProductRequest;
 use App\Models\Brand;
+use App\Models\Categories;
+use App\Models\Product;
+use App\Models\ProductImei;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -16,7 +16,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ProductController extends Controller
 {
-
     public function index(Request $request)
     {
         $title = 'Sản phẩm';
@@ -25,7 +24,12 @@ class ProductController extends Controller
 
             $products = Product::query()
                 ->where('user_id', Auth::id())
-                ->when(!empty($searchText), function ($query) use ($searchText) {
+                ->withCount([
+                    'imeis as imei_stock_count' => function ($query) {
+                        $query->where('status', ProductImei::STATUS_IN_STOCK);
+                    },
+                ])
+                ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%$searchText%");
                 })
                 ->latest()
@@ -33,6 +37,7 @@ class ProductController extends Controller
                 ->appends($request->query());
 
             $html = view('admin.product.table', compact('products'))->render();
+
             return successResponse(data: ['html' => $html], isToastr: false);
         }
 
@@ -45,6 +50,7 @@ class ProductController extends Controller
         $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
         $product = null;
+
         return view('admin.product.form', compact('title', 'categories', 'brands', 'product'));
     }
 
@@ -64,7 +70,7 @@ class ProductController extends Controller
 
             Product::create($credentials);
 
-            return successResponse("Thêm mới sản phẩm thành công.", code: Response::HTTP_CREATED);
+            return successResponse('Thêm mới sản phẩm thành công.', code: Response::HTTP_CREATED);
         });
     }
 
@@ -74,6 +80,7 @@ class ProductController extends Controller
         $title = "Cập nhật sản phẩm - {$product->name}";
         $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
+
         return view('admin.product.form', compact('title', 'categories', 'brands', 'product'));
     }
 
@@ -92,13 +99,13 @@ class ProductController extends Controller
 
             $credentials['is_featured'] ??= 0;
 
-            $updated =  $product->update($credentials);
+            $updated = $product->update($credentials);
 
             if ($updated && $request->hasFile('thumbnail')) {
                 deleteImage($oldThumbnail);
             }
 
-            return successResponse("Cập nhật sản phẩm thành công.");
+            return successResponse('Cập nhật sản phẩm thành công.');
         });
     }
 
@@ -106,7 +113,7 @@ class ProductController extends Controller
 
     public function export()
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $products = Product::all();
         // Đặt tiêu đề cột
@@ -121,18 +128,17 @@ class ProductController extends Controller
 
         // Lấy danh sách sản phẩm
 
-
         // Điền dữ liệu vào sheet
         $row = 2;
         foreach ($products as $product) {
-            $sheet->setCellValue('A' . $row, $product->code);
-            $sheet->setCellValue('B' . $row, $product->name);
-            $sheet->setCellValue('C' . $row, $product->quantity);
-            $sheet->setCellValue('D' . $row, $product->price);
-            $sheet->setCellValue('E' . $row, $product->price_buy);
-            $sheet->setCellValue('F' . $row, $product->category->name);
-            $sheet->setCellValue('G' . $row, $product->brands->name);
-            $sheet->setCellValue('H' . $row, $product->product_unit);
+            $sheet->setCellValue('A'.$row, $product->code);
+            $sheet->setCellValue('B'.$row, $product->name);
+            $sheet->setCellValue('C'.$row, $product->quantity);
+            $sheet->setCellValue('D'.$row, $product->price);
+            $sheet->setCellValue('E'.$row, $product->price_buy);
+            $sheet->setCellValue('F'.$row, $product->category->name);
+            $sheet->setCellValue('G'.$row, $product->brands->name);
+            $sheet->setCellValue('H'.$row, $product->product_unit);
             $row++;
         }
 
@@ -159,7 +165,7 @@ class ProductController extends Controller
             200,
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
             ]
         );
 

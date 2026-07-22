@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ImportDetail extends Model
 {
@@ -16,7 +17,7 @@ class ImportDetail extends Model
         'product_id',
         'quantity',
         'price',
-        'old_price'
+        'old_price',
     ];
 
     public function product()
@@ -32,5 +33,10 @@ class ImportDetail extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function imeis(): HasMany
+    {
+        return $this->hasMany(ProductImei::class);
     }
 }

@@ -93,6 +93,7 @@
                             }
                         },
                         error: (xhr) => {
+                            if (xhr.responseJSON?.message) return datgin.error(xhr.responseJSON.message);
                             datgin.error('Đã có lỗi xảy ra. Vui lòng thử lại sau!');
                         }
                     })

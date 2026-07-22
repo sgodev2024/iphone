@@ -13,36 +13,41 @@ use Illuminate\Support\Facades\Log;
 
 class ImportProductService
 {
-
     protected $importCoupon;
+
     protected $importDetail;
+
     public function __construct(ImportCoupon $importCoupon, ImportDetail $importDetail)
     {
         $this->importCoupon = $importCoupon;
         $this->importDetail = $importDetail;
     }
+
     public function getImportCoupon($perPage = 10, $search = null)
     {
         $query = ImportCoupon::query();
 
-        if (!empty($search)) {
+        if (! empty($search)) {
             $query->where(function ($q) use ($search) {
-                $q->where('coupon_code', 'like', '%' . $search . '%')
-                    ->orWhere('user_id', 'like', '%' . $search . '%')
-                    ->orWhere('supplier_id', 'like', '%' . $search . '%');
+                $q->where('coupon_code', 'like', '%'.$search.'%')
+                    ->orWhere('user_id', 'like', '%'.$search.'%')
+                    ->orWhere('supplier_id', 'like', '%'.$search.'%');
             });
         }
+
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
-
 
     public function getImportCouponByid($id)
     {
         try {
             Log::info('Fetching all ImportCoupon');
-            return $this->importCoupon->find($id);
+
+            return $this->importCoupon
+                ->with(['details.product', 'details.imeis', 'storage', 'user', 'companyRelation'])
+                ->findOrFail($id);
         } catch (Exception $e) {
-            Log::error('Failed to fetch ImportCoupon: ' . $e->getMessage());
+            Log::error('Failed to fetch ImportCoupon: '.$e->getMessage());
             throw new Exception('Failed to fetch ImportCoupon');
         }
     }
@@ -51,10 +56,11 @@ class ImportProductService
     {
         try {
             Log::info('Fetching add ImportCoupon');
-            $importCoupon  = $this->importCoupon->create($data);
+            $importCoupon = $this->importCoupon->create($data);
+
             return $importCoupon;
         } catch (Exception $e) {
-            Log::error('Failed to fetch ImportCoupon: ' . $e->getMessage());
+            Log::error('Failed to fetch ImportCoupon: '.$e->getMessage());
             throw new Exception('Failed to fetch add ImportCoupon');
         }
     }
@@ -64,10 +70,11 @@ class ImportProductService
         try {
             Log::info('Fetching add importDetail');
             // dd($data);
-            $importDetail  = $this->importDetail->create($data);
+            $importDetail = $this->importDetail->create($data);
+
             return $importDetail;
         } catch (Exception $e) {
-            Log::error('Failed to fetch importDetail: ' . $e->getMessage());
+            Log::error('Failed to fetch importDetail: '.$e->getMessage());
             throw new Exception('Failed to fetch add importDetail');
         }
     }
@@ -75,7 +82,7 @@ class ImportProductService
     public function deleteImportCoupons(array $ids, $user): int
     {
         $ids = collect($ids)
-            ->map(fn($id) => (int) $id)
+            ->map(fn ($id) => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -86,12 +93,12 @@ class ImportProductService
 
         return DB::transaction(function () use ($ids, $user) {
             $query = ImportCoupon::query()
-                ->with(['details.product'])
+                ->with(['details.product', 'details.imeis'])
                 ->whereIn('id', $ids)
                 ->lockForUpdate();
 
             $roleId = (int) ($user->role_id ?? 0);
-            if (!in_array($roleId, [1, 2], true)) {
+            if (! in_array($roleId, [1, 2], true)) {
                 $query->where('user_id', $user->id);
             }
 
@@ -123,6 +130,12 @@ class ImportProductService
         $paidAmount = (int) ($coupon->payment_ncc ?? 0);
         $totalAmount = (int) ($coupon->total ?? 0);
         $debtAmount = max($totalAmount - $paidAmount, 0);
+
+        if ($coupon->details->contains(fn (ImportDetail $detail) => $detail->imeis->isNotEmpty())) {
+            throw new DomainException(
+                "Không thể xóa phiếu nhập {$code} vì dữ liệu IMEI đã được ghi nhận vào kho."
+            );
+        }
 
         if ((string) $coupon->status === '1') {
             throw new DomainException("Phiếu nhập {$code} đã ở trạng thái đã thanh toán, không thể xóa.");
@@ -171,7 +184,7 @@ class ImportProductService
             ->lockForUpdate()
             ->first();
 
-        if (!$stock) {
+        if (! $stock) {
             throw new DomainException("Không tìm thấy tồn kho của sản phẩm #{$productId} trong kho #{$storageId}.");
         }
 
@@ -184,7 +197,7 @@ class ImportProductService
             ->lockForUpdate()
             ->first();
 
-        if (!$product) {
+        if (! $product) {
             throw new DomainException("Không tìm thấy sản phẩm #{$productId}.");
         }
 

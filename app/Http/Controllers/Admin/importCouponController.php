@@ -2,200 +2,253 @@
 
 namespace App\Http\Controllers\Admin;
 
-use Carbon\Carbon;
-use App\Models\Import;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Import\StoreImportCouponRequest;
 use App\Models\Account;
 use App\Models\Company;
-use App\Models\Product;
-use App\Models\Supplier;
-use App\Models\Transaction;
-use App\Models\ImportCoupon;
-use Illuminate\Http\Request;
 use App\Models\ExpenseDetail;
+use App\Models\Import;
+use App\Models\Product;
+use App\Models\ProductImei;
+use App\Models\SupplierDebtsDetail;
+use App\Models\Transaction;
 use App\Models\TransactionEntry;
+use App\Services\CompanyProductService;
 use App\Services\CompanyService;
 use App\Services\DebtNccService;
 use App\Services\ExpenseService;
-use App\Services\ProductService;
-use App\Services\SupplierService;
-use App\Models\SupplierDebtsDetail;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
 use App\Services\ImportProductService;
-use App\Services\CompanyProductService;
 use App\Services\ProductStorageService;
+use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class importCouponController extends Controller
 {
+    public function __construct(
+        protected ImportProductService $importProductService,
+        protected ExpenseService $expenseService,
+        protected DebtNccService $debtNccService,
+        protected CompanyService $companyService,
+        protected ProductStorageService $productStorageService,
+        protected CompanyProductService $companyProductService,
+    ) {}
 
-    protected $ImportProductService;
-    protected $productService;
-    protected $expenseService;
-    protected $debtNccService;
-    protected $supplierService;
-    protected $companyService;
-    protected $productStorageService;
-    protected $companyProductService;
-
-    public function __construct(ImportProductService $ImportProductService, ProductService $productService, ExpenseService $expenseService, DebtNccService $debtNccService, SupplierService $supplierService, CompanyService $companyService, ProductStorageService $productStorageService, CompanyProductService $companyProductService)
+    public function add(StoreImportCouponRequest $request): RedirectResponse
     {
-        $this->ImportProductService = $ImportProductService;
-        $this->productService = $productService;
-        $this->expenseService = $expenseService;
-        $this->debtNccService = $debtNccService;
-        $this->supplierService = $supplierService;
-        $this->companyService = $companyService;
-        $this->productStorageService = $productStorageService;
-        $this->companyProductService = $companyProductService;
+        try {
+            DB::transaction(function () use ($request) {
+                $this->confirmImportCoupon($request);
+            });
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (UniqueConstraintViolationException) {
+            return back()
+                ->withErrors(['imeis' => 'Có IMEI đã tồn tại trong hệ thống. Phiếu nhập chưa được lưu.'])
+                ->withInput();
+        } catch (Throwable $exception) {
+            Log::error('Failed to confirm import coupon with IMEIs.', [
+                'user_id' => Auth::id(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return back()
+                ->with('error', 'Không thể lưu phiếu nhập. Vui lòng kiểm tra dữ liệu và thử lại.')
+                ->withInput();
+        }
+
+        return redirect()
+            ->route('admin.importproduct.index')
+            ->with('success', 'Nhập hàng và ghi nhận IMEI thành công.');
     }
-    public function add(Request $request)
+
+    private function confirmImportCoupon(StoreImportCouponRequest $request): void
     {
-        $user        = Auth::user();
-        $supplier_id = $request->supplier;
-        $total       = $request->total;
-        $totalncc    = $request->totalncc ? $request->totalncc : 0;
-        $congno      = $total - $totalncc;
+        $user = $request->user();
+        $supplierId = (int) $request->validated('supplier');
+        $storageId = (int) $request->validated('storage');
+        $imports = Import::query()
+            ->with('product')
+            ->where('quantity', '>', 0)
+            ->lockForUpdate()
+            ->get();
 
-        $data = [
-            'user_id'      => $user->id,
-            'companies_id' => $supplier_id,
-            'total'        => $total,
-            'payment_ncc'  => $totalncc,
-            'storage_id'   => $request->storage,
-        ];
+        if ($imports->isEmpty()) {
+            throw ValidationException::withMessages([
+                'items' => 'Phiếu nhập phải có ít nhất một sản phẩm.',
+            ]);
+        }
 
-        // --- Quản lý công nợ NCC ---
-        if ($congno > 0) {
-            $debtncc = $this->debtNccService->getAllSupplierDebt()->pluck('companies_id');
-            if ($debtncc->contains($supplier_id)) {
-                $supplier = $this->debtNccService->findCompanyDebtBySupplier($supplier_id);
-                $update = [
-                    'amount' => $supplier->amount + $congno,
-                ];
-                $this->debtNccService->updateSupplierDebt($update, $supplier_id);
-                SupplierDebtsDetail::create([
-                    'supplier_debts_id' => $supplier->id,
-                    'content'           => 'Thanh toán thành công',
-                    'amount'            => $congno,
-                ]);
-            } else {
-                $supplier = $this->companyService->findCompanyById($supplier_id);
-                $add = [
-                    'companies_id' => $supplier_id,
-                    'amount'       => $congno,
-                    'description'  => 'Nợ nhà cung cấp ' . $supplier->name . '(' . $supplier->phone . ')',
-                ];
-                $debt = $this->debtNccService->addSupplierDebt($add);
-                SupplierDebtsDetail::create([
-                    'supplier_debts_id' => $debt->id,
-                    'content'           => 'Thanh toán thành công',
-                    'amount'            => $congno,
+        foreach ($imports as $import) {
+            $imeis = array_values((array) $request->input("imeis.{$import->id}", []));
+
+            if (count($imeis) !== (int) $import->quantity) {
+                $productName = $import->product?->name ?? "#{$import->product_id}";
+
+                throw ValidationException::withMessages([
+                    "imeis.{$import->id}" => "Số IMEI phải bằng số lượng nhập của sản phẩm {$productName}.",
                 ]);
             }
         }
 
-        if ($totalncc > 0) {
-            $supplier = Company::find($supplier_id);
-            $expenses = $this->expenseService->getAllExpense()->pluck('supplier_id');
-            if ($expenses->contains($supplier_id)) {
-                $expense = $this->expenseService->findExpenseBysupplier($supplier_id);
-                $expensedata = [
-                    'amount_spent' => $totalncc + $expense->amount_spent,
-                ];
-                $this->expenseService->updateExpense($expensedata, $supplier_id);
-                ExpenseDetail::create([
-                    'expense_id' => $expense->id,
-                    'content'    => 'Thanh toán cho nhà cung cấp ' . $supplier->name,
-                    'amount'     => $totalncc,
-                    'date'       => Carbon::now()->toDateString(),
-                ]);
-            } else {
-                $add = [
-                    'companies_id' => $supplier_id,
-                    'content'      => 'Thanh toán cho nhà cung cấp ' . $supplier->name,
-                    'amount_spent' => $totalncc,
-                    'date_spent'   => Carbon::now()->toDateString(),
-                ];
-                $expense = $this->expenseService->addExpense($add);
-                ExpenseDetail::create([
-                    'expense_id' => $expense->id,
-                    'content'    => 'Thanh toán cho nhà cung cấp ' . $supplier->name,
-                    'amount'     => $totalncc,
-                    'date'       => Carbon::now()->toDateString(),
-                ]);
-            }
+        $total = (int) $imports->sum('total');
+        $paidAmount = (int) $request->validated('totalncc', 0);
+
+        if ($paidAmount > $total) {
+            throw ValidationException::withMessages([
+                'totalncc' => 'Số tiền trả nhà cung cấp không được vượt quá tổng tiền phiếu nhập.',
+            ]);
         }
 
-        $importCoupon = $this->ImportProductService->addImportCoupon($data);
-        $import = Import::where('quantity', '>', 0)->get();
+        $importCoupon = $this->importProductService->addImportCoupon([
+            'user_id' => $user->id,
+            'companies_id' => $supplierId,
+            'total' => $total,
+            'payment_ncc' => $paidAmount,
+            'storage_id' => $storageId,
+        ]);
 
-        foreach ($import as $value) {
-            $data1 = [
-                'import_id'  => $importCoupon->id,
-                'product_id' => $value->product_id,
-                'quantity'   => $value->quantity,
-                'price'      => $value->price,
-                'old_price'  => $value->product->price,
-            ];
-            $this->ImportProductService->addImportDetail($data1);
+        foreach ($imports as $import) {
+            $product = Product::query()
+                ->whereKey($import->product_id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            $product = $this->productService->getProductById($value->product_id);
-            $data2 = [
-                'quantity' => $product->quantity + $value->quantity,
-                'price'    => $value->price,
-            ];
-            Product::find($value->product_id)->update($data2);
-
-            $productStorageData = [
-                'quantity' => $value->quantity,
-            ];
-            $this->productStorageService->updateProductStorage($value->product_id, $request->storage, $productStorageData);
-
-            $this->companyProductService->updateCompanyProduct($value->product_id, $supplier_id);
-        }
-
-        Import::truncate();
-        $accountGoodsId = Account::where('code', '156')->value('id'); // Hàng hóa
-        $accountNCCId   = Account::where('code', '331')->value('id'); // Phải trả NCC
-
-        if ($accountGoodsId && $accountNCCId) {
-            $transaction = Transaction::create([
-                'user_id'          => $user->id,
-                'transaction_date' => now(),
-                'description'      => "Nhập hàng NCC",
-                'type'             => 'expense',
-                'document_type'    => 'import',
-                'reference_number' => 'IMP-' . now()->format('YmdHis'),
-                'created_by'       => $user->id,
+            $importDetail = $this->importProductService->addImportDetail([
+                'import_id' => $importCoupon->id,
+                'product_id' => $product->id,
+                'quantity' => (int) $import->quantity,
+                'price' => $import->price,
+                'old_price' => $product->price,
             ]);
 
-            // 1. Nợ 156 - gắn NCC
-            TransactionEntry::create([
-                'transaction_id' => $transaction->id,
-                'account_id'     => $accountGoodsId,
-                'debit_amount'   => $total,
-                'credit_amount'  => 0,
-                'tableable_type' => 'App\\Models\\Company',
-                'tableable_id'   => $supplier_id,
+            $imeis = array_values((array) $request->input("imeis.{$import->id}", []));
+            $importDetail->imeis()->createMany(array_map(
+                fn (string $imei) => [
+                    'product_id' => $product->id,
+                    'imei' => $imei,
+                    'status' => ProductImei::STATUS_IN_STOCK,
+                ],
+                $imeis
+            ));
+
+            $product->update([
+                'quantity' => (int) $product->quantity + (int) $import->quantity,
+                'price' => $import->price,
             ]);
 
-            // 2. 331 - nếu trả hết thì Ghi Có, nếu chưa trả thì Ghi Nợ
-            if ($congno > 0) {
-                TransactionEntry::create([
-                    'transaction_id' => $transaction->id,
-                    'account_id'     => $accountNCCId,
-                    'debit_amount'   => $congno,
-                    'credit_amount'  => 0,
-                ]);
-            } else {
-                TransactionEntry::create([
-                    'transaction_id' => $transaction->id,
-                    'account_id'     => $accountNCCId,
-                    'debit_amount'   => 0,
-                    'credit_amount'  => $total,
-                ]);
-            }
+            $this->productStorageService->updateProductStorage($product->id, $storageId, [
+                'quantity' => (int) $import->quantity,
+            ]);
+            $this->companyProductService->updateCompanyProduct($product->id, $supplierId);
         }
-        return redirect()->route('admin.importproduct.index')->with('success', 'Nhập hàng thành công');
+
+        $debtAmount = $total - $paidAmount;
+        $this->recordSupplierDebt($supplierId, $debtAmount);
+        $this->recordSupplierPayment($supplierId, $paidAmount);
+        $this->recordAccountingEntries($user->id, $supplierId, $total, $debtAmount);
+
+        Import::query()->whereKey($imports->modelKeys())->delete();
+    }
+
+    private function recordSupplierDebt(int $supplierId, int $debtAmount): void
+    {
+        if ($debtAmount <= 0) {
+            return;
+        }
+
+        $supplierIds = $this->debtNccService->getAllSupplierDebt()->pluck('companies_id');
+
+        if ($supplierIds->contains($supplierId)) {
+            $supplierDebt = $this->debtNccService->findCompanyDebtBySupplier($supplierId);
+            $this->debtNccService->updateSupplierDebt([
+                'amount' => $supplierDebt->amount + $debtAmount,
+            ], $supplierId);
+        } else {
+            $company = $this->companyService->findCompanyById($supplierId);
+            $supplierDebt = $this->debtNccService->addSupplierDebt([
+                'companies_id' => $supplierId,
+                'amount' => $debtAmount,
+                'description' => "Nợ nhà cung cấp {$company->name} ({$company->phone})",
+            ]);
+        }
+
+        SupplierDebtsDetail::create([
+            'supplier_debts_id' => $supplierDebt->id,
+            'content' => 'Ghi nhận công nợ từ phiếu nhập',
+            'amount' => $debtAmount,
+        ]);
+    }
+
+    private function recordSupplierPayment(int $supplierId, int $paidAmount): void
+    {
+        if ($paidAmount <= 0) {
+            return;
+        }
+
+        $company = Company::findOrFail($supplierId);
+        $supplierIds = $this->expenseService->getAllExpense()->pluck('companies_id');
+
+        if ($supplierIds->contains($supplierId)) {
+            $expense = $this->expenseService->findExpenseByCompany($supplierId);
+            $this->expenseService->updateExpense([
+                'amount_spent' => $paidAmount + $expense->amount_spent,
+            ], $supplierId);
+        } else {
+            $expense = $this->expenseService->addExpense([
+                'companies_id' => $supplierId,
+                'content' => "Thanh toán cho nhà cung cấp {$company->name}",
+                'amount_spent' => $paidAmount,
+                'date_spent' => Carbon::now()->toDateString(),
+            ]);
+        }
+
+        ExpenseDetail::create([
+            'expense_id' => $expense->id,
+            'content' => "Thanh toán cho nhà cung cấp {$company->name}",
+            'amount' => $paidAmount,
+            'date' => Carbon::now()->toDateString(),
+        ]);
+    }
+
+    private function recordAccountingEntries(int $userId, int $supplierId, int $total, int $debtAmount): void
+    {
+        $accountGoodsId = Account::where('code', '156')->value('id');
+        $accountSupplierId = Account::where('code', '331')->value('id');
+
+        if (! $accountGoodsId || ! $accountSupplierId) {
+            return;
+        }
+
+        $transaction = Transaction::create([
+            'user_id' => $userId,
+            'transaction_date' => now(),
+            'description' => 'Nhập hàng NCC',
+            'type' => 'expense',
+            'document_type' => 'import',
+            'reference_number' => 'IMP-'.now()->format('YmdHis'),
+            'created_by' => $userId,
+        ]);
+
+        TransactionEntry::create([
+            'transaction_id' => $transaction->id,
+            'account_id' => $accountGoodsId,
+            'debit_amount' => $total,
+            'credit_amount' => 0,
+            'tableable_type' => Company::class,
+            'tableable_id' => $supplierId,
+        ]);
+
+        TransactionEntry::create([
+            'transaction_id' => $transaction->id,
+            'account_id' => $accountSupplierId,
+            'debit_amount' => $debtAmount > 0 ? $debtAmount : 0,
+            'credit_amount' => $debtAmount > 0 ? 0 : $total,
+        ]);
     }
 }

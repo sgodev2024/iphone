@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ImportCoupon extends Model
 {
     use HasFactory;
+
     protected $table = 'import_coupon';
 
     protected $fillable = [
@@ -47,10 +49,17 @@ class ImportCoupon extends Model
     {
         return $this->belongsTo(User::class);
     }
+
     public function storage()
     {
         return $this->belongsTo(Storage::class);
     }
+
+    public function companyRelation(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'companies_id');
+    }
+
     /**
      * Get the import coupon's details.
      */
@@ -65,7 +74,7 @@ class ImportCoupon extends Model
 
         static::creating(function ($model) {
             $latestCoupon = ImportCoupon::orderBy('id', 'desc')->first();
-            $model->coupon_code = 'MP' . str_pad($latestCoupon ? ($latestCoupon->id + 1) : 1, 6, '0', STR_PAD_LEFT);
+            $model->coupon_code = 'MP'.str_pad($latestCoupon ? ($latestCoupon->id + 1) : 1, 6, '0', STR_PAD_LEFT);
         });
     }
 }
