@@ -35,16 +35,10 @@
                                         value="{{ formatPrice(optional($product)->price_buy) }}">
                                 </div>
 
-                                <div class="col-md-6">
+                                <div class="col-md-12">
                                     <label for="product_unit" class="form-label mb-1 fw-bold">Đơn vị</label>
                                     <input type="text" class="form-control" name="product_unit"
                                         value="{{ optional($product)->product_unit }}">
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label for="quantity" class="form-label mb-1 fw-bold">Số lượng</label>
-                                    <input type="text" class="form-control" name="quantity"
-                                        value="{{ optional($product)->quantity }}">
                                 </div>
 
                                 <div class="col-md-6">

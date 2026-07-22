@@ -60,6 +60,7 @@ class ProductController extends Controller
 
             $credentials['user_id'] = Auth::id();
             $credentials['code'] = generateCode('products', 'SP');
+            $credentials['quantity'] = 0;
 
             Product::create($credentials);
 

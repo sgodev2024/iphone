@@ -4,8 +4,9 @@
             <th style="width: 3%" class="text-center"><input type="checkbox" id="check-all"></th>
             <th style="width: 12%"># | ngày tạo</th>
             <th style="width: 20%">Tên sản phẩm</th>
-            <th style="width: 10%">Mã SP</th>
-            <th style="width: 12%">Danh mục</th>
+            <th style="width: 10%">Giá nhập</th>
+            {{-- <th style="width: 10%">Mã SP</th>
+            <th style="width: 12%">Danh mục</th> --}}
             <th style="width: 10%">Giá bán</th>
             <th style="width: 8%">Tồn kho</th>
             <th style="width: 12%">Trạng thái</th>
@@ -20,8 +21,9 @@
                     | {{ $product->created_at->format('d/m/Y') }}
                 </td>
                 <td>{{ $product->name }}</td>
-                <td>{{ $product->code }}</td>
-                <td>{{ $product->category?->name }}</td>
+                <td>{{ number_format($product->price, 0, ',', '.') }}</td>
+                {{-- <td>{{ $product->code }}</td> mã sp
+                <td>{{ $product->category?->name }}</td> --}}
                 <td>{{ number_format($product->price_buy, 0, ',', '.') }}</td>
                 <td>{{ $product->quantity }}</td>
                 <td>
