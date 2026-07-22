@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Import;
 use App\Models\Product;
+use App\Models\ProductImei;
 use App\Services\CategoryService;
 use App\Services\CompanyService;
 use App\Services\ImportProductService;
@@ -168,10 +169,16 @@ class ImportProductController extends Controller
 
     public function importupdate(Request $request)
     {
-        $validated = $request->validate([
-            'dataId' => ['required', 'integer', 'exists:import,id'],
-            'value' => ['required', 'integer', 'min:1', 'max:1000'],
-        ]);
+        $validated = $request->validate(
+            [
+                'dataId' => ['required', 'integer', 'exists:import,id'],
+                'value' => ['required', 'integer', 'min:1', 'max:'.ProductImei::MAX_IMPORT_QUANTITY],
+            ],
+            [
+                'value.max' => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
+                'value.min' => 'Số lượng nhập phải từ 1 đến 35.',
+            ]
+        );
         $import = $this->stagingImportQuery()
             ->whereKey($validated['dataId'])
             ->firstOrFail();
@@ -268,6 +275,18 @@ class ImportProductController extends Controller
 
     private function currentImportPayload(): array
     {
+        $imports = $this->stagingImportQuery()->get();
+        $imports->each(function (Import $import) {
+            if ((int) $import->quantity <= ProductImei::MAX_IMPORT_QUANTITY) {
+                return;
+            }
+
+            $import->update([
+                'quantity' => ProductImei::MAX_IMPORT_QUANTITY,
+                'total' => $import->price * ProductImei::MAX_IMPORT_QUANTITY,
+            ]);
+        });
+
         $imports = $this->stagingImportQuery()->get();
 
         return [

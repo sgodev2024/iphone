@@ -15,6 +15,8 @@ class ProductImei extends Model
 
     public const STATUS_SOLD = 'sold';
 
+    public const MAX_IMPORT_QUANTITY = 35;
+
     protected $fillable = [
         'product_id',
         'import_detail_id',

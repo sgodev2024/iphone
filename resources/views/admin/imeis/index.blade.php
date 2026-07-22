@@ -22,83 +22,46 @@
             line-height: 1.35;
         }
 
-        .imei-stat-row {
-            margin-bottom: 14px;
+        .imei-summary-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.4;
         }
 
-        .imei-stat-card {
-            height: 100%;
-            margin-bottom: 0;
-            border-radius: 8px;
-        }
-
-        .imei-stat-card .card-body {
-            padding: 8px 12px !important;
-        }
-
-        .imei-stat-content {
-            min-height: 40px;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .imei-stat-card .icon-big.imei-stat-icon {
-            flex: 0 0 40px;
-            width: 40px;
-            height: 40px;
-            min-height: 40px;
-            border-radius: 8px;
-            font-size: 17px;
-        }
-
-        .imei-stat-card .imei-stat-icon i {
-            line-height: 1;
-        }
-
-        .imei-stat-copy {
-            min-width: 0;
-        }
-
-        .imei-stat-card .imei-stat-label {
-            margin-bottom: 2px;
-            color: #6c757d;
-            font-size: 12px;
+        .imei-summary-label {
+            color: #4b5563;
             font-weight: 500;
-            line-height: 1.25;
-            white-space: nowrap;
         }
 
-        .imei-stat-card .imei-stat-value {
-            margin-bottom: 0;
+        .imei-summary-value {
             color: #1f2937;
-            font-size: 18px;
             font-weight: 700;
-            line-height: 1.15;
         }
 
-        .imei-filter-card,
+        .imei-summary-separator {
+            color: #9ca3af;
+        }
+
         .imei-list-card {
-            margin-bottom: 14px;
-            border-radius: 8px;
+            margin-bottom: 0;
         }
 
-        .imei-filter-card .card-header,
-        .imei-list-card .card-header {
-            padding: 11px 16px;
+        .imei-card-toolbar {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #ebecec;
         }
 
-        .imei-filter-card .card-title,
         .imei-list-card .card-title {
-            font-size: 16px;
+            font-size: 18px;
             line-height: 1.25;
         }
 
-        .imei-filter-card .card-body,
-        .imei-list-card .card-body {
-            padding: 14px 16px;
-        }
-
-        .imei-filter-card .alert {
+        .imei-card-toolbar .alert {
             margin-bottom: 12px;
             padding: 8px 12px;
         }
@@ -132,34 +95,15 @@
                 font-size: 20px;
             }
 
-            .imei-stat-card .card-body {
-                padding: 8px 10px !important;
-            }
-
-            .imei-stat-content {
-                gap: 8px;
-            }
-
-            .imei-stat-card .icon-big.imei-stat-icon {
-                flex-basis: 38px;
-                width: 38px;
-                height: 38px;
-                min-height: 38px;
-                font-size: 16px;
-            }
-
-            .imei-stat-card .imei-stat-label {
-                font-size: 12px;
-            }
-
-            .imei-stat-card .imei-stat-value {
-                font-size: 18px;
+            .imei-summary-line {
+                gap: 5px;
+                margin-bottom: 8px;
             }
 
             .imei-filter-actions {
                 display: grid;
                 width: 100%;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: 1fr;
             }
 
             .imei-filter-actions .btn {
@@ -172,79 +116,51 @@
 @endpush
 
 @section('content')
-    @php
-        $filterQuery = request()->except(['page', 'status']);
-    @endphp
-
     <div class="page-inner imei-page">
         <x-breadcrumb :items="[['label' => 'Sản phẩm', 'url' => route('admin.products.index')], ['label' => 'Quản lý IMEI']]" />
 
-        <div class="imei-page-header">
+        {{-- <div class="imei-page-header">
             <div>
                 <h3 class="fw-bold mb-1 imei-page-title">{{ $title }}</h3>
                 <div class="text-muted imei-page-subtitle">Tra cứu và theo dõi toàn bộ thiết bị theo IMEI.</div>
             </div>
+        </div> --}}
+
+        <div class="imei-summary-line" aria-label="Thống kê IMEI">
+            <span>
+                <span class="imei-summary-label">Tổng thiết bị:</span>
+                <span class="imei-summary-value">{{ number_format($statistics['total']) }}</span>
+            </span>
+            <span class="imei-summary-separator">/</span>
+            <span>
+                <span class="imei-summary-label">Đang tồn kho:</span>
+                <span class="imei-summary-value">{{ number_format($statistics['in_stock']) }}</span>
+            </span>
         </div>
 
-        <div class="row g-2 imei-stat-row">
-            <div class="col-12 col-md-6">
-                <div class="card card-stats card-round imei-stat-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center imei-stat-content">
-                            <div class="icon-big text-center icon-primary bubble-shadow-small imei-stat-icon">
-                                <i class="fa-solid fa-barcode"></i>
-                            </div>
-                            <div class="imei-stat-copy">
-                                <div class="numbers">
-                                    <p class="card-category imei-stat-label">Tổng thiết bị</p>
-                                    <h4 class="card-title imei-stat-value">{{ number_format($statistics['total']) }}</h4>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <a class="text-decoration-none"
-                    href="{{ route('admin.imeis.index', array_merge($filterQuery, ['status' => \App\Models\ProductImei::STATUS_IN_STOCK])) }}">
-                    <div class="card card-stats card-round imei-stat-card">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center imei-stat-content">
-                                <div class="icon-big text-center icon-success bubble-shadow-small imei-stat-icon">
-                                    <i class="fa-solid fa-boxes-stacked"></i>
-                                </div>
-                                <div class="imei-stat-copy">
-                                    <div class="numbers">
-                                        <p class="card-category imei-stat-label">Đang tồn kho</p>
-                                        <h4 class="card-title imei-stat-value">{{ number_format($statistics['in_stock']) }}
-                                        </h4>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-
-        <div class="card imei-filter-card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Tra cứu IMEI</h4>
-            </div>
-            <div class="card-body">
+        <div class="card imei-list-card">
+            <div class="card-toolbar imei-card-toolbar">
                 @if ($filterWarning)
                     <div class="alert alert-warning" role="alert">{{ $filterWarning }}</div>
                 @endif
 
                 <form method="GET" action="{{ route('admin.imeis.index') }}" class="imei-filter-form">
+                    @foreach (request()->except(['page', 'imei', 'product']) as $name => $value)
+                        @if (is_array($value))
+                            @foreach ($value as $item)
+                                <input type="hidden" name="{{ $name }}[]" value="{{ $item }}">
+                            @endforeach
+                        @else
+                            <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                        @endif
+                    @endforeach
+
                     <div class="row g-2 align-items-end">
                         <div class="col-12 col-md-6 col-lg-3">
-                            <label for="imei" class="form-label">IMEI</label>
                             <input id="imei" type="text" name="imei" class="form-control"
                                 value="{{ $filters['imei'] }}" placeholder="Nhập IMEI">
                         </div>
                         <div class="col-12 col-md-6 col-lg-4">
-                            <label for="product" class="form-label">Mã hoặc tên sản phẩm</label>
                             <input id="product" type="text" name="product" class="form-control"
                                 value="{{ $filters['product'] }}" placeholder="Mã hoặc tên sản phẩm">
                         </div>
@@ -263,7 +179,7 @@
                                     <i class="fa-solid fa-magnifying-glass me-1"></i> Tìm kiếm
                                 </button>
                                 <a href="{{ route('admin.imeis.index') }}" class="btn btn-outline-secondary">
-                                    <i class="fa-solid fa-rotate me-1"></i> Làm mới
+                                    <i class="fa-solid fa-rotate me-1"></i>
                                 </a>
                             </div>
                         </div>
@@ -296,12 +212,10 @@
                     </div>
                 </form>
             </div>
-        </div>
 
-        <div class="card imei-list-card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">Danh sách IMEI</h4>
-            </div>
+            {{-- <div class="card-header">
+                <h5 class="card-title mb-0">Danh sách IMEI</h5>
+            </div> --}}
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover table-striped table-bordered align-middle">
@@ -358,8 +272,7 @@
                                         @if ($product)
                                             <a href="{{ route('admin.products.imeis.index', $product) }}"
                                                 class="btn btn-outline-primary btn-sm" title="Xem IMEI theo sản phẩm"
-                                                aria-label="Xem IMEI theo sản phẩm"><i
-                                                    class="fa-solid fa-barcode"></i></a>
+                                                aria-label="Xem IMEI theo sản phẩm"><i class="fa-solid fa-barcode"></i></a>
                                         @endif
                                         @if ($importCoupon)
                                             <a href="{{ route('admin.importproduct.importCoupon.detail', $importCoupon->id) }}"

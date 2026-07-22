@@ -411,6 +411,8 @@
         </div>
     </div>
     <script>
+        const MAX_IMPORT_QUANTITY = @json(\App\Models\ProductImei::MAX_IMPORT_QUANTITY);
+        const MAX_IMPORT_QUANTITY_MESSAGE = 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm';
         const initialImeiValues = @json(old('imeis', []));
         const imeiValidationErrors = @json($errors->toArray());
 
@@ -574,10 +576,16 @@
                 var previousQuantity = parseInt(input.data('previous-quantity'), 10) || 1;
                 var currentValues = imeiValues[dataId] || [];
 
-                if (!Number.isInteger(value) || value < 1 || value > 1000) {
+                if (!Number.isInteger(value) || value < 1) {
                     input.val(previousQuantity);
-                    alert('Số lượng nhập phải từ 1 đến 1000.');
+                    alert(`Số lượng nhập phải từ 1 đến ${MAX_IMPORT_QUANTITY}.`);
                     return;
+                }
+
+                if (value > MAX_IMPORT_QUANTITY) {
+                    value = MAX_IMPORT_QUANTITY;
+                    input.val(value);
+                    alert(MAX_IMPORT_QUANTITY_MESSAGE);
                 }
 
                 var removedValues = currentValues.slice(value).filter(imei => imei.trim() !== '');
@@ -607,6 +615,16 @@
                         updateimport(data.import, data.total);
                         updateReceiptTotal(data.total);
 
+                    },
+                    error: function(xhr) {
+                        const errors = xhr.responseJSON?.errors || {};
+                        const firstError = Object.values(errors).reduce((message, fieldErrors) => {
+                            return message || (Array.isArray(fieldErrors) ? fieldErrors[0] : fieldErrors);
+                        }, '');
+
+                        input.val(previousQuantity);
+                        alert(firstError || xhr.responseJSON?.message ||
+                            'Không thể cập nhật số lượng. Vui lòng thử lại.');
                     },
                 });
 
@@ -766,7 +784,7 @@
                     <td>${escapeHtml(productCode)}</td>
                     <td>${escapeHtml(productName)}</td>
                     <td>
-                        <input style='text-align: center;' type="number" min="1" max="1000"
+                        <input style='text-align: center;' type="number" min="1" max="${MAX_IMPORT_QUANTITY}"
                             class="numberInput"
                             name="quantity"
                             data-previous-quantity="${item.quantity}"

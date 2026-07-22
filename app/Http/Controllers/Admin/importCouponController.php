@@ -106,6 +106,12 @@ class importCouponController extends Controller
         }
 
         foreach ($imports as $import) {
+            if ((int) $import->quantity > ProductImei::MAX_IMPORT_QUANTITY) {
+                throw ValidationException::withMessages([
+                    "imeis.{$import->id}" => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
+                ]);
+            }
+
             $imeis = array_values((array) $request->input("imeis.{$import->id}", []));
 
             if (count($imeis) !== (int) $import->quantity) {

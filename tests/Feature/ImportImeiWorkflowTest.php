@@ -133,6 +133,63 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseCount('import', 1);
     }
 
+    public function test_import_quantity_update_accepts_one_and_thirty_five_but_rejects_larger_values(): void
+    {
+        $item = $this->createImportItem(quantity: 1);
+        $item->update([
+            'price' => 2000,
+            'total' => 2000,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->postJson('/admin/importproduct/import/update', [
+                'dataId' => $item->id,
+                'value' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('import.0.quantity', 1)
+            ->assertJsonPath('total', 2000);
+
+        $this->actingAs($this->admin)
+            ->postJson('/admin/importproduct/import/update', [
+                'dataId' => $item->id,
+                'value' => ProductImei::MAX_IMPORT_QUANTITY,
+            ])
+            ->assertOk()
+            ->assertJsonPath('import.0.quantity', ProductImei::MAX_IMPORT_QUANTITY)
+            ->assertJsonPath('total', 70000);
+
+        foreach ([36, 73] as $quantity) {
+            $response = $this->actingAs($this->admin)
+                ->postJson('/admin/importproduct/import/update', [
+                    'dataId' => $item->id,
+                    'value' => $quantity,
+                ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['value']);
+
+            $this->assertSame(
+                'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
+                $response->json('errors.value.0')
+            );
+
+            $this->assertSame(
+                (string) ProductImei::MAX_IMPORT_QUANTITY,
+                (string) $item->fresh()->quantity
+            );
+        }
+    }
+
+    public function test_import_add_page_exposes_quantity_limit_to_frontend(): void
+    {
+        $this->actingAs($this->admin)
+            ->get('/admin/importproduct/add')
+            ->assertOk()
+            ->assertSee('const MAX_IMPORT_QUANTITY = 35;', false)
+            ->assertSee('max="${MAX_IMPORT_QUANTITY}"', false)
+            ->assertSee('Mỗi lần chỉ được nhập tối đa 35 sản phẩm');
+    }
+
     public function test_missing_or_invalid_product_query_opens_normal_form_without_preselection(): void
     {
         $otherAdmin = User::create([
@@ -194,6 +251,27 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseCount('import_coupon', 0);
         $this->assertDatabaseCount('import_detail', 0);
         $this->assertDatabaseCount('product_imeis', 0);
+    }
+
+    public function test_confirmation_rejects_staged_quantity_above_thirty_five(): void
+    {
+        $item = $this->createImportItem(quantity: 36);
+
+        $response = $this->actingAs($this->admin)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', $this->validPayload(
+                $item,
+                $this->makeImeis(36)
+            ));
+
+        $response->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHasErrors([
+                "imeis.{$item->id}" => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
+            ]);
+        $this->assertDatabaseCount('import_coupon', 0);
+        $this->assertDatabaseCount('import_detail', 0);
+        $this->assertDatabaseCount('product_imeis', 0);
+        $this->assertDatabaseHas('import', ['id' => $item->id]);
     }
 
     public function test_confirming_import_creates_exact_imeis_linked_to_detail_and_increases_stock(): void
@@ -406,6 +484,14 @@ class ImportImeiWorkflowTest extends TestCase
                 $item->id => $imeis,
             ],
         ];
+    }
+
+    private function makeImeis(int $quantity): array
+    {
+        return array_map(
+            fn (int $number) => '9'.str_pad((string) $number, 14, '0', STR_PAD_LEFT),
+            range(1, $quantity)
+        );
     }
 
     private function createSchema(): void

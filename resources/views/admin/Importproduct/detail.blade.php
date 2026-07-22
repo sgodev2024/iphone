@@ -142,7 +142,7 @@
                             </div>
                         </div>
                         <div class="text-center mt-4">
-                            <a href="{{ route('admin.importproduct.index') }}" class="btn btn-primary w-md">
+                            <a href="{{ route('admin.imeis.index') }}" class="btn btn-primary w-md">
                                 <i class="fas fa-arrow-left"></i> Quay lại
                             </a>
                         </div>

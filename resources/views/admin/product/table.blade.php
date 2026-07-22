@@ -10,7 +10,7 @@
             <th style="width: 10%">Giá bán</th>
             <th style="width: 8%">Tồn kho</th>
             <th style="width: 12%">Trạng thái</th>
-            <th style="width: 12%" class="text-center">Hành động</th>
+            <th style="width: 12%" class="text-center product-actions-column">Hành động</th>
         </tr>
     </thead>
     <tbody>
@@ -31,17 +31,23 @@
                         ? '<span class="badge bg-success">Kích hoạt</span>'
                         : '<span class="badge bg-danger">Không kích hoạt</span>' !!}
                 </td>
-                <td class="text-center">
-                    <a href="{{ route('admin.products.imeis.index', $product) }}" class="btn btn-info btn-sm"
-                        title="Quản lý IMEI" aria-label="Quản lý IMEI">
-                        <i class="fa-solid fa-barcode"></i>
-                    </a>
-                    <a href="/admin/products/{{ $product->id }}/edit" class="btn btn-primary btn-sm">
-                        <i class="fa-solid fa-pen-to-square"></i>
-                    </a>
-                    <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $product->id }}">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
+                <td class="text-center product-actions-column">
+                    <div class="product-actions">
+                        <a href="{{ route('admin.products.imeis.index', $product) }}"
+                            class="btn btn-info btn-sm product-action-btn" title="Quản lý IMEI"
+                            aria-label="Quản lý IMEI">
+                            <i class="fa-solid fa-barcode"></i>
+                        </a>
+                        <a href="/admin/products/{{ $product->id }}/edit"
+                            class="btn btn-primary btn-sm product-action-btn" title="Chỉnh sửa sản phẩm"
+                            aria-label="Chỉnh sửa sản phẩm">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </a>
+                        <button class="btn btn-danger btn-sm btn-delete product-action-btn" data-id="{{ $product->id }}"
+                            title="Xóa sản phẩm" aria-label="Xóa sản phẩm">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         @empty

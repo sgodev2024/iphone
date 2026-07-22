@@ -1,5 +1,36 @@
 @extends('admin.layout.index')
 
+@push('style')
+    <style>
+        .product-actions-column {
+            min-width: 120px;
+            white-space: nowrap;
+        }
+
+        .product-actions {
+            display: flex;
+            flex-wrap: nowrap;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .product-action-btn {
+            display: inline-flex;
+            width: 32px;
+            height: 32px;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .product-action-btn i {
+            font-size: 13px;
+        }
+    </style>
+@endpush
+
 @section('content')
     <div class="page-inner">
 

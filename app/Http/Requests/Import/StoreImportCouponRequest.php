@@ -109,6 +109,15 @@ class StoreImportCouponRequest extends FormRequest
                 $rowImeis = $submitted[$import->id] ?? $submitted[(string) $import->id] ?? [];
                 $rowImeis = is_array($rowImeis) ? array_values($rowImeis) : [];
 
+                if ($quantity > ProductImei::MAX_IMPORT_QUANTITY) {
+                    $validator->errors()->add(
+                        "imeis.{$import->id}",
+                        'Mỗi lần chỉ được nhập tối đa 35 sản phẩm'
+                    );
+
+                    continue;
+                }
+
                 if (count($rowImeis) < $quantity) {
                     $missing = $quantity - count($rowImeis);
                     $validator->errors()->add(
