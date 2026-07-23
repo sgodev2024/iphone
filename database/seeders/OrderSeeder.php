@@ -13,6 +13,10 @@ class OrderSeeder extends Seeder
      */
     public function run(): void
     {
+        if (Order::query()->exists()) {
+            return;
+        }
+
         Order::factory()->count(10)->create();
     }
 }

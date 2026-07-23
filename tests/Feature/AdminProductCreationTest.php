@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Brand;
 use App\Models\Categories;
 use App\Models\Product;
+use App\Models\ProductImei;
+use App\Models\ProductStorage;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -35,6 +37,7 @@ class AdminProductCreationTest extends TestCase
             'product_unit' => 'chiec',
             'category_id' => $category->id,
             'brand_id' => $brand->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
             'status' => 1,
             'thumbnail' => UploadedFile::fake()->image('iphone.jpg'),
@@ -47,6 +50,26 @@ class AdminProductCreationTest extends TestCase
 
         $this->assertNotNull($product);
         $this->assertSame('0', (string) $product->quantity);
+        $this->assertSame(Product::INVENTORY_TRACKING_IMEI, $product->inventory_tracking);
+    }
+
+    public function test_inventory_tracking_is_required_when_creating_product(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+
+        $this->actingAs($admin)->post('/admin/products', [
+            'name' => 'iPhone Missing Tracking',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'description' => 'May moi',
+            'status' => 1,
+            'thumbnail' => UploadedFile::fake()->image('iphone.jpg'),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['inventory_tracking']);
     }
 
     public function test_submitted_quantity_is_ignored_when_creating_product(): void
@@ -60,6 +83,7 @@ class AdminProductCreationTest extends TestCase
             'price_buy' => 25000000,
             'product_unit' => 'chiec',
             'quantity' => 99,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'category_id' => $category->id,
             'description' => 'May moi',
             'status' => 1,
@@ -73,6 +97,7 @@ class AdminProductCreationTest extends TestCase
 
         $this->assertNotNull($product);
         $this->assertSame('0', (string) $product->quantity);
+        $this->assertSame(Product::INVENTORY_TRACKING_QUANTITY, $product->inventory_tracking);
     }
 
     public function test_create_and_edit_product_forms_do_not_render_quantity_field(): void
@@ -90,6 +115,7 @@ class AdminProductCreationTest extends TestCase
             'price_buy' => 23000000,
             'product_unit' => 'chiec',
             'quantity' => 7,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
             'status' => 1,
         ]);
@@ -97,12 +123,93 @@ class AdminProductCreationTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/products/create')
             ->assertOk()
+            ->assertSee('name="inventory_tracking"', false)
+            ->assertSee('Quản lý theo IMEI')
+            ->assertSee('Quản lý theo số lượng')
             ->assertDontSee('name="quantity"', false);
 
         $this->actingAs($admin)
             ->get("/admin/products/{$product->id}/edit")
             ->assertOk()
+            ->assertSee('name="inventory_tracking"', false)
             ->assertDontSee('name="quantity"', false);
+    }
+
+    public function test_product_without_activity_can_change_inventory_tracking(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+        $product = Product::create([
+            'user_id' => $admin->id,
+            'category_id' => $category->id,
+            'code' => 'SPCHANGE001',
+            'name' => 'iPhone Change Tracking',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'quantity' => 0,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'description' => 'May moi',
+            'status' => 1,
+        ]);
+
+        $this->actingAs($admin)->put("/admin/products/{$product->id}", [
+            'name' => 'iPhone Change Tracking',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => 'May moi',
+            'status' => 1,
+        ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(Product::INVENTORY_TRACKING_QUANTITY, $product->fresh()->inventory_tracking);
+    }
+
+    public function test_product_with_inventory_activity_cannot_change_inventory_tracking(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+        $product = Product::create([
+            'user_id' => $admin->id,
+            'category_id' => $category->id,
+            'code' => 'SPLOCK001',
+            'name' => 'iPhone Locked Tracking',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'quantity' => 1,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'description' => 'May moi',
+            'status' => 1,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => 1,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/admin/products/{$product->id}/edit")
+            ->assertOk()
+            ->assertSee('Không thể thay đổi phương thức quản lý tồn kho vì sản phẩm đã phát sinh dữ liệu kho hoặc giao dịch.');
+
+        $this->actingAs($admin)->put("/admin/products/{$product->id}", [
+            'name' => 'iPhone Locked Tracking',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => 'May moi',
+            'status' => 1,
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['inventory_tracking']);
+
+        $this->assertSame(Product::INVENTORY_TRACKING_IMEI, $product->fresh()->inventory_tracking);
     }
 
     private function createSchema(): void
@@ -171,9 +278,43 @@ class AdminProductCreationTest extends TestCase
             $table->string('thumbnail')->nullable();
             $table->string('product_unit')->nullable();
             $table->string('quantity')->nullable()->default('0');
+            $table->string('inventory_tracking', 20)->nullable();
             $table->text('description')->nullable();
             $table->string('is_featured')->nullable();
             $table->boolean('status')->default(1);
+            $table->timestamps();
+        });
+
+        Schema::create('product_storage', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('storage_id');
+            $table->integer('quantity')->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('import_detail', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('import_id')->nullable();
+            $table->unsignedBigInteger('product_id');
+            $table->integer('quantity')->default(0);
+            $table->integer('price')->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('order_details', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('order_id')->nullable();
+            $table->unsignedBigInteger('product_id');
+            $table->integer('quantity')->default(1);
+            $table->timestamps();
+        });
+
+        Schema::create('product_imeis', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->string('imei', 15)->unique();
+            $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
             $table->timestamps();
         });
     }

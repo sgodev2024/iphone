@@ -82,6 +82,12 @@ class ProductService
 
     public function createProduct($data): Product
     {
+        $inventoryTracking = data_get($data, 'inventory_tracking');
+
+        if (! in_array($inventoryTracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
+            throw new Exception('Invalid inventory tracking method');
+        }
+
         $images = saveImages($data, 'images', 'product', 300, 300, true);
 
         DB::beginTransaction();
@@ -91,7 +97,8 @@ class ProductService
             $product = $this->product->create([
                 'name' => $data->name,
                 'price' => $data->price,
-                'quantity' => $data->quantity,
+                'quantity' => 0,
+                'inventory_tracking' => $inventoryTracking,
                 'product_unit' => $data->product_unit,
                 'category_id' => $data->category_id,
                 'description' => $data->description,

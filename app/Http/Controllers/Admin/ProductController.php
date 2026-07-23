@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\Categories;
 use App\Models\Product;
 use App\Models\ProductImei;
+use App\Models\ProductStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -23,6 +24,13 @@ class ProductController extends Controller
             $searchText = $request->input('s');
 
             $products = Product::query()
+                ->select('products.*')
+                ->selectSub(
+                    ProductStorage::query()
+                        ->selectRaw('COALESCE(SUM(quantity), 0)')
+                        ->whereColumn('product_storage.product_id', 'products.id'),
+                    'storage_stock_quantity'
+                )
                 ->where('user_id', Auth::id())
                 ->withCount([
                     'imeis as imei_stock_count' => function ($query) {
@@ -50,8 +58,17 @@ class ProductController extends Controller
         $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
         $product = null;
+        $canChangeInventoryTracking = true;
+        $inventoryTrackingLockedMessage = null;
 
-        return view('admin.product.form', compact('title', 'categories', 'brands', 'product'));
+        return view('admin.product.form', compact(
+            'title',
+            'categories',
+            'brands',
+            'product',
+            'canChangeInventoryTracking',
+            'inventoryTrackingLockedMessage'
+        ));
     }
 
     public function store(ProductRequest $request)
@@ -80,8 +97,19 @@ class ProductController extends Controller
         $title = "Cập nhật sản phẩm - {$product->name}";
         $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
+        $canChangeInventoryTracking = $product->canChangeInventoryTracking();
+        $inventoryTrackingLockedMessage = $canChangeInventoryTracking
+            ? null
+            : 'Không thể thay đổi phương thức quản lý tồn kho vì sản phẩm đã phát sinh dữ liệu kho hoặc giao dịch.';
 
-        return view('admin.product.form', compact('title', 'categories', 'brands', 'product'));
+        return view('admin.product.form', compact(
+            'title',
+            'categories',
+            'brands',
+            'product',
+            'canChangeInventoryTracking',
+            'inventoryTrackingLockedMessage'
+        ));
     }
 
     public function update(ProductRequest $request, $id)

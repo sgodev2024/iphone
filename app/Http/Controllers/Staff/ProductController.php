@@ -30,12 +30,13 @@ class ProductController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $storage_id = $user->storage_id;
 
         $title = "Quản lý bán hàng";
-        $config = Config::query()->with(['user', 'bank'])->first();
+        $config = Config::with(['bank', 'user'])->first();
+        $missingConfigMessage = !$config
+            ? 'Chưa cấu hình thông tin chuyển khoản.'
+            : (!$config->bank ? 'Chưa cấu hình ngân hàng cho thông tin chuyển khoản.' : null);
         $clientgroup = $this->clientGroupService->getAllClientGroup();
-        $user = Auth::user();
         $cart =  Cart::where('user_id', $user->id)->get();
         foreach ($cart as $key => $item) {
             $item->delete();
@@ -46,7 +47,7 @@ class ProductController extends Controller
             $sum += $value->price * $value->amount;
         }
 
-        return view('Themes.pages.layout_staff.index', compact('cart', 'sum', 'config', 'title', 'clientgroup'));
+        return view('Themes.pages.layout_staff.index', compact('cart', 'sum', 'config', 'title', 'clientgroup', 'missingConfigMessage'));
     }
 
     public function getBranchs()

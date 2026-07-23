@@ -159,6 +159,9 @@
                                     <ul class="results" id="results">
                                         @if ($products)
                                             @foreach ($products as $item)
+                                                @php
+                                                    $isImeiTracked = $item->inventory_tracking === \App\Models\Product::INVENTORY_TRACKING_IMEI;
+                                                @endphp
                                                 <li data-id="{{ $item->id }}" class="product_inventory">
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
@@ -167,7 +170,11 @@
                                                                 alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">
-                                                            <p class="txtB ng-binding">{{ $item->name }} <span
+                                                            <p class="txtB ng-binding">{{ $item->name }}
+                                                                <span class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }}">
+                                                                    {{ $isImeiTracked ? 'Quản lý IMEI' : 'Theo số lượng' }}
+                                                                </span>
+                                                                <span
                                                                     class="sugg-attr ng-binding"> </span>
                                                                 <span class="sugg-unit ng-binding"></span>
                                                             </p>
@@ -503,6 +510,23 @@
                 imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
             });
 
+            $j('#tieptuc').on('click', function(event) {
+                captureImeiValues();
+                const firstMissingImei = Array.from(document.querySelectorAll('.imei-input'))
+                    .find(input => input.value.trim() === '');
+
+                if (!firstMissingImei) {
+                    return true;
+                }
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                firstMissingImei.focus();
+                alert('Vui lòng nhập đầy đủ IMEI trước khi tiếp tục.');
+
+                return false;
+            });
+
             $j.ajax({
                 url: '{{ route('admin.importproduct.import') }}',
                 type: 'GET',
@@ -573,24 +597,25 @@
                 var value = parseInt(input.val(), 10);
                 var tr = $j(this).closest('tr');
                 var dataId = tr.data('id');
+                var isImeiProduct = tr.data('tracking') === 'imei';
                 var previousQuantity = parseInt(input.data('previous-quantity'), 10) || 1;
                 var currentValues = imeiValues[dataId] || [];
 
                 if (!Number.isInteger(value) || value < 1) {
                     input.val(previousQuantity);
-                    alert(`Số lượng nhập phải từ 1 đến ${MAX_IMPORT_QUANTITY}.`);
+                    alert('Số lượng nhập phải lớn hơn 0.');
                     return;
                 }
 
-                if (value > MAX_IMPORT_QUANTITY) {
+                if (isImeiProduct && value > MAX_IMPORT_QUANTITY) {
                     value = MAX_IMPORT_QUANTITY;
                     input.val(value);
                     alert(MAX_IMPORT_QUANTITY_MESSAGE);
                 }
 
-                var removedValues = currentValues.slice(value).filter(imei => imei.trim() !== '');
+                var removedValues = isImeiProduct ? currentValues.slice(value).filter(imei => imei.trim() !== '') : [];
 
-                if (value < previousQuantity && removedValues.length > 0) {
+                if (isImeiProduct && value < previousQuantity && removedValues.length > 0) {
                     var shouldReduce = confirm(
                         'Giảm số lượng sẽ xóa các ô IMEI đã có dữ liệu. Bạn có chắc chắn muốn tiếp tục?'
                     );
@@ -601,7 +626,9 @@
                     }
                 }
 
-                imeiValues[dataId] = currentValues.slice(0, value);
+                if (isImeiProduct) {
+                    imeiValues[dataId] = currentValues.slice(0, value);
+                }
 
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.update') }}',
@@ -770,10 +797,11 @@
                         const product = item.product || {};
                         const productCode = product.code || item.code || '';
                         const productName = product.name || '';
+                        const tracking = getInventoryTracking(item);
                         const price = parseMoneyValue(item.price);
                         const rowTotal = parseMoneyValue(item.total);
                         var productHtml = `
-                <tr data-id='${item.id}' data-product='${item.product_id ?? ""}'>
+                <tr data-id='${item.id}' data-product='${item.product_id ?? ""}' data-tracking="${tracking}">
                     <td class='delete'>
                         <input type="hidden" form="addimport" name="items[${item.id}][product_id]" value="${item.product_id ?? ''}">
                         <input type="hidden" form="addimport" name="items[${item.id}][quantity]" value="${item.quantity ?? ''}">
@@ -782,9 +810,9 @@
                     </td>
                     <td>${ index + 1 }</td>
                     <td>${escapeHtml(productCode)}</td>
-                    <td>${escapeHtml(productName)}</td>
+                    <td>${escapeHtml(productName)} ${trackingBadge(tracking)}</td>
                     <td>
-                        <input style='text-align: center;' type="number" min="1" max="${MAX_IMPORT_QUANTITY}"
+                        <input style='text-align: center;' type="number" min="1" ${tracking === 'imei' ? `max="${MAX_IMPORT_QUANTITY}"` : ''}
                             class="numberInput"
                             name="quantity"
                             data-previous-quantity="${item.quantity}"
@@ -806,6 +834,12 @@
             }
 
             function buildImeiPanel(item) {
+                const tracking = getInventoryTracking(item);
+
+                if (tracking !== 'imei') {
+                    return '';
+                }
+
                 const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
                 const values = imeiValues[item.id] || [];
                 const product = item.product || {};
@@ -852,6 +886,18 @@
                         </td>
                     </tr>
                 `;
+            }
+
+            function getInventoryTracking(item) {
+                return item.product?.inventory_tracking || item.inventory_tracking || 'quantity';
+            }
+
+            function trackingBadge(tracking) {
+                if (tracking === 'imei') {
+                    return '<span class="badge bg-info ms-1">Quản lý IMEI</span>';
+                }
+
+                return '<span class="badge bg-secondary ms-1">Theo số lượng</span>';
             }
 
             function captureImeiValues() {

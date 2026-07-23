@@ -35,8 +35,9 @@ class ProductStorageService
                 'product_id' => $productId,
                 'storage_id' => $storageId,
             ]);
-            $productStorage->quantity += $data['quantity'];
+            $productStorage->quantity = (int) ($productStorage->quantity ?? 0) + (int) $data['quantity'];
             $productStorage->save();
+            $this->syncProductTotalQuantity((int) $productId);
             DB::commit();
             return $productStorage;
         } catch (Exception $e) {
@@ -83,7 +84,7 @@ class ProductStorageService
         }
     }
 
-    private function syncProductTotalQuantity(int $productId): void
+    public function syncProductTotalQuantity(int $productId): void
     {
         DB::statement(
             'UPDATE products SET quantity = (SELECT COALESCE(SUM(quantity), 0) FROM product_storage WHERE product_id = ?), updated_at = ? WHERE id = ?',
@@ -135,7 +136,7 @@ class ProductStorageService
                         $soldQuantity = $this->orderDetail->whereHas('order', function ($query) use ($latestImport) {
                             $query->where('created_at', '>', $latestImport->created_at);
                         })->where('product_id', $currentProductId)
-                            ->sum('p_quantity');
+                            ->sum('quantity');
 
                         //Tính số lượng trước khi nhập hàng
                         $quantityBeforeImport = $currentQuantity + $soldQuantity - $importedQuantity;

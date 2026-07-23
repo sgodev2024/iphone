@@ -4,6 +4,9 @@
     <div class="page-inner">
         <x-breadcrumb :items="[['label' => $title]]" />
 
+        @php
+            $configUser = $config?->user ?? auth()->user();
+        @endphp
 
         <form id="myForm">
 
@@ -15,30 +18,31 @@
                                 <div class="col-md-12">
                                     <label for="company_name" class="form-label mb-1 fw-bold">Tên cửa hàng</label>
                                     <input type="text" class="form-control" name="company_name"
-                                        value="{{ optional($config)->company_name }}" placeholder="Nhập tên cửa hàng">
+                                        value="{{ optional($configUser)->store_name ?? optional($configUser)->company_name }}"
+                                        placeholder="Nhập tên cửa hàng">
                                 </div>
 
                                 <div class="col-md-6">
                                     <label for="email" class="form-label mb-1 fw-bold">Email</label>
                                     <input type="email" class="form-control" name="email"
-                                        value="{{ optional($config)->email }}" placeholder="Nhập email">
+                                        value="{{ optional($configUser)->email }}" placeholder="Nhập email">
                                 </div>
 
                                 <div class="col-md-6">
                                     <label for="phone" class="form-label mb-1 fw-bold">Số điện thoại</label>
                                     <input type="phone" class="form-control" name="phone"
-                                        value="{{ optional($config)->phone }}" placeholder="Nhập số điện thoại">
+                                        value="{{ optional($configUser)->phone }}" placeholder="Nhập số điện thoại">
                                 </div>
 
                                 <div class="col-md-12">
                                     <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
-                                    <textarea name="address" placeholder="Nhập địa chỉ" class="form-control">{{ optional($config)->address }}</textarea>
+                                    <textarea name="address" placeholder="Nhập địa chỉ" class="form-control">{{ optional($configUser)->address }}</textarea>
                                 </div>
 
                                 <div class="col-md-6">
                                     <label for="tax_number" class="form-label mb-1 fw-bold">Mã số thuế</label>
                                     <input type="text" class="form-control" name="tax_number"
-                                        value="{{ optional($config)->tax_number }}" placeholder="Nhập mã số thuế">
+                                        value="{{ optional($configUser)->tax_code }}" placeholder="Nhập mã số thuế">
                                 </div>
 
                                 <div class="col-md-6">
@@ -48,10 +52,10 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="bank_account_number" class="form-label mb-1 fw-bold">Số tài khoản ngân
+                                    <label for="bank_account" class="form-label mb-1 fw-bold">Số tài khoản ngân
                                         hàng</label>
-                                    <input type="text" class="form-control" name="bank_account_number"
-                                        value="{{ optional($config)->bank_account_number }}"
+                                    <input type="text" class="form-control" name="bank_account"
+                                        value="{{ optional($config)->bank_account }}"
                                         placeholder="Nhập số tài khoản ngân hàng">
                                 </div>
 

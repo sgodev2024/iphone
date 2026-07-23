@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CategoryRequest;
-use App\Http\Responses\ApiResponse;
 use App\Models\Categories;
 use App\Services\CategoryService;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 
 class CategorieController extends Controller
 {
@@ -29,7 +28,6 @@ class CategorieController extends Controller
             $searchTerm = $request->query('s');
 
             $categories = Categories::query()
-                ->where('user_id', Auth::id())
                 ->when($searchTerm, function ($query, $searchTerm) {
                     $query->where('name', 'like', '%' . $searchTerm . '%');
                 })
@@ -48,26 +46,30 @@ class CategorieController extends Controller
         return transaction(function () use ($request) {
             $credentials = $request->validated();
 
-            $credentials['user_id'] = Auth::id();
+            $category = Categories::create($credentials);
 
-            Categories::create($credentials);
-
-            return successResponse("Thêm mới danh mục thành công");
+            return successResponse("Thêm mới danh mục thành công", $category, Response::HTTP_CREATED);
         });
     }
-    public function delete($id)
+
+    public function destroy($id)
     {
         try {
             $this->categoryService->deleteCategory($id);
 
-            $category = Categories::orderByDesc('created_at')->paginate(10);
-            $view = view('admin.category.table', compact('category'))->render();
+            $categories = Categories::orderByDesc('created_at')->paginate(10);
+            $view = view('admin.category.table', compact('categories'))->render();
 
             return response()->json(['success' => true, 'message' => 'Xoá danh mục thành công!', 'table' => $view]);
         } catch (Exception $e) {
             Log::error('Failed to delete category: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Không thể xóa danh mục']);
         }
+    }
+
+    public function delete($id)
+    {
+        return $this->destroy($id);
     }
 
     public function show($id)
@@ -84,6 +86,6 @@ class CategorieController extends Controller
 
         $category->update($request->validated());
 
-        return successResponse('Cập nhật danh mục thành công');
+        return successResponse('Cập nhật danh mục thành công', $category->fresh(), Response::HTTP_OK);
     }
 }

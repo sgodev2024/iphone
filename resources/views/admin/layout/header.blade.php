@@ -82,7 +82,7 @@
                                                     ->locale('vi')
                                                     ->diffForHumans();
                                             @endphp
-                                            <a href="{{ route('admin.order.detail', ['id' => $item->id]) }}"
+                                            <a href="{{ route('admin.order.show', ['id' => $item->id]) }}"
                                                 class="notification-item mark-as-read" data-id="{{ $item->id }}">
                                                 <div class="notif-icon notif-primary">
                                                     <i class="fas fa-shopping-cart"></i>

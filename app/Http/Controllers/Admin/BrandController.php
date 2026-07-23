@@ -3,17 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Responses\ApiResponse;
 use App\Models\Brand;
 use App\Services\BrandService;
 use App\Services\CompanyService;
 use App\Services\SupplierService;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class BrandController extends Controller
@@ -34,7 +31,6 @@ class BrandController extends Controller
             $searchText = $request->query('s');
 
             $brands = Brand::query()
-                ->where('user_id', Auth::id())
                 ->when(!empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%");
                 })
@@ -59,18 +55,19 @@ class BrandController extends Controller
     public function store(Request $request)
     {
         $credentials = $this->validateRequest($request);
+        $uploadedLogo = null;
 
-        return transaction(function () use ($request, $credentials) {
-
-            $credentials['user_id'] = Auth::id();
-
+        return transaction(function () use ($request, $credentials, &$uploadedLogo) {
             if ($request->hasFile('logo')) {
-                $credentials['logo'] = uploadImages('logo', 'brands');
+                $uploadedLogo = $request->file('logo')->store('brands', 'public');
+                $credentials['logo'] = $uploadedLogo;
             }
 
-            Brand::create($credentials);
+            $brand = Brand::create($credentials);
 
-            return successResponse(message: 'Tạo mới thương hiệu thành công.', code: Response::HTTP_CREATED);
+            return successResponse('Tạo mới thương hiệu thành công.', $brand, Response::HTTP_CREATED);
+        }, function () use (&$uploadedLogo) {
+            deleteImage($uploadedLogo);
         });
     }
 
@@ -103,7 +100,7 @@ class BrandController extends Controller
                 deleteImage($oldLogo);
             }
 
-            return successResponse(message: 'Cập nhật thương hiệu thành công.', code: Response::HTTP_OK);
+            return successResponse('Cập nhật thương hiệu thành công.', $brand->fresh(), Response::HTTP_OK);
         });
     }
 
@@ -111,8 +108,8 @@ class BrandController extends Controller
     {
         try {
             $this->brandService->deleteBrand($id);
-            $brand = Brand::orderByDesc('created_at')->paginate(10);
-            $view = view('admin.brand.table', compact('brand'))->render();
+            $brands = Brand::orderByDesc('created_at')->paginate(10);
+            $view = view('admin.brand.table', compact('brands'))->render();
             return response()->json(['success' => true, 'message' => 'Xoá thương hiệu thành công!', 'table' => $view]);
         } catch (Exception $e) {
             Log::error('Failed to delete brand: ' . $e->getMessage());
@@ -123,8 +120,8 @@ class BrandController extends Controller
     private function validateRequest($request, $id = null)
     {
         return $this->validate($request, [
-            'name' => 'required|max:255|unique:brands,name,' . $id,
-            'description' => 'nullable|string|max:255',
+            'name' => ['required', 'string', 'max:255', Rule::unique('brands', 'name')->ignore($id)],
+            'description' => 'nullable|string',
             'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'status' => 'required|in:0,1'
         ], __('request.messages'), [

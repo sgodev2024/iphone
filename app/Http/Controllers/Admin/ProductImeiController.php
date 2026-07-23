@@ -9,6 +9,7 @@ use App\Models\ProductImei;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
@@ -28,7 +29,12 @@ class ProductImeiController extends Controller
 
         [$fromDate, $toDate, $filterWarning] = $this->resolveDateRange($filters['from_date'], $filters['to_date']);
 
-        $statistics = ProductImei::query()
+        $imeiBaseQuery = ProductImei::query()
+            ->whereHas('product', function (Builder $productQuery) {
+                $productQuery->where('inventory_tracking', Product::INVENTORY_TRACKING_IMEI);
+            });
+
+        $statistics = (clone $imeiBaseQuery)
             ->selectRaw(
                 'COUNT(*) as total, '
                 .'COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) as in_stock, '
@@ -44,9 +50,9 @@ class ProductImeiController extends Controller
         ];
         $statistics['other'] = $statistics['total'] - $statistics['in_stock'] - $statistics['sold'];
 
-        $imeis = ProductImei::query()
+        $imeis = (clone $imeiBaseQuery)
             ->with([
-                'product:id,code,name',
+                'product:id,code,name,inventory_tracking',
                 'importDetail:id,import_id,price',
                 'importDetail.import:id,companies_id,coupon_code,created_at',
                 'importDetail.import.companyRelation:id,name',
@@ -60,7 +66,9 @@ class ProductImeiController extends Controller
             ->withQueryString();
 
         $companies = Company::query()
-            ->whereHas('importCoupons.details.imeis')
+            ->whereHas('importCoupons.details.imeis.product', function (Builder $productQuery) {
+                $productQuery->where('inventory_tracking', Product::INVENTORY_TRACKING_IMEI);
+            })
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -86,6 +94,16 @@ class ProductImeiController extends Controller
         $this->ensureProductBelongsToCurrentUser($product);
 
         $search = trim((string) $request->query('search', ''));
+        $notImeiTracked = ! $product->isImeiTracked();
+
+        if ($notImeiTracked) {
+            $product->setAttribute('imei_stock_count', 0);
+            $imeis = new LengthAwarePaginator([], 0, 10);
+            $title = "Quản lý IMEI – {$product->name}";
+
+            return view('admin.product.imeis.index', compact('title', 'product', 'imeis', 'search', 'notImeiTracked'));
+        }
+
         $product->loadCount([
             'imeis as imei_stock_count' => fn ($query) => $query->inStock(),
         ]);
@@ -100,8 +118,9 @@ class ProductImeiController extends Controller
             ->withQueryString();
 
         $title = "Quản lý IMEI – {$product->name}";
+        $notImeiTracked = false;
 
-        return view('admin.product.imeis.index', compact('title', 'product', 'imeis', 'search'));
+        return view('admin.product.imeis.index', compact('title', 'product', 'imeis', 'search', 'notImeiTracked'));
     }
 
     private function ensureProductBelongsToCurrentUser(Product $product): void
@@ -126,8 +145,12 @@ class ProductImeiController extends Controller
             $product = $filters['product'];
             $query->whereHas('product', function (Builder $productQuery) use ($product) {
                 $productQuery
-                    ->where('code', 'like', "%{$product}%")
-                    ->orWhere('name', 'like', "%{$product}%");
+                    ->where('inventory_tracking', Product::INVENTORY_TRACKING_IMEI)
+                    ->where(function (Builder $searchQuery) use ($product) {
+                        $searchQuery
+                            ->where('code', 'like', "%{$product}%")
+                            ->orWhere('name', 'like', "%{$product}%");
+                    });
             });
         }
 

@@ -281,6 +281,7 @@ class ImportProductBulkDeleteTest extends TestCase
             $table->string('thumbnail')->nullable();
             $table->string('product_unit')->nullable();
             $table->string('quantity')->nullable();
+            $table->string('inventory_tracking', 20)->nullable();
             $table->text('description')->nullable();
             $table->boolean('status')->default(true);
             $table->timestamps();
@@ -351,6 +352,7 @@ class ImportProductBulkDeleteTest extends TestCase
             'thumbnail' => null,
             'product_unit' => 'cái',
             'quantity' => 0,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'description' => 'Test product',
             'status' => true,
         ], $overrides));

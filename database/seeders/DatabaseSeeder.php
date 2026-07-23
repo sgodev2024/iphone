@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
@@ -12,8 +13,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // $this->call(ClientSeeder::class);
-        $this->call(OrderSeeder::class);
+        DB::table('roles')->insertOrIgnore([
+            ['id' => 1, 'name' => 'store', 'description' => 'Store owner'],
+            ['id' => 2, 'name' => 'admin', 'description' => 'Administrator'],
+            ['id' => 3, 'name' => 'staff', 'description' => 'Staff'],
+        ]);
+
+        $this->call([
+            BankSeeder::class,
+            ConfigSeeder::class,
+            UsersTableSeeder::class,
+            ClientSeeder::class,
+            OrderSeeder::class,
+        ]);
         // $this->call(OrderDetailSeeder::class);
         // $this->call([
         //     UsersTableSeeder::class,

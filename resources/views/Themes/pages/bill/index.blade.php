@@ -128,6 +128,13 @@
     </style>
 </head>
 
+@php
+    $configUser = $config?->user;
+    $bankCode = $config?->bank?->code ?? 'Chưa cấu hình ngân hàng';
+    $receiver = $config?->receiver ?? 'Chưa cấu hình người nhận';
+    $storeName = $configUser?->store_name ?? 'Chưa cấu hình cửa hàng';
+@endphp
+
 <body>
     <div id="bill" class="bill">
         <div class="content">
@@ -136,29 +143,28 @@
                     <h2 style="margin: 0px">HÓA ĐƠN THANH TOÁN</h2>
                 </div>
                 <div class="receipt-header">
-                    <h3 style="font-size: 20px ; margin: 0px; padding: 10px 0px">{{ isset($config) ?
-                        $config->user->store_name : '' }}</h3>
+                    <h3 style="font-size: 20px ; margin: 0px; padding: 10px 0px">{{ $storeName }}</h3>
                     <table style="width: 60%; margin: 0px auto" id="thongtinnhahang">
                         <tr>
                             <td style="
                             display: flex;
                             justify-content: start;
                         "><strong>Địa chỉ:</strong></td>
-                            <td style="text-align: left;">{{ isset($config) ? $config->user->address : '' }}</td>
+                            <td style="text-align: left;">{{ $configUser?->address ?? 'Chưa cấu hình địa chỉ' }}</td>
                         </tr>
                         <tr>
                             <td style="
                             display: flex;
                             justify-content: start;
                         "><strong>Điện thoại:</strong></td>
-                            <td style="text-align: left;">{{ isset($config) ? $config->user->phone : '' }}</td>
+                            <td style="text-align: left;">{{ $configUser?->phone ?? 'Chưa cấu hình số điện thoại' }}</td>
                         </tr>
                         <tr>
                             <td style="
                             display: flex;
                             justify-content: start;
                         "><strong>Email:</strong></td>
-                            <td style="text-align: left;">{{ isset($config) ? $config->user->email : '' }}</td>
+                            <td style="text-align: left;">{{ $configUser?->email ?? 'Chưa cấu hình email' }}</td>
                         </tr>
                     </table>
                 </div>
@@ -215,10 +221,11 @@
                     @if (isset($config))
                     <img style="width: 200px;" src="{{ $config->qr }}" alt="QR Code">
                     <div>
-                        <p>{{ $config->bank->code }} - {{ $config->receiver }} - {{ $config->user->store_name }}</p>
+                        <p>{{ $bankCode }} - {{ $receiver }} - {{ $storeName }}</p>
                     </div>
                     @else
                     <img style="width: 200px;" src="" alt="QR Code">
+                    <p>Chưa cấu hình ngân hàng</p>
                     @endif
                 </div>
             </div>

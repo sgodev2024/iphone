@@ -114,6 +114,15 @@
         }
     </style>
 
+    @php
+        $configBank = $config?->bank;
+        $bankName = $configBank?->name ?? 'Chưa cấu hình ngân hàng';
+        $bankCode = $configBank?->code ?? '';
+        $bankAccount = $config?->bank_account ?? 'Chưa cấu hình số tài khoản';
+        $bankAccountForQr = $config?->bank_account ?? '';
+        $receiver = $config?->receiver ?? 'Chưa cấu hình người nhận';
+    @endphp
+
     <div class="container-fluid py-4">
         <div class="row g-4">
             <!-- LEFT 9 cols -->
@@ -395,10 +404,12 @@
                         <!-- QR Section -->
                         <div class="qr-section text-center my-4">
                             <p>Cảm ơn quý khách!</p>
+                            @if (!empty($missingConfigMessage))
+                                <p class="text-warning mb-2">{{ $missingConfigMessage }}</p>
+                            @endif
                             <img src="" alt="QR Code" width="180" id="qr-code">
-                            <p class="mt-2 mb-0"><strong>{{ $config->bank->name }}:</strong> {{ $config['bank_account'] }}
-                            </p>
-                            <p class="mb-0">{{ $config['receiver'] }}</p>
+                            <p class="mt-2 mb-0"><strong>{{ $bankName }}:</strong> {{ $bankAccount }}</p>
+                            <p class="mb-0">{{ $receiver }}</p>
                         </div>
 
                     </div>
@@ -835,13 +846,17 @@
                     }
                 };
 
-                let bankCode = "{{ $config->bank->code }}"
-                let bankAccount = "{{ $config->bank_account_number }}"
+                const bankCode = @json($bankCode);
+                const bankAccount = @json($bankAccountForQr);
 
                 // https: //img.vietqr.io/image/MB-1080128122002-compact.png?amount=1000&addInfo=
-                $('#qr-code').attr('src',
-                    `https://img.vietqr.io/image/${bankCode}-${bankAccount}-compact.png?amount=${order.grand}&addInfo=ThanhToanDonHang`
-                )
+                if (bankCode && bankAccount) {
+                    $('#qr-code').attr('src',
+                        `https://img.vietqr.io/image/${bankCode}-${bankAccount}-compact.png?amount=${order.grand}&addInfo=ThanhToanDonHang`
+                    )
+                } else {
+                    $('#qr-code').attr('src', '').attr('alt', 'Chưa cấu hình QR chuyển khoản')
+                }
 
                 $('#invoiceModal').modal('show')
             });

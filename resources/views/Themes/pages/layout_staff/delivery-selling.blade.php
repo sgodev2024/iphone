@@ -1,3 +1,10 @@
+@php
+    $configUser = $config?->user;
+    $bankName = $config?->bank?->name ?? 'Chưa cấu hình ngân hàng';
+    $bankAccount = $config?->bank_account ?? 'Chưa cấu hình số tài khoản';
+    $receiver = $config?->receiver ?? 'Chưa cấu hình người nhận';
+@endphp
+
 <div class="col-lg-4" id="delivery-selling-content" style="display: none;">
     <div class="card">
         <div class="card-header">Thông tin khách hàng</div>
@@ -95,7 +102,7 @@
                             <h2>HÓA ĐƠN THANH TOÁN</h2>
                         </div>
                         <div class="receipt-header">
-                            <h3 style="font-size: 20px">{{ isset($config) ? $config->user->store_name : '' }}</h3>
+                            <h3 style="font-size: 20px">{{ $configUser?->store_name ?? 'Chưa cấu hình cửa hàng' }}</h3>
                             <table style="width: 40%; margin: 0px auto" id="thongtinnhahang">
                                 <tr>
                                     <td
@@ -104,7 +111,7 @@
                                     justify-content: start;
                                 ">
                                         <strong>Địa chỉ:</strong></td>
-                                    <td style="text-align: left;">{{ isset($config) ? $config->user->address : '' }}
+                                    <td style="text-align: left;">{{ $configUser?->address ?? 'Chưa cấu hình địa chỉ' }}
                                     </td>
                                 </tr>
                                 <tr>
@@ -114,7 +121,7 @@
                                     justify-content: start;
                                 ">
                                         <strong>Điện thoại:</strong></td>
-                                    <td style="text-align: left;">{{ isset($config) ? $config->user->phone : '' }}</td>
+                                    <td style="text-align: left;">{{ $configUser?->phone ?? 'Chưa cấu hình số điện thoại' }}</td>
                                 </tr>
                                 <tr>
                                     <td
@@ -123,7 +130,7 @@
                                     justify-content: start;
                                 ">
                                         <strong>Email:</strong></td>
-                                    <td style="text-align: left;">{{ isset($config) ? $config->user->email : '' }}</td>
+                                    <td style="text-align: left;">{{ $configUser?->email ?? 'Chưa cấu hình email' }}</td>
                                 </tr>
                             </table>
 
@@ -176,14 +183,15 @@
                         <div class="receipt-footer">
                             <p style='margin: 0px;'>Cảm ơn quý khách!</p>
                             @if (isset($config))
-                                <img style="width: 200px;" src="{{ $config->qr }}" alt="QR Code">
+                                <img style="width: 200px;" src="{{ $config?->qr }}" alt="QR Code">
                                 <div>
-                                    <p style="margin: 0; padding-bottom: 5px ">{{ $config->bank->name }}
-                                        :{{ $config->bank_account }} </p>
-                                    <p>{{ $config->receiver }}</p>
+                                    <p style="margin: 0; padding-bottom: 5px ">{{ $bankName }}
+                                        :{{ $bankAccount }} </p>
+                                    <p>{{ $receiver }}</p>
                                 </div>
                             @else
                                 <img style="width: 200px;" src="" alt="QR Code">
+                                <p>Chưa cấu hình ngân hàng</p>
                             @endif
 
                         </div>

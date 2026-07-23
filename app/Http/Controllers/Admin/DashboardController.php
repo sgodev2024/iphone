@@ -106,7 +106,7 @@ class DashboardController extends Controller
             ->join('order_details as oi', 'o.id', '=', 'oi.order_id')
             ->where('o.status', 1)
             ->whereBetween(DB::raw('DATE(o.created_at)'), [$startDate, $endDate])
-            ->sum(DB::raw('oi.p_price * oi.p_quantity'));
+            ->sum(DB::raw('oi.price * oi.quantity'));
 
         // Tổng giá vốn
         $totalCost = DB::table('orders as o')
@@ -114,7 +114,7 @@ class DashboardController extends Controller
             ->join('products as p', 'oi.product_id', '=', 'p.id')
             ->where('o.status', 1)
             ->whereBetween(DB::raw('DATE(o.created_at)'), [$startDate, $endDate])
-            ->sum(DB::raw('p.price_buy * oi.p_quantity'));
+            ->sum(DB::raw('p.price_buy * oi.quantity'));
 
         // Biên LN gộp (%)
         $grossMargin = $totalRevenue > 0
@@ -190,7 +190,7 @@ class DashboardController extends Controller
             ->join('products as p', 'oi.product_id', '=', 'p.id')
             ->select(
                 'p.name',
-                DB::raw('SUM(oi.p_quantity) as total_sold')
+                DB::raw('SUM(oi.quantity) as total_sold')
             )
             ->where('o.status', 1) // chỉ lấy đơn hoàn thành
             ->groupBy('p.id', 'p.name')
@@ -226,10 +226,10 @@ class DashboardController extends Controller
             ->leftJoin('clients as c', 'o.client_id', '=', 'c.id')
             ->select(
                 'o.id as order_id',
-                'o.code as order_code',
+                DB::raw("CONCAT('DH', LPAD(o.id, 6, '0')) as order_code"),
                 DB::raw("COALESCE(o.name, c.name, u.name, 'Khách lạ') as customer_name"),
                 'o.total_money',
-                'o.payment_method'
+                DB::raw("'unknown' as payment_method")
             )
             ->orderByDesc('o.created_at')
             ->limit($limit)

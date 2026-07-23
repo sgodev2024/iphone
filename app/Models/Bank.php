@@ -14,7 +14,7 @@ class Bank extends Model
 
     public function config()
     {
-        return $this->hasOne(Config::class);
+        return $this->hasOne(Config::class, 'bank_id');
     }
 
     public function companies()

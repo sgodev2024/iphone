@@ -83,10 +83,10 @@
                         @foreach ($order->orderDetails as $item)
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
-                                <td>{{ $item->p_name }}</td>
-                                <td>{{ formatPrice($item->p_price) }} VND</td>
-                                <td>x{{ $item->p_quantity }}</td>
-                                <td>{{ formatPrice($item->p_price * $item->p_quantity) }} VND</td>
+                                <td>{{ $item->product?->name }}</td>
+                                <td>{{ formatPrice($item->price) }} VND</td>
+                                <td>x{{ $item->quantity }}</td>
+                                <td>{{ formatPrice($item->price * $item->quantity) }} VND</td>
                             </tr>
                         @endforeach
                     </tbody>

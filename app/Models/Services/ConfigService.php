@@ -35,7 +35,13 @@ class ConfigService
         try {
             DB::beginTransaction();
 
-            $config = Config::firstOrCreate(['user_id' => $id]);
+            $config = Config::firstOrCreate(
+                ['user_id' => $id],
+                [
+                    'logo' => 'assets/img/default-image.jpg',
+                    'receiver' => $data['receiver'] ?? 'Chưa cấu hình người nhận',
+                ]
+            );
 
             // Cập nhật giá trị cho cột receiver
             $config->receiver = $data['receiver'];

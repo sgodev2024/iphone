@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -21,6 +22,7 @@ class ProductFactory extends Factory
             'price' => $this->faker->numberBetween(1000, 1000000),
             'price_buy' => $this->faker->numberBetween(1000, 1000000),
             'quantity' => $this->faker->numberBetween(0, 100),
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'description' => $this->faker->sentence(4),
             'category_id' => $this->faker->randomElement(['1', '2', '5']),
             'status' => $this->faker->randomElement(['inactive', 'published']),

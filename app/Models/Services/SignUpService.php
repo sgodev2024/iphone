@@ -54,9 +54,11 @@ class SignUpService
                 'address' => $data['address'],
             ]);
 
-            $config = new Config();
-            $config->user_id = $user->id;
-            $config->save();
+            Config::create([
+                'user_id' => $user->id,
+                'logo' => 'assets/img/default-image.jpg',
+                'receiver' => 'Chưa cấu hình người nhận',
+            ]);
 
             DB::commit();
 

@@ -102,6 +102,7 @@
 
             let currentPage = 1
             let searchText = '';
+            const categoryBaseUrl = @json(url('/admin/category'));
 
             $(document).on('click', 'a.page-link', function(e) {
                 e.preventDefault();
@@ -133,6 +134,7 @@
                 $('#categoryModal').modal('show')
 
                 $('#myForm')[0].reset()
+                clearValidationErrors($('#myForm'))
                 $('#myForm').attr({
                     'data-method': 'POST',
                     'data-id': ''
@@ -143,18 +145,22 @@
                 let id = $(this).data('id');
 
                 $.ajax({
-                    url: `/admin/category/${id}`,
+                    url: `${categoryBaseUrl}/${id}`,
                     type: 'GET',
                     success: (res) => {
+                        clearValidationErrors($('#myForm'))
+
                         $.each(res.data, function(key, item) {
+                            const $field = $(`[name="${key}"]`)
 
                             if (key === 'status') {
-                                $(`select[name="${key}"]`).val(item ? 1 : 0);
+                                $field.val(item ? 1 : 0);
+                                return;
                             }
 
-                            $(`input[name="${key}"]`).val(item)
-                            $('#myForm').attr('data-method', 'PUT')
+                            $field.val(item ?? '')
                         })
+                        $('#myForm').attr('data-method', 'PUT')
                         $('#myForm').attr('data-id', id)
 
                         $('#categoryModal').modal('show')
@@ -188,6 +194,8 @@
             $('#myForm').on('submit', function(e) {
                 e.preventDefault()
                 let form = $(this);
+                clearValidationErrors(form)
+
                 let formData = form.serializeArray();
                 let method = form.attr('data-method')
                 let id = form.attr('data-id')
@@ -197,7 +205,7 @@
                     value: 'PUT'
                 })
 
-                let url = `/admin/category/${id ? id : ''}`
+                let url = id ? `${categoryBaseUrl}/${id}` : categoryBaseUrl
 
                 $.ajax({
                     url: url,
@@ -209,7 +217,14 @@
                         datgin.success(res.message);
                     },
                     error: (xhr) => {
-                        datgin.error(xhr.responseJSON.message ||
+                        if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                            renderValidationErrors(form, xhr.responseJSON.errors)
+                            datgin.warning(xhr.responseJSON.message ||
+                                'Vui lòng kiểm tra lại thông tin.')
+                            return
+                        }
+
+                        datgin.error(xhr.responseJSON?.message ||
                             'Đã có lỗi xảy ra. Vui lòng thử lại sau!')
                     }
                 });

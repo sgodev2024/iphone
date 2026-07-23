@@ -18,13 +18,16 @@ return new class extends Migration
             $table->unsignedBigInteger('field_id')->nullable();
 
             $table->foreign('field_id')->references('id')->on('fields');
+            $table->dropForeign(['commission_id']);
+            $table->dropForeign(['district_id']);
+            $table->dropForeign(['wards_id']);
 
             // Xóa các cột không cần thiết
             $table->dropColumn('referral_code');
             $table->dropColumn('referrer_id');
             $table->dropColumn('commission_id');
             $table->dropColumn('district_id');
-            $table->dropColumn('ward_id');
+            $table->dropColumn('wards_id');
         });
     }
 

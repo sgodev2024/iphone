@@ -28,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Chia sẻ $config cho tất cả view
         View::composer('*', function ($view) {
-            $config = Config::first();
+            $config = Config::with(['bank', 'user'])->first();
             $view->with('config', $config);
         });
 

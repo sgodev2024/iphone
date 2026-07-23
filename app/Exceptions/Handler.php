@@ -39,7 +39,8 @@ class Handler extends ExceptionHandler
 
             if ($request->ajax()) {
                 return response()->json([
-                    'message' => $firstError[0]
+                    'message' => $firstError[0],
+                    'errors' => $error,
                 ], 422);
             }
         }

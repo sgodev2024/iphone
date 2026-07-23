@@ -22,6 +22,9 @@ class User extends Authenticatable
         'status',
         'role_id',
         'address',
+        'company_name',
+        'tax_code',
+        'store_name',
         'storage_id',
         'img_url'
     ];

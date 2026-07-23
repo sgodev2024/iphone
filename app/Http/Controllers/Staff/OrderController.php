@@ -17,7 +17,7 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $config = Config::first();
+        $config = Config::with(['bank', 'user'])->first();
         $title = 'Lịch sử mua hàng';
 
         if ($request->ajax()) {

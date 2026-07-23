@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Import;
 
 use App\Models\Import;
+use App\Models\Product;
 use App\Models\ProductImei;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -42,7 +43,7 @@ class StoreImportCouponRequest extends FormRequest
             'storage' => ['required', 'integer', 'exists:storages,id'],
             'total' => ['nullable', 'numeric', 'min:0'],
             'totalncc' => ['nullable', 'numeric', 'min:0'],
-            'imeis' => ['required', 'array'],
+            'imeis' => ['nullable', 'array'],
         ];
     }
 
@@ -55,7 +56,6 @@ class StoreImportCouponRequest extends FormRequest
             'storage.exists' => 'Kho nhập không hợp lệ.',
             'totalncc.numeric' => 'Số tiền trả nhà cung cấp không hợp lệ.',
             'totalncc.min' => 'Số tiền trả nhà cung cấp không được âm.',
-            'imeis.required' => 'Vui lòng nhập đầy đủ IMEI cho các sản phẩm.',
             'imeis.array' => 'Danh sách IMEI không hợp lệ.',
         ];
     }
@@ -105,9 +105,32 @@ class StoreImportCouponRequest extends FormRequest
 
             foreach ($imports as $import) {
                 $productName = $import->product?->name ?? "#{$import->product_id}";
+                $tracking = $import->product?->inventory_tracking;
                 $quantity = (int) $import->quantity;
                 $rowImeis = $submitted[$import->id] ?? $submitted[(string) $import->id] ?? [];
                 $rowImeis = is_array($rowImeis) ? array_values($rowImeis) : [];
+                $hasSubmittedImeis = array_key_exists($import->id, $submitted)
+                    || array_key_exists((string) $import->id, $submitted);
+
+                if (! in_array($tracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
+                    $validator->errors()->add(
+                        "items.{$import->id}",
+                        "Sản phẩm {$productName} chưa có phương thức quản lý tồn kho hợp lệ."
+                    );
+
+                    continue;
+                }
+
+                if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
+                    if ($hasSubmittedImeis) {
+                        $validator->errors()->add(
+                            "imeis.{$import->id}",
+                            "Sản phẩm {$productName} được quản lý theo số lượng nên không được gửi danh sách IMEI."
+                        );
+                    }
+
+                    continue;
+                }
 
                 if ($quantity > ProductImei::MAX_IMPORT_QUANTITY) {
                     $validator->errors()->add(
@@ -161,13 +184,16 @@ class StoreImportCouponRequest extends FormRequest
                     if (isset($seen[$imei])) {
                         $validator->errors()->add(
                             $path,
-                            "IMEI {$imei} bị trùng trong cùng phiếu nhập."
+                            "IMEI {$imei} của sản phẩm {$productName} bị trùng trong cùng phiếu nhập."
                         );
                     } else {
                         $seen[$imei] = $path;
                     }
 
-                    $candidates[$path] = $imei;
+                    $candidates[$path] = [
+                        'imei' => $imei,
+                        'product_name' => $productName,
+                    ];
                 }
             }
 
@@ -176,13 +202,16 @@ class StoreImportCouponRequest extends FormRequest
             }
 
             $existingImeis = ProductImei::query()
-                ->whereIn('imei', array_values($candidates))
+                ->whereIn('imei', collect($candidates)->pluck('imei')->all())
                 ->pluck('imei')
                 ->flip();
 
-            foreach ($candidates as $path => $imei) {
-                if ($existingImeis->has($imei)) {
-                    $validator->errors()->add($path, "IMEI {$imei} đã tồn tại trong hệ thống.");
+            foreach ($candidates as $path => $candidate) {
+                if ($existingImeis->has($candidate['imei'])) {
+                    $validator->errors()->add(
+                        $path,
+                        "IMEI {$candidate['imei']} của sản phẩm {$candidate['product_name']} đã tồn tại trong hệ thống."
+                    );
                 }
             }
         });

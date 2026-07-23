@@ -10,6 +10,15 @@ class Product extends Model
 {
     use HasFactory;
 
+    public const INVENTORY_TRACKING_IMEI = 'imei';
+
+    public const INVENTORY_TRACKING_QUANTITY = 'quantity';
+
+    public const INVENTORY_TRACKING_OPTIONS = [
+        self::INVENTORY_TRACKING_IMEI,
+        self::INVENTORY_TRACKING_QUANTITY,
+    ];
+
     protected $fillable = [
         'user_id',
         'category_id',
@@ -21,6 +30,7 @@ class Product extends Model
         'thumbnail',
         'product_unit',
         'quantity',
+        'inventory_tracking',
         'description',
         'is_featured',
         'status',
@@ -28,6 +38,7 @@ class Product extends Model
 
     protected $casts = [
         'is_featured' => 'boolean',
+        'quantity' => 'integer',
         'status' => 'boolean',
     ];
 
@@ -76,10 +87,57 @@ class Product extends Model
         return $this->hasMany(ProductImei::class);
     }
 
+    public function importDetails(): HasMany
+    {
+        return $this->hasMany(ImportDetail::class);
+    }
+
+    public function orderDetails(): HasMany
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+
+    public function productStorages(): HasMany
+    {
+        return $this->hasMany(ProductStorage::class);
+    }
+
     public function storages()
     {
         return $this->belongsToMany(Storage::class, 'product_storage')
             ->withPivot('quantity')
             ->withTimestamps();
+    }
+
+    public function isImeiTracked(): bool
+    {
+        return $this->inventory_tracking === self::INVENTORY_TRACKING_IMEI;
+    }
+
+    public function isQuantityTracked(): bool
+    {
+        return $this->inventory_tracking === self::INVENTORY_TRACKING_QUANTITY;
+    }
+
+    public function getInventoryTrackingLabelAttribute(): string
+    {
+        return $this->isImeiTracked() ? 'IMEI' : 'Theo số lượng';
+    }
+
+    public function hasInventoryTrackingActivity(): bool
+    {
+        return $this->imeis()->exists()
+            || $this->importDetails()->exists()
+            || $this->orderDetails()->exists()
+            || $this->productStorages()->where('quantity', '>', 0)->exists();
+    }
+
+    public function canChangeInventoryTracking(): bool
+    {
+        if (! $this->exists) {
+            return true;
+        }
+
+        return ! $this->hasInventoryTrackingActivity();
     }
 }

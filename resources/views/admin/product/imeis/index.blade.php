@@ -92,6 +92,14 @@
             </div>
         </div>
 
+        @if ($notImeiTracked)
+            <div class="alert alert-info">
+                Sản phẩm này được quản lý theo số lượng và không có dữ liệu IMEI.
+            </div>
+            <a href="{{ route('admin.products.index') }}" class="btn btn-outline-secondary">
+                <i class="fa-solid fa-arrow-left me-1"></i> Quay lại
+            </a>
+        @else
         <div class="card">
             <div class="card-header product-imei-toolbar">
                 {{-- <h4 class="card-title mb-0">Danh sách IMEI</h4> --}}
@@ -190,5 +198,6 @@
                 {{ $imeis->links('vendor.pagination.custom') }}
             </div>
         </div>
+        @endif
     </div>
 @endsection

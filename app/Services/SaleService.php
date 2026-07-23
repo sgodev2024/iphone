@@ -120,9 +120,8 @@ class SaleService
                 $order->orderDetails()->create([
                     'product_id' => $product->id,
                     'storage_id' => $storageId,
-                    'p_name' => $product->name,
-                    'p_price' => $item['price'],
-                    'p_quantity' => $quantity,
+                    'price' => $item['price'],
+                    'quantity' => $quantity,
                 ]);
 
                 $updatedRows = ProductStorage::query()

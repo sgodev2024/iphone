@@ -76,7 +76,7 @@
     <script>
         $(function() {
 
-            const url = '/admin/brand' + '{{ !empty($brand) ? "/{$brand->id}" : '' }}'
+            const url = @json(empty($brand) ? route('admin.brand.store') : route('admin.brand.update', $brand->id))
 
             handleSubmit('#myForm', function(res) {
                 window.location.href = '/admin/brand';

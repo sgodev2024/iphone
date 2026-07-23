@@ -80,6 +80,8 @@ class AddVietnamCitiesToCityTable extends Migration
             ['name' => 'Yên Bái', 'short_name' => 'YB'],
         ];
 
+        $cities = array_map(fn (array $city) => $city + ['country_id' => 'VN'], $cities);
+
         DB::table('city')->insert($cities);
     }
 

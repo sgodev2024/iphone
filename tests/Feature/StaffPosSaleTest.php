@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\Bank;
+use App\Models\Config;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
@@ -54,12 +56,49 @@ class StaffPosSaleTest extends TestCase
         $this->assertDatabaseHas('order_details', [
             'product_id' => $product->id,
             'storage_id' => $storage->id,
-            'p_quantity' => 3,
-            'p_price' => 100000,
+            'quantity' => 3,
+            'price' => 100000,
         ]);
         $this->assertSame('9', (string) $product->fresh()->quantity);
         $this->assertDatabaseCount('transactions', 1);
         $this->assertDatabaseCount('transaction_entries', 2);
+    }
+
+    public function test_staff_index_renders_bank_transfer_info_from_config(): void
+    {
+        [, , $staff, $manager] = $this->createStaffContext();
+        $bank = Bank::create([
+            'name' => 'MBBank Test',
+            'code' => 'MB',
+            'bin' => '970422',
+            'shortName' => 'MBBank',
+        ]);
+
+        Config::create([
+            'user_id' => $manager->id,
+            'bank_id' => $bank->id,
+            'bank_account' => '0000000000',
+            'receiver' => 'Nguoi nhan mau',
+            'logo' => 'assets/img/default-image.jpg',
+            'qr' => 'https://img.vietqr.io/image/MB-0000000000-compact.jpg',
+        ]);
+
+        $response = $this->actingAs($staff)->get('/ban-hang');
+
+        $response->assertOk()
+            ->assertSee('MBBank Test', false)
+            ->assertSee('0000000000', false)
+            ->assertSee('Nguoi nhan mau', false);
+    }
+
+    public function test_staff_index_renders_placeholder_when_config_is_missing(): void
+    {
+        [, , $staff] = $this->createStaffContext();
+
+        $response = $this->actingAs($staff)->get('/ban-hang');
+
+        $response->assertOk()
+            ->assertSee('Chưa cấu hình ngân hàng', false);
     }
 
     public function test_sale_fails_when_assigned_storage_does_not_have_enough_stock(): void
@@ -256,6 +295,34 @@ class StaffPosSaleTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('banks', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('code');
+            $table->string('bin');
+            $table->string('shortName');
+            $table->timestamps();
+        });
+
+        Schema::create('config', function (Blueprint $table) {
+            $table->id();
+            $table->string('logo');
+            $table->string('bank_account')->nullable();
+            $table->string('qr')->nullable();
+            $table->unsignedBigInteger('bank_id')->nullable();
+            $table->string('receiver');
+            $table->unsignedBigInteger('user_id');
+            $table->timestamps();
+        });
+
+        Schema::create('client_group', function (Blueprint $table) {
+            $table->id();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+            $table->text('description')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('storages', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -273,6 +340,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('thumbnail')->nullable();
             $table->string('product_unit')->nullable();
             $table->string('quantity')->nullable();
+            $table->string('inventory_tracking', 20)->nullable();
             $table->text('description')->nullable();
             $table->boolean('status')->default(true);
             $table->timestamps();
@@ -292,6 +360,15 @@ class StaffPosSaleTest extends TestCase
             $table->integer('quantity')->default(0);
             $table->timestamps();
             $table->unique(['product_id', 'storage_id']);
+        });
+
+        Schema::create('carts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id')->nullable();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->integer('amount')->default(0);
+            $table->decimal('price', 15, 2)->default(0);
+            $table->timestamps();
         });
 
         Schema::create('clients', function (Blueprint $table) {
@@ -341,9 +418,8 @@ class StaffPosSaleTest extends TestCase
             $table->unsignedBigInteger('order_id');
             $table->unsignedBigInteger('storage_id')->nullable();
             $table->unsignedBigInteger('product_id');
-            $table->string('p_name');
-            $table->decimal('p_price', 12, 2)->default(0);
-            $table->integer('p_quantity')->default(0);
+            $table->decimal('price', 12, 2)->default(0);
+            $table->integer('quantity')->default(0);
             $table->timestamps();
         });
 
@@ -416,6 +492,7 @@ class StaffPosSaleTest extends TestCase
             'thumbnail' => null,
             'product_unit' => 'cái',
             'quantity' => 0,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'description' => 'Test product',
             'status' => true,
         ], $overrides));

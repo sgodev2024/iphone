@@ -98,9 +98,28 @@ class ProductImeiManagementTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_product_list_uses_in_stock_imei_count_and_contains_management_button(): void
+    public function test_quantity_tracked_product_imei_page_reports_not_applicable(): void
+    {
+        $product = $this->createProduct($this->admin, [
+            'name' => 'Sac nhanh',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get("/admin/products/{$product->id}/imeis")
+            ->assertOk()
+            ->assertSee('Sản phẩm này được quản lý theo số lượng và không có dữ liệu IMEI.')
+            ->assertDontSee('Danh sách IMEI');
+    }
+
+    public function test_product_list_uses_tracking_specific_stock_and_imei_button(): void
     {
         $product = $this->createProduct($this->admin, ['quantity' => 99]);
+        $quantityProduct = $this->createProduct($this->admin, [
+            'name' => 'Sac nhanh',
+            'quantity' => 50,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+        ]);
         ProductImei::create([
             'product_id' => $product->id,
             'imei' => '123456789012345',
@@ -111,6 +130,16 @@ class ProductImeiManagementTest extends TestCase
             'imei' => '999999999999999',
             'status' => ProductImei::STATUS_SOLD,
         ]);
+        \App\Models\ProductStorage::create([
+            'product_id' => $quantityProduct->id,
+            'storage_id' => 1,
+            'quantity' => 8,
+        ]);
+        \App\Models\ProductStorage::create([
+            'product_id' => $quantityProduct->id,
+            'storage_id' => 2,
+            'quantity' => 12,
+        ]);
 
         $response = $this->actingAs($this->admin)
             ->withHeader('X-Requested-With', 'XMLHttpRequest')
@@ -118,7 +147,11 @@ class ProductImeiManagementTest extends TestCase
 
         $html = $response->json('data.html');
         $this->assertStringContainsString("/admin/products/{$product->id}/imeis", $html);
+        $this->assertStringNotContainsString("/admin/products/{$quantityProduct->id}/imeis", $html);
+        $this->assertStringContainsString('IMEI', $html);
+        $this->assertStringContainsString('Theo số lượng', $html);
         $this->assertMatchesRegularExpression('/<td>\s*1\s*<\/td>/', $html);
+        $this->assertMatchesRegularExpression('/<td>\s*20\s*<\/td>/', $html);
         $this->assertStringNotContainsString('<td>99</td>', $html);
     }
 
@@ -211,17 +244,31 @@ class ProductImeiManagementTest extends TestCase
             ]);
     }
 
-    public function test_global_imei_page_handles_missing_relations_invalid_dates_and_keeps_pagination_filters(): void
+    public function test_global_imei_page_excludes_orphan_and_quantity_products_and_keeps_pagination_filters(): void
     {
+        $product = $this->createProduct($this->admin, [
+            'code' => 'IMEIPAGE',
+            'name' => 'iPhone Pagination',
+        ]);
+        $quantityProduct = $this->createProduct($this->admin, [
+            'name' => 'Sac nhanh',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+        ]);
+
         ProductImei::create([
             'product_id' => 999999,
             'imei' => '900000000000000',
             'status' => ProductImei::STATUS_IN_STOCK,
         ]);
+        ProductImei::create([
+            'product_id' => $quantityProduct->id,
+            'imei' => '800000000000000',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
 
         foreach (range(1, 10) as $number) {
             ProductImei::create([
-                'product_id' => 999999,
+                'product_id' => $product->id,
                 'imei' => str_pad((string) $number, 15, '0', STR_PAD_LEFT),
                 'status' => ProductImei::STATUS_IN_STOCK,
             ]);
@@ -235,8 +282,10 @@ class ProductImeiManagementTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Từ ngày phải nhỏ hơn hoặc bằng đến ngày.')
-            ->assertSee('Sản phẩm không tồn tại')
-            ->assertSee('Chưa xác định')
+            ->assertSee('iPhone Pagination')
+            ->assertDontSee('900000000000000')
+            ->assertDontSee('800000000000000')
+            ->assertDontSee('Sac nhanh')
             ->assertViewHas('imeis', function ($imeis) {
                 return $imeis->perPage() === 10
                     && str_contains($imeis->url(2), 'status=in_stock');
@@ -289,7 +338,16 @@ class ProductImeiManagementTest extends TestCase
             $table->decimal('price', 15, 2)->default(0);
             $table->decimal('price_buy', 15, 2)->default(0);
             $table->string('quantity')->nullable()->default('0');
+            $table->string('inventory_tracking', 20)->nullable();
             $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('product_storage', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('storage_id');
+            $table->integer('quantity')->default(0);
             $table->timestamps();
         });
 
@@ -355,6 +413,7 @@ class ProductImeiManagementTest extends TestCase
             'price' => 20000000,
             'price_buy' => 18000000,
             'quantity' => 0,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'status' => true,
         ], $attributes));
     }

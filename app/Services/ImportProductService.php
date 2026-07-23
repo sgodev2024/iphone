@@ -200,14 +200,17 @@ class ImportProductService
             throw new DomainException("Không tìm thấy sản phẩm #{$productId}.");
         }
 
-        if ((int) $product->quantity < $quantity) {
-            throw new DomainException("Tổng tồn kho sản phẩm #{$productId} không đủ để hoàn tác phiếu nhập.");
-        }
-
         $stock->quantity = (int) $stock->quantity - $quantity;
         $stock->save();
 
-        $product->quantity = (string) ((int) $product->quantity - $quantity);
-        $product->save();
+        $this->syncProductTotalQuantity($productId);
+    }
+
+    private function syncProductTotalQuantity(int $productId): void
+    {
+        DB::statement(
+            'UPDATE products SET quantity = (SELECT COALESCE(SUM(quantity), 0) FROM product_storage WHERE product_id = ?), updated_at = ? WHERE id = ?',
+            [$productId, now()->toDateTimeString(), $productId]
+        );
     }
 }

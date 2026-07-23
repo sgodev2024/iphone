@@ -16,7 +16,7 @@ class ConfigController extends Controller
     public function index()
     {
         $title = 'Thông tin cửa hàng';
-        $config = Config::query()->where('user_id', Auth::id())->first();
+        $config = Config::with(['bank', 'user'])->where('user_id', Auth::id())->first();
         $banks = Bank::query()->orderBy('name')->pluck('name', 'id')->toArray();
         return view('admin.configuration.config', compact('config', 'banks', 'title'));
     }
@@ -26,7 +26,8 @@ class ConfigController extends Controller
         $credentials = $this->validateRequest($request);
 
         return transaction(function () use ($credentials, $request) {
-            $userId = Auth::id();
+            $user = Auth::user();
+            $userId = $user->id;
 
             $config = Config::query()->where('user_id', $userId)->first();
 
@@ -36,11 +37,26 @@ class ConfigController extends Controller
                 $credentials['logo'] = uploadImages('logo', 'logo');
             }
 
-            $credentials['user_id'] = $userId;
+            $bank = Bank::findOrFail($credentials['bank_id']);
+            $bankAccount = $credentials['bank_account'];
+
+            $user->store_name = $credentials['company_name'];
+            $user->company_name = $credentials['company_name'];
+            $user->email = $credentials['email'];
+            $user->phone = $credentials['phone'];
+            $user->address = $credentials['address'];
+            $user->tax_code = $credentials['tax_number'];
+            $user->save();
 
             $config = Config::updateOrCreate(
-                ['user_id' => $userId], // điều kiện tìm
-                $credentials            // dữ liệu cập nhật / tạo mới
+                ['user_id' => $userId],
+                [
+                    'bank_id' => $bank->id,
+                    'bank_account' => $bankAccount,
+                    'receiver' => $credentials['receiver'],
+                    'logo' => $credentials['logo'] ?? $oldLogo ?? 'assets/img/default-image.jpg',
+                    'qr' => "https://img.vietqr.io/image/{$bank->code}-{$bankAccount}-compact.jpg",
+                ]
             );
 
             if ($config && $request->hasFile('logo')) {
@@ -60,24 +76,23 @@ class ConfigController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('config', 'company_name')->ignore($userId, 'user_id'),
             ],
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                Rule::unique('config', 'email')->ignore($userId, 'user_id'),
+                Rule::unique('users', 'email')->ignore($userId),
             ],
             'phone' => [
                 'required',
                 'string',
                 'max:20',
-                Rule::unique('config', 'phone')->ignore($userId, 'user_id'),
+                Rule::unique('users', 'phone')->ignore($userId),
             ],
             'address' => 'required|string|max:255',
             'tax_number' => 'required|string|max:20',
             'receiver' => 'required|string|max:255',
-            'bank_account_number' => 'required|string|max:20',
+            'bank_account' => 'required|string|max:20',
             'bank_id' => 'required|exists:banks,id',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ];
@@ -89,7 +104,7 @@ class ConfigController extends Controller
             'address' => 'Địa chỉ',
             'tax_number' => 'Mã số thuế',
             'receiver' => 'Chủ tài khoản',
-            'bank_account_number' => 'Số tài khoản',
+            'bank_account' => 'Số tài khoản',
             'bank_id' => 'Ngân hàng',
             'logo' => 'Logo'
         ];

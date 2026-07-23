@@ -1,6 +1,10 @@
 @extends('admin.layout.index')
 
 @section('content')
+    @php
+        $selectedInventoryTracking = old('inventory_tracking', optional($product)->inventory_tracking);
+        $trackingLocked = !($canChangeInventoryTracking ?? true);
+    @endphp
     <div class="page-inner">
         <x-breadcrumb :items="[['label' => 'Sản phẩm', 'url' => route('admin.products.index')], ['label' => $title]]" />
 
@@ -39,6 +43,39 @@
                                     <label for="product_unit" class="form-label mb-1 fw-bold">Đơn vị</label>
                                     <input type="text" class="form-control" name="product_unit"
                                         value="{{ optional($product)->product_unit }}">
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label class="form-label mb-1 fw-bold">Phương thức quản lý tồn kho</label>
+                                    @if ($trackingLocked)
+                                        <input type="hidden" name="inventory_tracking"
+                                            value="{{ optional($product)->inventory_tracking }}">
+                                    @endif
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="inventory_tracking"
+                                                id="inventory_tracking_imei"
+                                                value="{{ \App\Models\Product::INVENTORY_TRACKING_IMEI }}"
+                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_IMEI)
+                                                @disabled($trackingLocked)>
+                                            <label class="form-check-label" for="inventory_tracking_imei">
+                                                Quản lý theo IMEI
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="inventory_tracking"
+                                                id="inventory_tracking_quantity"
+                                                value="{{ \App\Models\Product::INVENTORY_TRACKING_QUANTITY }}"
+                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_QUANTITY)
+                                                @disabled($trackingLocked)>
+                                            <label class="form-check-label" for="inventory_tracking_quantity">
+                                                Quản lý theo số lượng
+                                            </label>
+                                        </div>
+                                    </div>
+                                    @if ($trackingLocked && $inventoryTrackingLockedMessage)
+                                        <small class="text-muted d-block mt-2">{{ $inventoryTrackingLockedMessage }}</small>
+                                    @endif
                                 </div>
 
                                 <div class="col-md-6">

@@ -64,7 +64,7 @@ class importCouponController extends Controller
 
         return redirect()
             ->route('admin.importproduct.index')
-            ->with('success', 'Nhập hàng và ghi nhận IMEI thành công.');
+            ->with('success', 'Nhập hàng thành công.');
     }
 
     private function confirmImportCoupon(StoreImportCouponRequest $request): void
@@ -105,18 +105,37 @@ class importCouponController extends Controller
             ]);
         }
 
+        $submittedImeis = (array) $request->input('imeis', []);
+
         foreach ($imports as $import) {
+            $productName = $import->product?->name ?? "#{$import->product_id}";
+            $tracking = $import->product?->inventory_tracking;
+
+            if (! in_array($tracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
+                throw ValidationException::withMessages([
+                    "items.{$import->id}" => "Sản phẩm {$productName} chưa có phương thức quản lý tồn kho hợp lệ.",
+                ]);
+            }
+
+            if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
+                if (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
+                    throw ValidationException::withMessages([
+                        "imeis.{$import->id}" => "Sản phẩm {$productName} được quản lý theo số lượng nên không được gửi danh sách IMEI.",
+                    ]);
+                }
+
+                continue;
+            }
+
             if ((int) $import->quantity > ProductImei::MAX_IMPORT_QUANTITY) {
                 throw ValidationException::withMessages([
                     "imeis.{$import->id}" => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
                 ]);
             }
 
-            $imeis = array_values((array) $request->input("imeis.{$import->id}", []));
+            $imeis = array_values((array) ($submittedImeis[$import->id] ?? $submittedImeis[(string) $import->id] ?? []));
 
             if (count($imeis) !== (int) $import->quantity) {
-                $productName = $import->product?->name ?? "#{$import->product_id}";
-
                 throw ValidationException::withMessages([
                     "imeis.{$import->id}" => "Số IMEI phải bằng số lượng nhập của sản phẩm {$productName}.",
                 ]);
@@ -147,6 +166,12 @@ class importCouponController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if (! in_array($product->inventory_tracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
+                throw ValidationException::withMessages([
+                    "items.{$import->id}" => "Sản phẩm {$product->name} chưa có phương thức quản lý tồn kho hợp lệ.",
+                ]);
+            }
+
             $importDetail = $this->importProductService->addImportDetail([
                 'import_id' => $importCoupon->id,
                 'product_id' => $product->id,
@@ -155,20 +180,23 @@ class importCouponController extends Controller
                 'old_price' => $product->price,
             ]);
 
-            $imeis = array_values((array) $request->input("imeis.{$import->id}", []));
-            $importDetail->imeis()->createMany(array_map(
-                fn (string $imei) => [
-                    'product_id' => $product->id,
-                    'imei' => $imei,
-                    'status' => ProductImei::STATUS_IN_STOCK,
-                ],
-                $imeis
-            ));
+            if ($product->isImeiTracked()) {
+                $imeis = array_values((array) ($submittedImeis[$import->id] ?? $submittedImeis[(string) $import->id] ?? []));
+                $importDetail->imeis()->createMany(array_map(
+                    fn (string $imei) => [
+                        'product_id' => $product->id,
+                        'imei' => $imei,
+                        'status' => ProductImei::STATUS_IN_STOCK,
+                    ],
+                    $imeis
+                ));
+            } elseif (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
+                throw ValidationException::withMessages([
+                    "imeis.{$import->id}" => "Sản phẩm {$product->name} được quản lý theo số lượng nên không được gửi danh sách IMEI.",
+                ]);
+            }
 
-            $product->update([
-                'quantity' => (int) $product->quantity + (int) $import->quantity,
-                'price' => $import->price,
-            ]);
+            $product->update(['price' => $import->price]);
 
             $this->productStorageService->updateProductStorage($product->id, $storageId, [
                 'quantity' => (int) $import->quantity,

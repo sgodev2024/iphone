@@ -261,7 +261,7 @@ class ClientController extends Controller
         }
 
         Cart::where('user_id', $user->id)->delete();
-        $config = Config::first();
+        $config = Config::with(['bank', 'user'])->first();
         $text = convert($sum);
         $html = view('Themes.pages.bill.index', compact('cartItems', 'sum', 'client', 'user', 'config', 'text'))->render();
         $pdf = Pdf::loadHTML($html);

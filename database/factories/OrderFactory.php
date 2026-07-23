@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\Client;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,8 +19,8 @@ class OrderFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => $this->faker->numberBetween(33, 54),
-            'client_id' => $this->faker->numberBetween(1, 14),
+            'user_id' => User::query()->inRandomOrder()->value('id'),
+            'client_id' => Client::query()->inRandomOrder()->value('id'),
             'total_money' => $this->faker->randomFloat(2, 100000, 10000000),
             'status' => $this->faker->randomElement(['0', '1']), //1 là pending 2 là completed
             'note' => $this->faker->sentence,

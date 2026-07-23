@@ -33,7 +33,7 @@ class CheckInventoryController extends Controller
     {
         try {
             $title = 'Kiểm kho';
-            $config = Config::first();
+            $config = Config::with(['bank', 'user'])->first();
             $user = Auth::user();
             $inventory = $this->checkInventoryService->getAllCheckInventory();
             return view('Themes.pages.Inventory.index', compact('inventory', 'config', 'title'));
@@ -46,7 +46,7 @@ class CheckInventoryController extends Controller
     public function add()
     {
         $title = 'Kiểm kho';
-        $config = Config::first();
+        $config = Config::with(['bank', 'user'])->first();
         $user = Auth::user();
         $category = Categories::all();
         $product = $this->productService->getProductAll_Staff();

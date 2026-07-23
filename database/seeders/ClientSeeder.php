@@ -13,6 +13,10 @@ class ClientSeeder extends Seeder
      */
     public function run(): void
     {
+        if (Client::query()->exists()) {
+            return;
+        }
+
         Client::factory()->count(7)->create();
     }
 }

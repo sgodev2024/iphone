@@ -15,17 +15,28 @@
     </thead>
     <tbody>
         @forelse ($products as $product)
+            @php
+                $isImeiTracked = $product->inventory_tracking === \App\Models\Product::INVENTORY_TRACKING_IMEI;
+                $stockQuantity = $isImeiTracked
+                    ? (int) $product->imei_stock_count
+                    : (int) ($product->storage_stock_quantity ?? $product->quantity);
+            @endphp
             <tr>
                 <td><input type="checkbox" class="checked-item" value="{{ $product->id }}"></td>
                 <td>{{ ($products->currentPage() - 1) * $products->perPage() + $loop->iteration }}
                     | {{ $product->created_at->format('d/m/Y') }}
                 </td>
-                <td>{{ $product->name }}</td>
+                <td>
+                    {{ $product->name }}
+                    <span class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }} ms-1">
+                        {{ $isImeiTracked ? 'IMEI' : 'Theo số lượng' }}
+                    </span>
+                </td>
                 <td>{{ number_format($product->price, 0, ',', '.') }}</td>
                 {{-- <td>{{ $product->code }}</td> mã sp
                 <td>{{ $product->category?->name }}</td> --}}
                 <td>{{ number_format($product->price_buy, 0, ',', '.') }}</td>
-                <td>{{ $product->imei_stock_count }}</td>
+                <td>{{ $stockQuantity }}</td>
                 <td>
                     {!! $product->status
                         ? '<span class="badge bg-success">Kích hoạt</span>'
@@ -33,11 +44,13 @@
                 </td>
                 <td class="text-center product-actions-column">
                     <div class="product-actions">
-                        <a href="{{ route('admin.products.imeis.index', $product) }}"
-                            class="btn btn-info btn-sm product-action-btn" title="Quản lý IMEI"
-                            aria-label="Quản lý IMEI">
-                            <i class="fa-solid fa-barcode"></i>
-                        </a>
+                        @if ($isImeiTracked)
+                            <a href="{{ route('admin.products.imeis.index', $product) }}"
+                                class="btn btn-info btn-sm product-action-btn" title="Quản lý IMEI"
+                                aria-label="Quản lý IMEI">
+                                <i class="fa-solid fa-barcode"></i>
+                            </a>
+                        @endif
                         <a href="/admin/products/{{ $product->id }}/edit"
                             class="btn btn-primary btn-sm product-action-btn" title="Chỉnh sửa sản phẩm"
                             aria-label="Chỉnh sửa sản phẩm">

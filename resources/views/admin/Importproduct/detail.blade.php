@@ -124,11 +124,15 @@
                                                 <td>{{ number_format($detail->old_price) }}</td>
                                                 <td>{{ number_format($detail->price) }}</td>
                                                 <td>
-                                                    @forelse ($detail->imeis as $imei)
-                                                        <div class="font-monospace">{{ $imei->imei }}</div>
-                                                    @empty
-                                                        <span class="text-muted">Dữ liệu cũ</span>
-                                                    @endforelse
+                                                    @if ($detail->product?->isQuantityTracked())
+                                                        <span class="text-muted">Theo số lượng</span>
+                                                    @else
+                                                        @forelse ($detail->imeis as $imei)
+                                                            <div class="font-monospace">{{ $imei->imei }}</div>
+                                                        @empty
+                                                            <span class="text-muted">Dữ liệu cũ</span>
+                                                        @endforelse
+                                                    @endif
                                                 </td>
                                                 <td>{{ number_format($detail->price * $detail->quantity) }}</td>
 
