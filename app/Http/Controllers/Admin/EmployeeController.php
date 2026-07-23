@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
@@ -62,6 +63,7 @@ class EmployeeController extends Controller
             $user = DB::transaction(function () use ($credentials) {
                 $credentials['role_id'] = self::EMPLOYEE_ROLE_ID;
                 $credentials['manager_id'] = Auth::id();
+                $credentials['password'] = Hash::make($credentials['password']);
 
                 return User::create($credentials);
             });
@@ -132,6 +134,8 @@ class EmployeeController extends Controller
 
             if (empty($credentials['password'])) {
                 unset($credentials['password']);
+            } else {
+                $credentials['password'] = Hash::make($credentials['password']);
             }
 
             $user->update($credentials);

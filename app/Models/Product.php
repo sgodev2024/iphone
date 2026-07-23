@@ -22,7 +22,7 @@ class Product extends Model
     protected $fillable = [
         'user_id',
         'category_id',
-        'brand_id',
+        'brands_id',
         'code',
         'name',
         'price',
@@ -39,7 +39,6 @@ class Product extends Model
     protected $casts = [
         'is_featured' => 'boolean',
         'quantity' => 'integer',
-        'status' => 'boolean',
     ];
 
     public function getImagesAttribute()
@@ -54,12 +53,12 @@ class Product extends Model
 
     public function getBrandsAttribute()
     {
-        return Brand::where('id', $this->attributes['brands_id'])->first();
+        return Brand::where('id', $this->attributes['brands_id'] ?? null)->first();
     }
 
     public function brand()
     {
-        return $this->belongsTo(Brand::class);
+        return $this->belongsTo(Brand::class, 'brands_id');
     }
 
     public function carts()

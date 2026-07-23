@@ -38,64 +38,67 @@
                                     @method('PUT')
                                     @csrf
                                     <div class="row">
+                                        @error('error')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
                                         <div class="col-lg-6 mb-3">
                                             <label for="name" class="form-label">Tên khách hàng</label>
                                             <input type="text" class="form-control" id="name" name="name"
-                                                value="{{ $client->name }}" required>
+                                                value="{{ old('name', $client->name) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="name_error"></span> </div>
+                                                    id="name_error">@error('name'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="phone" class="form-label">Số điện thoại</label>
                                             <input type="text" class="form-control" id="phone" name="phone"
-                                                value="{{ $client->phone }}" required>
+                                                value="{{ old('phone', $client->phone) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="phone_error"></span> </div>
+                                                    id="phone_error">@error('phone'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="email" class="form-label">Email</label>
                                             <input type="email" class="form-control" id="email" name="email"
-                                                value="{{ $client->email }}" required>
+                                                value="{{ old('email', $client->email) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="email_error"></span> </div>
+                                                    id="email_error">@error('email'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="gender" class="form-label">Giới tính</label>
                                             <select class="form-control" id="gender" name="gender" required>
-                                                <option value="Male" {{ $client->gender == 'Male' ? 'selected' : '' }}>Nam
+                                                <option value="Male" {{ old('gender', $client->gender) == 'Male' ? 'selected' : '' }}>Nam
                                                 </option>
-                                                <option value="Female" {{ $client->gender == 'Female' ? 'selected' : '' }}>
+                                                <option value="Female" {{ old('gender', $client->gender) == 'Female' ? 'selected' : '' }}>
                                                     Nữ</option>
                                             </select>
                                             <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                id="gender_error"></span> </div>
+                                                id="gender_error">@error('gender'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="dob" class="form-label">Ngày sinh</label>
                                             <input type="date" class="form-control" id="dob" name="dob"
-                                                value="{{ $client->dob }}" required>
+                                                value="{{ old('dob', $client->dob) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="dob_error"></span> </div>
+                                                    id="dob_error">@error('dob'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="address" class="form-label">Địa chỉ</label>
                                             <input type="text" class="form-control" id="address" name="address"
-                                                value="{{ $client->address }}" required>
+                                                value="{{ old('address', $client->address) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="address_error"></span> </div>
+                                                    id="address_error">@error('address'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="zip_code" class="form-label">Mã bưu điện</label>
                                             <input type="text" class="form-control" id="zip_code" name="zip_code"
-                                                value="{{ $client->zip_code }}" required>
+                                                value="{{ old('zip_code', $client->zip_code) }}" required>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="zip_code_error"></span> </div>
+                                                    id="zip_code_error">@error('zip_code'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
@@ -103,12 +106,12 @@
                                             <select class="form-control" name="clientgroup_id" id="clientgroup_id" required>
                                                 <option value="">Chọn nhóm khách hàng</option>
                                                 @foreach ($clientgroups as $item)
-                                                <option {{ $client->clientgroup_id == $item->id ? 'selected' : '' }}
+                                                <option {{ old('clientgroup_id', $client->clientgroup_id) == $item->id ? 'selected' : '' }}
                                                     value="{{ $item->id }}">{{ $item->name }}</option>
                                                 @endforeach
                                             </select>
                                                 <div class="col-lg-9"><span class="invalid-feedback d-block" style="font-weight: 500"
-                                                    id="clientgroup_id_error"></span> </div>
+                                                    id="clientgroup_id_error">@error('clientgroup_id'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                     </div>

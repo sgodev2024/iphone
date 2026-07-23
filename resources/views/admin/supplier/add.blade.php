@@ -129,23 +129,39 @@
                         <form action="{{ route('admin.supplier.store') }}" method="post" enctype="multipart/form-data">
                             @csrf
                             <input type="hidden" name="company_id" value="{{ $company_id }}">
+                            @error('error')
+                                <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                            @enderror
+                            @error('company_id')
+                                <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                            @enderror
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="new-supplier-name">Tên:</label>
                                         <input type="text" class="form-control" id="new-supplier-name" name="name"
-                                            required>
+                                            value="{{ old('name') }}" required>
+                                        @error('name')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
                                     </div>
                                     <div class="form-group">
                                         <label for="new-supplier-email">Email:</label>
                                         <input type="email" class="form-control" id="new-supplier-email" name="email"
-                                            required>
+                                            value="{{ old('email') }}" required>
+                                        @error('email')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="new-supplier-phone">Số điện thoại:</label>
-                                        <input type="text" class="form-control" id="new-supplier-phone" name="phone">
+                                        <input type="text" class="form-control" id="new-supplier-phone" name="phone"
+                                            value="{{ old('phone') }}">
+                                        @error('phone')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
                                     </div>
                                 </div>
                             </div>

@@ -170,28 +170,34 @@
                                     @csrf
                                     <div class="row">
                                         <input name="company_id" value="{{$suppliers->company_id}}" hidden>
+                                        @error('error')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
+                                        @error('company_id')
+                                            <span class="invalid-feedback d-block" style="font-weight: 500">{{ $message }}</span>
+                                        @enderror
                                         <div class="col-lg-6 mb-3">
                                             <label for="name" class="form-label">Tên nhà cung cấp</label>
                                             <input type="text" class="form-control" id="name" name="name"
-                                                value="{{ $suppliers->name }}" required>
+                                                value="{{ old('name', $suppliers->name) }}" required>
                                             <div class="col-lg-9"><span class="invalid-feedback d-block"
-                                                    style="font-weight: 500" id="name_error"></span> </div>
+                                                    style="font-weight: 500" id="name_error">@error('name'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-6 mb-3">
                                             <label for="phone" class="form-label">Số điện thoại</label>
                                             <input type="text" class="form-control" id="phone" name="phone"
-                                                value="{{ $suppliers->phone }}" required>
+                                                value="{{ old('phone', $suppliers->phone) }}" required>
                                             <div class="col-lg-9"><span class="invalid-feedback d-block"
-                                                    style="font-weight: 500" id="phone_error"></span> </div>
+                                                    style="font-weight: 500" id="phone_error">@error('phone'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                         <div class="col-lg-12 mb-3">
                                             <label for="email" class="form-label">Email</label>
                                             <input type="email" class="form-control" id="email" name="email"
-                                                value="{{ $suppliers->email }}" required>
+                                                value="{{ old('email', $suppliers->email) }}" required>
                                             <div class="col-lg-9"><span class="invalid-feedback d-block"
-                                                    style="font-weight: 500" id="email_error"></span> </div>
+                                                    style="font-weight: 500" id="email_error">@error('email'){{ $message }}@enderror</span> </div>
 
                                         </div>
                                     </div>

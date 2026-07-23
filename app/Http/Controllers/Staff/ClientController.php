@@ -34,6 +34,7 @@ use Kavenegar;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response as HttpFoundationResponse;
 
 // Import the Storage facade
@@ -62,10 +63,23 @@ class ClientController extends Controller
         $userId = $user->role_id === 3 ? $user->manager_id : $user->id;
 
         $data = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'email' => 'required|email|max:255|unique:clients,email,' . $userId,
-            'phone' => 'required|max:11|min:10|unique:clients,phone,' . $userId,
-            'address' => 'nullable|max:255'
+            'name' => ['required', 'max:255'],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('clients', 'email')->where(fn ($query) => $query->where('user_id', $userId)),
+            ],
+            'phone' => [
+                'required',
+                'max:11',
+                'min:10',
+                Rule::unique('clients', 'phone')->where(fn ($query) => $query->where('user_id', $userId)),
+            ],
+            'address' => ['nullable', 'max:255'],
+            'gender' => ['nullable', 'in:Male,Female'],
+            'dob' => ['nullable', 'date'],
+            'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],
         ], __('request.messages'), [
             'name' => 'Tên khách hàng',
             'phone' => 'Số điện thoại',
@@ -76,6 +90,7 @@ class ClientController extends Controller
         if ($data->fails()) {
             return response()->json([
                 'message' => $data->errors()->first(),
+                'errors' => $data->errors(),
             ], HttpFoundationResponse::HTTP_UNPROCESSABLE_ENTITY);
         }
 

@@ -215,6 +215,12 @@
                         $('#branchModal').modal('show')
                     },
                     error: (xhr) => {
+                        if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                            renderValidationErrors($form, xhr.responseJSON.errors)
+                            datgin.warning(xhr.responseJSON.message || 'Vui long kiem tra lai thong tin.')
+                            return
+                        }
+
                         datgin.error('Đã có lỗi xảy ra. Vui lòng thử lại sau!');
                     }
                 })
@@ -271,9 +277,12 @@
             $('#branchForm').on('submit', function(e) {
                 e.preventDefault();
 
-                let formData = $(this).serializeArray()
+                const $form = $(this)
+                clearValidationErrors($form)
 
-                let method = $(this).attr('data-method')
+                let formData = $form.serializeArray()
+
+                let method = $form.attr('data-method')
 
                 method === 'PUT' && formData.push({
                     name: '_method',
@@ -281,12 +290,12 @@
                 })
 
                 $.ajax({
-                    url: '/admin/branchs' + (method === 'PUT' ? '/' + $(this).attr('data-id') : ''),
+                    url: '/admin/branchs' + (method === 'PUT' ? '/' + $form.attr('data-id') : ''),
                     type: 'POST',
                     data: formData,
                     success: (res) => {
                         datgin.success(res.message)
-                        $(this)[0].reset()
+                        $form[0].reset()
                         $('#branchModal').modal('hide')
                         fetchBranches(method === 'PUT' ? currentPage : 1)
                     },

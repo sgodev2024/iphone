@@ -168,6 +168,7 @@
             $('#myForm').on('submit', function(e) {
                 e.preventDefault()
                 let form = $(this);
+                clearValidationErrors(form);
                 let formData = form.serializeArray();
                 let method = form.attr('data-method')
                 let id = form.attr('data-id')
@@ -189,6 +190,12 @@
                         datgin.success(res.message);
                     },
                     error: (xhr) => {
+                        if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                            renderValidationErrors(form, xhr.responseJSON.errors);
+                            datgin.warning(xhr.responseJSON.message || 'Vui long kiem tra lai thong tin.');
+                            return;
+                        }
+
                         datgin.error(xhr.responseJSON.message ||
                             'Đã có lỗi xảy ra. Vui lòng thử lại sau!')
                     }

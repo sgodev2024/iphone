@@ -8,10 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('brands') || Schema::hasColumn('brands', 'status')) {
-            return;
-        }
-
         Schema::table('brands', function (Blueprint $table) {
             $table->boolean('status')->default(true)->after('description');
         });
@@ -19,10 +15,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (! Schema::hasTable('brands') || ! Schema::hasColumn('brands', 'status')) {
-            return;
-        }
-
         Schema::table('brands', function (Blueprint $table) {
             $table->dropColumn('status');
         });

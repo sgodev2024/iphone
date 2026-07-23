@@ -171,7 +171,13 @@ class ProductStorageService
 
             return $report;
         } catch (Exception $e) {
-            Log::error('Failed to get inventory report: ' . $e->getMessage());
+            Log::error('Failed to get inventory report.', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'storage_id' => $storage_id,
+            ]);
+
             throw new Exception('Failed to get inventory report');
         }
     }

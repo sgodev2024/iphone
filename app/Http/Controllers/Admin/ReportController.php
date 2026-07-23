@@ -17,8 +17,11 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
+use Throwable;
 
 class ReportController extends Controller
 {
@@ -36,35 +39,86 @@ class ReportController extends Controller
     {
         try {
             $title = 'Báo cáo xuất nhập tồn';
-            $storages = Storage::orderBy('name', 'asc')->get();
-            $storage = Storage::first();
-            $storage_id = $storage->id;
-            $products = $this->productStorageService->inventoryReport($storage_id);
-
-            // Lấy thêm thông tin kho và ngày tạo phiếu nhập
-            $latestImportCoupon = ImportCoupon::where('storage_id', $storage_id)
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            $latestImportDate = $latestImportCoupon ? $latestImportCoupon->created_at : null;
-
+            $storages = $this->inventoryStorageQuery()
+                ->orderBy('name', 'asc')
+                ->get();
+            $storage = $this->resolveInitialInventoryStorage($storages);
+            $products = [];
+            $latestImportDate = null;
             $yesterday = now()->subDay()->toDateString();
+            $inventoryWarning = null;
 
-            return view('admin.inventory.index', compact('title', 'products', 'storages', 'storage', 'latestImportDate', 'yesterday'));
-        } catch (Exception $e) {
-            Log::error('Failed to get Inventory Report: ' . $e->getMessage());
-            return ApiResponse::error('Failed to get Inventory Report', 500);
+            if ($storage) {
+                $storage_id = $storage->id;
+                $products = $this->productStorageService->inventoryReport($storage_id);
+
+                // Lấy thêm thông tin kho và ngày tạo phiếu nhập
+                $latestImportCoupon = ImportCoupon::where('storage_id', $storage_id)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+
+                $latestImportDate = $latestImportCoupon ? $latestImportCoupon->created_at : null;
+            } else {
+                $inventoryWarning = 'Tài khoản hiện chưa có kho trong phạm vi quản lý. Vui lòng tạo kho hoặc gán kho trước khi xem báo cáo tồn kho.';
+
+                Log::warning('Inventory report has no available storage.', [
+                    'message' => $inventoryWarning,
+                    'file' => __FILE__,
+                    'line' => __LINE__,
+                    'user_id' => Auth::id(),
+                    'owner_ids' => $this->inventoryOwnerIds(),
+                    'assigned_storage_id' => Auth::user()?->storage_id,
+                ]);
+            }
+
+            return view('admin.inventory.index', compact('title', 'products', 'storages', 'storage', 'latestImportDate', 'yesterday', 'inventoryWarning'));
+        } catch (Throwable $e) {
+            $this->logInventoryException($e, 'Failed to get Inventory Report');
+
+            $title = 'Báo cáo xuất nhập tồn';
+            $storages = collect();
+            $storage = null;
+            $products = [];
+            $latestImportDate = null;
+            $yesterday = now()->subDay()->toDateString();
+            $inventoryWarning = 'Không thể tải dữ liệu báo cáo tồn kho. Vui lòng thử lại sau hoặc liên hệ quản trị viên.';
+
+            return view('admin.inventory.index', compact('title', 'products', 'storages', 'storage', 'latestImportDate', 'yesterday', 'inventoryWarning'));
         }
     }
 
     public function getReportByStorage(Request $request)
     {
         try {
-            $storage_id = $request->storage_id;
+            $storage_id = (int) $request->input('storage_id');
+
+            if ($storage_id <= 0) {
+                return response()->json([
+                    'message' => 'Vui lòng chọn kho cần xem báo cáo.',
+                ], 422);
+            }
+
+            $storage = $this->inventoryStorageQuery()->find($storage_id);
+
+            if (! $storage) {
+                Log::warning('Inventory report requested storage outside user scope.', [
+                    'message' => 'Không tìm thấy kho trong phạm vi quản lý của tài khoản hiện tại.',
+                    'file' => __FILE__,
+                    'line' => __LINE__,
+                    'user_id' => Auth::id(),
+                    'storage_id' => $storage_id,
+                    'owner_ids' => $this->inventoryOwnerIds(),
+                    'assigned_storage_id' => Auth::user()?->storage_id,
+                ]);
+
+                return response()->json([
+                    'message' => 'Không tìm thấy kho trong phạm vi quản lý của tài khoản hiện tại.',
+                ], 404);
+            }
+
             $products = $this->productStorageService->inventoryReport($storage_id);
 
             // Additional information
-            $storage = Storage::find($storage_id);
             $latestImportCoupon = ImportCoupon::where('storage_id', $storage_id)
                 ->orderBy('created_at', 'desc')
                 ->first();
@@ -77,10 +131,76 @@ class ReportController extends Controller
                 'latestImportDate' => $latestImportDate,
                 'yesterday' => $yesterday
             ]);
-        } catch (Exception $e) {
-            Log::error('Failed to get Inventory Report: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to get Inventory Report'], 500);
+        } catch (Throwable $e) {
+            $this->logInventoryException($e, 'Failed to get Inventory Report by storage', [
+                'storage_id' => $request->input('storage_id'),
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể tải báo cáo tồn kho. Vui lòng thử lại sau.',
+            ], 500);
         }
+    }
+
+    private function inventoryStorageQuery()
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return Storage::query()->whereRaw('1 = 0');
+        }
+
+        $ownerIds = $this->inventoryOwnerIds();
+
+        return Storage::query()
+            ->where(function ($query) use ($ownerIds, $user) {
+                if (! empty($ownerIds)) {
+                    $query->whereIn('user_id', $ownerIds);
+                }
+
+                if ($user->storage_id) {
+                    $query->orWhere('id', (int) $user->storage_id);
+                }
+            });
+    }
+
+    private function resolveInitialInventoryStorage(Collection $storages): ?Storage
+    {
+        $assignedStorageId = Auth::user()?->storage_id;
+
+        if ($assignedStorageId) {
+            $assignedStorage = $storages->firstWhere('id', (int) $assignedStorageId);
+
+            if ($assignedStorage) {
+                return $assignedStorage;
+            }
+        }
+
+        return $storages->first();
+    }
+
+    private function inventoryOwnerIds(): array
+    {
+        $user = Auth::user();
+
+        return collect([$user?->id, $user?->manager_id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function logInventoryException(Throwable $e, string $message, array $context = []): void
+    {
+        Log::error($message, array_merge([
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'user_id' => Auth::id(),
+            'owner_ids' => $this->inventoryOwnerIds(),
+            'assigned_storage_id' => Auth::user()?->storage_id,
+        ], $context));
     }
 
     public function getProductsWithSmallQuanity(Request $request)

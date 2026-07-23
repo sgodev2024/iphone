@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Company;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CompanyRequest extends FormRequest
 {
@@ -28,12 +29,11 @@ class CompanyRequest extends FormRequest
             'phone' => 'required|regex:/^[0-9]{10,11}$/|unique:companies,phone,' . $id,
             'email' => 'required|email|unique:companies,email,' . $id,
             'address' => 'required|max:255',
-            'tax_number' => 'required|max:255',
+            'tax_number' => ['required', 'max:255', Rule::unique('companies', 'tax_number')->ignore($id)],
             'bank_account' => 'required|max:255',
             'bank_id' => 'required|exists:banks,id',
             'note' => 'nullable|max:255',
-            'city_id' => 'required|exists:city,id',
-            'status' => 'required|in:0,1',
+            'city_id' => 'nullable|exists:city,id',
         ];
     }
 
@@ -54,7 +54,6 @@ class CompanyRequest extends FormRequest
             'bank_id' => 'Ngân hàng',
             'note' => 'Ghi chú',
             'city_id' => 'Thành phố',
-            'status' => 'Trạng thái',
         ];
     }
 }

@@ -69,16 +69,26 @@
                     </div>
 
                     <div class="card-body">
+                        @if ($inventoryWarning ?? null)
+                            <div class="alert alert-warning mb-3">
+                                {{ $inventoryWarning }}
+                            </div>
+                        @endif
+
                         <div class="form-group">
                             <p id="reportDateRange">
                                 Từ ngày: <span id="startDate"></span> đến ngày: <span id="endDate"></span><br>
                                 Kho: <span id="storageName"></span>
                             </p>
                             <label for="storageSelect" id="label">Chọn kho:</label>
-                            <select id="storageSelect" class="form-control">
-                                @foreach ($storages as $storage)
-                                    <option value="{{ $storage->id }}">{{ $storage->name }}</option>
-                                @endforeach
+                            <select id="storageSelect" class="form-control" @disabled($storages->isEmpty())>
+                                @forelse ($storages as $storageOption)
+                                    <option value="{{ $storageOption->id }}" @selected(optional($storage)->id === $storageOption->id)>
+                                        {{ $storageOption->name }}
+                                    </option>
+                                @empty
+                                    <option value="">Chưa có kho</option>
+                                @endforelse
                             </select>
                             <div class="loader" id="loader"></div>
                         </div>
@@ -115,8 +125,26 @@
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js"></script>
     <script>
         $(document).ready(function() {
+            const hasStorages = @json($storages->isNotEmpty());
+
+            if (!hasStorages) {
+                $('#startDate').text('N/A');
+                $('#endDate').text(moment(@json($yesterday)).format('DD/MM/YYYY'));
+                $('#storageName').text('N/A');
+                $('#itemCount').text('Số lượng mặt hàng: 0');
+                $('#reportTableBody').html(
+                    '<tr><td class="text-center" colspan="10">Chưa có kho để xem báo cáo tồn kho</td></tr>'
+                );
+                return;
+            }
+
             $('#storageSelect').change(function() {
                 var storageId = $(this).val();
+
+                if (!storageId) {
+                    return;
+                }
+
                 $('#loader').show(); // Hiển thị loader
 
                 $.ajax({
@@ -142,22 +170,24 @@
                             $('#startDate').text('N/A');
                         }
                         $('#endDate').text(moment(response.yesterday).format('DD/MM/YYYY'));
-                        $('#storageName').text(response.storage.name);
-                        $('#itemCount').text('Số lượng mặt hàng: ' + response.products.length);
+                        $('#storageName').text(response.storage?.name || 'N/A');
+
+                        var products = response.products || [];
+                        $('#itemCount').text('Số lượng mặt hàng: ' + products.length);
 
                         // Update table
                         var tableBody = $('#reportTableBody');
                         tableBody.empty();
 
-                        if (response.products.length === 0) {
+                        if (products.length === 0) {
                             tableBody.append(
                                 '<tr><td class="text-center" colspan="10">Kho hàng trống</td></tr>'
                                 );
                         } else {
-                            response.products.forEach(function(item) {
+                            products.forEach(function(item) {
                                 tableBody.append('<tr>' +
                                     '<td>' + item.product_id + '</td>' +
-                                    '<td>' + item.product.name + '</td>' +
+                                    '<td>' + (item.product?.name || 'N/A') + '</td>' +
                                     '<td>' + item.quantity_before_import + '</td>' +
                                     '<td>' + new Intl.NumberFormat().format(item
                                         .before_import_value) + '</td>' +
@@ -176,7 +206,7 @@
                     },
                     error: function(xhr) {
                         $('#loader').hide(); // Ẩn loader
-                        alert('Failed to fetch report. Please try again later.');
+                        alert(xhr.responseJSON?.message || 'Failed to fetch report. Please try again later.');
                     }
                 });
             });

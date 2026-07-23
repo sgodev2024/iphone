@@ -20,11 +20,6 @@ class Company extends Model
         'bank_id',
         'city_id',
         'note',
-        'status'
-    ];
-
-    protected $casts = [
-        'status' => 'boolean'
     ];
 
     public function city()

@@ -90,11 +90,11 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="brand_id" class="form-label mb-1 fw-bold">Thương hiệu</label>
-                                    <select name="brand_id" id="brand_id" class="form-control form-select">
+                                    <label for="brands_id" class="form-label mb-1 fw-bold">Thương hiệu</label>
+                                    <select name="brands_id" id="brands_id" class="form-control form-select">
                                         <option value="">-- Chọn thương hiệu --</option>
                                         @foreach ($brands as $brandId => $brandName)
-                                            <option value="{{ $brandId }}" @selected($brandId == optional($product)->brand_id)>
+                                            <option value="{{ $brandId }}" @selected($brandId == optional($product)->brands_id)>
                                                 {{ $brandName }}</option>
                                         @endforeach
                                     </select>
@@ -137,8 +137,8 @@
                         </div>
                         <div class="card-body">
                             <select name="status" class="form-select form-control">
-                                <option value="1" @selected((optional($product)->status ?? 1) == 1)>Kích hoạt</option>
-                                <option value="0" @selected(optional($product)->status == 0)>Không kích hoạt</option>
+                                <option value="published" @selected((optional($product)->status ?? 'published') === 'published')>Kích hoạt</option>
+                                <option value="inactive" @selected(optional($product)->status === 'inactive')>Không kích hoạt</option>
                             </select>
                         </div>
                     </div>

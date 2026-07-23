@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Mail\SendMailInfo;
-use App\Models\Roles;
 use App\Models\User;
 use App\Services\AdminService;
 use App\Services\StorageService;
@@ -15,16 +14,22 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class UserController extends Controller
 {
+    private const BRANCH_ROLE_ID = 2;
+
     protected $userService;
     protected $adminService;
     protected $storageService;
+
     public function __construct(UserService $userService, AdminService $adminService, StorageService $storageService)
     {
         $this->userService = $userService;
@@ -34,15 +39,17 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        $title = "Tài khoản quản trị";
+        $title = 'Tai khoan quan tri';
         $mode = 'users';
+
         if ($request->ajax()) {
             $searchText = $request->query('s');
 
             $users = User::query()
                 ->where('id', '<>', Auth::id())
-                ->where(['manager_id' => Auth::id(), 'role_id' => 2])
-                ->when(!empty($searchText), function ($query) use ($searchText) {
+                ->where('manager_id', Auth::id())
+                ->where('role_id', self::BRANCH_ROLE_ID)
+                ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%");
                 })
                 ->latest()
@@ -58,42 +65,53 @@ class UserController extends Controller
 
     public function create(Request $request)
     {
-        $title = "Thêm chi nhánh";
+        $title = 'Them chi nhanh';
         $api = '/admin/users';
         $user = null;
+
         return view('admin.employee.form', compact('title', 'api', 'user'));
     }
 
     public function store(Request $request)
     {
-        // $title = 'Thêm nhân viên';
-        // $storage = $this->storageService->getAllStorage();
-        // $role    = Roles::all();
-        // return view('admin.employee.add', compact('title', 'storage', 'role'));
-
         $credentials = $this->validateRequest($request);
+        $plainPassword = $credentials['password'];
 
-        return transaction(function () use ($credentials, $request) {
-            $credentials['role_id'] = 2;
-            $credentials['manager_id'] = Auth::id();
+        try {
+            $user = DB::transaction(function () use ($credentials) {
+                $credentials['role_id'] = self::BRANCH_ROLE_ID;
+                $credentials['manager_id'] = Auth::id();
+                $credentials['password'] = Hash::make($credentials['password']);
 
-            $user = User::create($credentials);
+                return User::create($credentials);
+            });
+        } catch (Throwable $e) {
+            Log::error('Failed to create branch account.', [
+                'manager_id' => Auth::id(),
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone'),
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
 
-            Mail::to($credentials['email'])->send(new SendMailInfo($user,  $credentials['password']));
+            return errorResponse('Khong the tao tai khoan chi nhanh. Chi tiet loi da duoc ghi vao log.');
+        }
 
-            return successResponse(
-                message: 'Tạo tài khoản quản trị thành công.',
-                data: ['redirect' => '/admin/users'],
-                code: Response::HTTP_CREATED,
-                isToastr: true
-            );
-        });
+        $this->sendAccountInfoEmail($user, $plainPassword);
+
+        return successResponse(
+            message: 'Tao tai khoan chi nhanh thanh cong.',
+            data: ['redirect' => '/admin/users'],
+            code: Response::HTTP_CREATED,
+            isToastr: true
+        );
     }
 
     public function findByPhone(Request $request)
     {
         try {
-            $title = "Nhân viên";
+            $title = 'Nhan vien';
             $staff = $this->adminService->findStaffByPhone($request->input('phone'));
             $user = new LengthAwarePaginator(
                 $staff ? [$staff] : [],
@@ -102,17 +120,23 @@ class UserController extends Controller
                 1,
                 ['path' => Paginator::resolveCurrentPath()]
             );
+
             return view('admin.employee.index', compact('user', 'title'));
         } catch (Exception $e) {
             Log::error('Failed to find staff: ' . $e->getMessage());
+
             return response()->json(['error' => 'Failed to find staff'], 500);
         }
     }
+
     public function edit(string $id)
     {
-        $user = User::query()->where('role_id', 2)->findOrFail($id);
-        $title = "Sửa tài khoản - $user->name";
-        $api = "/admin/users/$user->id";
+        $user = User::query()
+            ->where('role_id', self::BRANCH_ROLE_ID)
+            ->where('manager_id', Auth::id())
+            ->findOrFail($id);
+        $title = "Sua tai khoan - {$user->name}";
+        $api = "/admin/users/{$user->id}";
 
         return view('admin.employee.form', compact('title', 'api', 'user'));
     }
@@ -122,17 +146,25 @@ class UserController extends Controller
         $credentials = $this->validateRequest($request, $id);
 
         return transaction(function () use ($credentials, $id) {
+            $user = User::query()
+                ->where('role_id', self::BRANCH_ROLE_ID)
+                ->where('manager_id', Auth::id())
+                ->find($id);
 
-            if (! $user = User::query()->where('role_id', 2)->find($id)) return errorResponse(message: 'Tài khoản không tồn tại', code: Response::HTTP_NOT_FOUND);
+            if (! $user) {
+                return errorResponse(message: 'Tai khoan khong ton tai', code: Response::HTTP_NOT_FOUND);
+            }
 
             if (empty($credentials['password'])) {
                 unset($credentials['password']);
+            } else {
+                $credentials['password'] = Hash::make($credentials['password']);
             }
 
             $user->update($credentials);
 
             return successResponse(
-                message: 'Cập nhật tài khoản quản trị thành công.',
+                message: 'Cap nhat tai khoan chi nhanh thanh cong.',
                 data: ['redirect' => '/admin/users'],
                 code: Response::HTTP_OK,
                 isToastr: true
@@ -147,35 +179,52 @@ class UserController extends Controller
             $request->session()->regenerate();
             Auth::setUser($user);
             $request->session()->put('authUser', $user);
-            return redirect()->route('admin.staff.store')->with('success', 'Cập nhật thành công');
+
+            return redirect()->route('admin.staff.store')->with('success', 'Cap nhat thanh cong');
         } catch (Exception $e) {
             Log::error('Failed to fetch products: ' . $e->getMessage());
+
             return ApiResponse::error('Failed to fetch products', 500);
+        }
+    }
+
+    private function sendAccountInfoEmail(User $user, string $plainPassword): void
+    {
+        try {
+            Mail::to($user->email)->send(new SendMailInfo($user, $plainPassword));
+        } catch (Throwable $e) {
+            Log::error('Failed to send branch account email.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
         }
     }
 
     private function validateRequest($request, $id = null)
     {
         $rules = [
-            'name'       => "required|string|max:255",
-            'email'      => "required|email|max:255|unique:users,email,{$id}",
-            'phone'      => "required|string|max:15|unique:users,phone,{$id}",
-            'address'    => "nullable|string|max:255",
-            'storage_id' => 'nullable|integer|exists:storages,id',
-            'status'     => 'required|in:active,inactive,locked',
-            'img_url'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'password'   => $id ? 'nullable' : 'required' . "|string|min:6"
+            'name'       => ['required', 'string', 'max:255'],
+            'email'      => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($id)],
+            'phone'      => ['required', 'string', 'max:15', Rule::unique('users', 'phone')->ignore($id)],
+            'address'    => ['nullable', 'string', 'max:255'],
+            'storage_id' => ['nullable', 'integer', 'exists:storages,id'],
+            'status'     => ['required', 'in:active,inactive,locked'],
+            'img_url'    => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:2048'],
+            'password'   => [$id ? 'nullable' : 'required', 'string', 'min:6'],
         ];
 
         return $this->validate($request, $rules, __('request.messages'), [
-            'name'       => 'Tên tài khoản',
+            'name'       => 'Ten tai khoan',
             'email'      => 'Email',
-            'phone'      => 'Số điện thoại',
-            'password'   => 'Mật khẩu',
-            'address'    => 'Địa chỉ',
-            'storage_id' => 'Kho hàng',
-            'status'     => 'Trạng thái',
-            'img_url'    => 'Ảnh đại diện',
+            'phone'      => 'So dien thoai',
+            'password'   => 'Mat khau',
+            'address'    => 'Dia chi',
+            'storage_id' => 'Kho hang',
+            'status'     => 'Trang thai',
+            'img_url'    => 'Anh dai dien',
         ]);
     }
 }

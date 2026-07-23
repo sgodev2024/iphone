@@ -59,6 +59,7 @@ class ClientService
     }
     public function addClient($data): Client
     {
+        DB::beginTransaction();
         try {
             Log::info('Adding new client');
             $client = $this->client->create($data);

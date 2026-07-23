@@ -31,11 +31,11 @@ class ProductRequest extends FormRequest
             'price_buy'    => 'required|numeric|min:0',
             'product_unit' => 'required|string|max:50',
             'category_id'  => 'required|exists:categories,id',
-            'brand_id'     => 'nullable|exists:brands,id',
+            'brands_id'    => 'nullable|exists:brands,id',
             'inventory_tracking' => ['required', Rule::in(Product::INVENTORY_TRACKING_OPTIONS)],
-            'description'  => 'nullable|string',
+            'description'  => 'required|string',
             'is_featured'  => 'nullable|in:1',
-            'status'       => 'required|boolean',
+            'status'       => ['required', Rule::in(['published', 'inactive', 'scheduled'])],
             'thumbnail'    => ($id ? 'nullable' : 'required') . '|image|mimes:jpeg,png,jpg,gif|max:2048',
         ];
     }
@@ -85,7 +85,7 @@ class ProductRequest extends FormRequest
             'price_buy'    => 'giá nhập',
             'product_unit' => 'đơn vị',
             'category_id'  => 'danh mục',
-            'brand_id'     => 'thương hiệu',
+            'brands_id'    => 'thương hiệu',
             'inventory_tracking' => 'phương thức quản lý tồn kho',
             'description'  => 'mô tả',
             'is_featured'  => 'sản phẩm nổi bật',

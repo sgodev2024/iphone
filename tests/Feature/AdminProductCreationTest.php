@@ -36,10 +36,10 @@ class AdminProductCreationTest extends TestCase
             'price_buy' => 23000000,
             'product_unit' => 'chiec',
             'category_id' => $category->id,
-            'brand_id' => $brand->id,
+            'brands_id' => $brand->id,
             'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
             'thumbnail' => UploadedFile::fake()->image('iphone.jpg'),
         ], ['Accept' => 'application/json']);
 
@@ -65,7 +65,7 @@ class AdminProductCreationTest extends TestCase
             'product_unit' => 'chiec',
             'category_id' => $category->id,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
             'thumbnail' => UploadedFile::fake()->image('iphone.jpg'),
         ], ['Accept' => 'application/json'])
             ->assertUnprocessable()
@@ -86,7 +86,7 @@ class AdminProductCreationTest extends TestCase
             'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'category_id' => $category->id,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
             'thumbnail' => UploadedFile::fake()->image('iphone-16.jpg'),
         ], ['Accept' => 'application/json']);
 
@@ -108,7 +108,7 @@ class AdminProductCreationTest extends TestCase
         $product = Product::create([
             'user_id' => $admin->id,
             'category_id' => $category->id,
-            'brand_id' => $brand->id,
+            'brands_id' => $brand->id,
             'code' => 'SPFORM001',
             'name' => 'iPhone Form Test',
             'price' => 20000000,
@@ -117,7 +117,7 @@ class AdminProductCreationTest extends TestCase
             'quantity' => 7,
             'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
         ]);
 
         $this->actingAs($admin)
@@ -150,7 +150,7 @@ class AdminProductCreationTest extends TestCase
             'quantity' => 0,
             'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
         ]);
 
         $this->actingAs($admin)->put("/admin/products/{$product->id}", [
@@ -161,7 +161,7 @@ class AdminProductCreationTest extends TestCase
             'category_id' => $category->id,
             'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
         ], ['Accept' => 'application/json'])
             ->assertOk();
 
@@ -183,7 +183,7 @@ class AdminProductCreationTest extends TestCase
             'quantity' => 1,
             'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
         ]);
         ProductStorage::create([
             'product_id' => $product->id,
@@ -204,7 +204,7 @@ class AdminProductCreationTest extends TestCase
             'category_id' => $category->id,
             'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
             'description' => 'May moi',
-            'status' => 1,
+            'status' => 'published',
         ], ['Accept' => 'application/json'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['inventory_tracking']);
@@ -270,7 +270,7 @@ class AdminProductCreationTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('category_id')->nullable();
-            $table->unsignedBigInteger('brand_id')->nullable();
+            $table->unsignedBigInteger('brands_id')->nullable();
             $table->string('code')->nullable()->unique();
             $table->string('name')->index();
             $table->decimal('price', 15, 2)->unsigned()->default(0);
@@ -281,7 +281,7 @@ class AdminProductCreationTest extends TestCase
             $table->string('inventory_tracking', 20)->nullable();
             $table->text('description')->nullable();
             $table->string('is_featured')->nullable();
-            $table->boolean('status')->default(1);
+            $table->string('status')->default('published');
             $table->timestamps();
         });
 

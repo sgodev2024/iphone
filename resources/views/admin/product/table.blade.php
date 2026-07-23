@@ -38,7 +38,7 @@
                 <td>{{ number_format($product->price_buy, 0, ',', '.') }}</td>
                 <td>{{ $stockQuantity }}</td>
                 <td>
-                    {!! $product->status
+                    {!! $product->status === 'published'
                         ? '<span class="badge bg-success">Kích hoạt</span>'
                         : '<span class="badge bg-danger">Không kích hoạt</span>' !!}
                 </td>
