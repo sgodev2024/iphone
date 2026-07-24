@@ -47,6 +47,7 @@ use App\Http\Controllers\SuperAdmin\SuperAdminController;
 use App\Http\Middleware\CheckLogin;
 use App\Http\Middleware\CheckLoginSuperAdmin;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\ImeiController;
 
 Route::post('/check-account', [SignUpController::class, 'checkAccount'])->name('check.account');
 
@@ -128,7 +129,8 @@ Route::middleware(['auth'])
                 });
 
             Route::get('imeis', [ProductImeiController::class, 'globalIndex'])->name('imeis.index');
-
+            Route::delete('imeis/{productImei}', [ProductImeiController::class, 'destroy'])
+                ->name('imeis.destroy');
             Route::prefix('users')
                 ->controller(UserController::class)
                 ->name('users.')

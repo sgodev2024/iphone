@@ -125,7 +125,6 @@
                 <div class="text-muted imei-page-subtitle">Tra cứu và theo dõi toàn bộ thiết bị theo IMEI.</div>
             </div>
         </div> --}}
-
         <div class="imei-summary-line" aria-label="Thống kê IMEI">
             <span>
                 <span class="imei-summary-label">Tổng thiết bị:</span>
@@ -272,14 +271,28 @@
                                         @if ($product)
                                             <a href="{{ route('admin.products.imeis.index', $product) }}"
                                                 class="btn btn-outline-primary btn-sm" title="Xem IMEI theo sản phẩm"
-                                                aria-label="Xem IMEI theo sản phẩm"><i class="fa-solid fa-barcode"></i></a>
+                                                aria-label="Xem IMEI theo sản phẩm">
+                                                <i class="fa-solid fa-barcode"></i>
+                                            </a>
                                         @endif
+
                                         @if ($importCoupon)
                                             <a href="{{ route('admin.importproduct.importCoupon.detail', $importCoupon->id) }}"
                                                 class="btn btn-info btn-sm" title="Xem phiếu nhập"
-                                                aria-label="Xem phiếu nhập"><i class="fa-solid fa-receipt"></i></a>
+                                                aria-label="Xem phiếu nhập">
+                                                <i class="fa-solid fa-receipt"></i>
+                                            </a>
                                         @endif
-                                        @if (!$product && !$importCoupon)
+
+                                        @if ($isInStock)
+                                            <button type="button" class="btn btn-danger btn-sm" title="Xóa IMEI"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteImeiModal{{ $productImei->id }}">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        @endif
+
+                                        @if (!$product && !$importCoupon && !$isInStock)
                                             <span class="text-muted">—</span>
                                         @endif
                                     </td>
@@ -292,6 +305,61 @@
                         </tbody>
                     </table>
                 </div>
+                @foreach ($imeis as $productImei)
+                    @if ($productImei->status === \App\Models\ProductImei::STATUS_IN_STOCK)
+                        <div class="modal fade" id="deleteImeiModal{{ $productImei->id }}" tabindex="-1"
+                            aria-labelledby="deleteImeiModalLabel{{ $productImei->id }}" aria-hidden="true">
+
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <form method="POST" action="{{ route('admin.imeis.destroy', $productImei) }}">
+
+                                        @csrf
+                                        @method('DELETE')
+
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteImeiModalLabel{{ $productImei->id }}">
+                                                Xác nhận xóa IMEI
+                                            </h5>
+
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                                aria-label="Đóng">
+                                            </button>
+                                        </div>
+
+                                        <div class="modal-body">
+                                            <div class="alert alert-warning">
+                                                Bạn đang loại IMEI
+                                                <strong>{{ $productImei->imei }}</strong>
+                                                khỏi tồn kho.
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="delete_reason_{{ $productImei->id }}" class="form-label">
+                                                    Lý do xóa <span class="text-danger">*</span>
+                                                </label>
+
+                                                <textarea id="delete_reason_{{ $productImei->id }}" name="delete_reason" class="form-control" rows="3"
+                                                    maxlength="500" required placeholder="Nhập lý do xóa IMEI"></textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                Hủy
+                                            </button>
+
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fa-solid fa-trash me-1"></i>
+                                                Xác nhận xóa
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                @endforeach
 
                 {{ $imeis->links('vendor.pagination.custom') }}
             </div>

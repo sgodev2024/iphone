@@ -387,6 +387,9 @@ class ProductImeiManagementTest extends TestCase
             $table->unsignedBigInteger('import_detail_id')->nullable();
             $table->string('imei', 15)->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->string('delete_reason', 500)->nullable();
+            $table->softDeletes();
             $table->timestamps();
             $table->index(['product_id', 'status']);
         });

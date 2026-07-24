@@ -313,7 +313,7 @@ class ImportImeiWorkflowTest extends TestCase
                 ' 012345678901234 ',
                 '123456789012345',
                 '223456789012345',
-        ]));
+            ]));
 
         $response->assertRedirect('/admin/importproduct')
             ->assertSessionHas('success', 'Nhập hàng thành công.');
@@ -646,7 +646,7 @@ class ImportImeiWorkflowTest extends TestCase
     private function makeImeis(int $quantity): array
     {
         return array_map(
-            fn (int $number) => '9'.str_pad((string) $number, 14, '0', STR_PAD_LEFT),
+            fn(int $number) => '9' . str_pad((string) $number, 14, '0', STR_PAD_LEFT),
             range(1, $quantity)
         );
     }
@@ -766,6 +766,9 @@ class ImportImeiWorkflowTest extends TestCase
             $table->unsignedBigInteger('import_detail_id')->nullable();
             $table->string('imei', 15)->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->string('delete_reason', 500)->nullable();
+            $table->softDeletes();
             $table->timestamps();
         });
 

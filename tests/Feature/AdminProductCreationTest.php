@@ -125,7 +125,7 @@ class AdminProductCreationTest extends TestCase
             ->assertOk()
             ->assertSee('name="inventory_tracking"', false)
             ->assertSee('Quản lý theo IMEI')
-            ->assertSee('Quản lý theo số lượng')
+            ->assertSee('Sản phẩm thường')
             ->assertDontSee('name="quantity"', false);
 
         $this->actingAs($admin)
@@ -316,6 +316,10 @@ class AdminProductCreationTest extends TestCase
             $table->string('imei', 15)->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
             $table->timestamps();
+
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->string('delete_reason', 500)->nullable();
+            $table->softDeletes();
         });
     }
 
