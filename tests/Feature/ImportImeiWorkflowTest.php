@@ -572,6 +572,54 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseHas('product_imeis', ['import_detail_id' => $detail->id]);
     }
 
+    public function test_delete_staging_import_item_removes_regular_product(): void
+    {
+        $item = ImportItem::create([
+            'product_id' => $this->quantityProduct->id,
+            'quantity' => 2,
+            'price' => 50000,
+            'total' => 100000,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get("/admin/importproduct/import/delete?id={$item->id}");
+
+        $response->assertOk()
+            ->assertJson([
+                'import' => [],
+                'total' => 0,
+            ]);
+
+        $this->assertDatabaseMissing('import', ['id' => $item->id]);
+    }
+
+    public function test_delete_staging_import_item_removes_imei_product_and_updates_totals(): void
+    {
+        $imeiItem = ImportItem::create([
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'price' => 200000,
+            'total' => 200000,
+        ]);
+        $regularItem = ImportItem::create([
+            'product_id' => $this->quantityProduct->id,
+            'quantity' => 1,
+            'price' => 50000,
+            'total' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get("/admin/importproduct/import/delete?id={$imeiItem->id}");
+
+        $response->assertOk()
+            ->assertJson([
+                'total' => 50000,
+            ]);
+
+        $this->assertDatabaseMissing('import', ['id' => $imeiItem->id]);
+        $this->assertDatabaseHas('import', ['id' => $regularItem->id]);
+    }
+
     private function createImportItem(int $quantity, ?Product $product = null): ImportItem
     {
         return ImportItem::create([

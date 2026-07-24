@@ -3,7 +3,6 @@
 @section('content')
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <style>
         .numberInput {
@@ -97,9 +96,31 @@
             max-width: 150px;
             text-align: right;
         }
+
+        /* BS4 CDN overrides layout BS5 breadcrumb — align items on one row */
+        .importproduct-add-page .page-header .breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .importproduct-add-page .page-header .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            line-height: 1;
+        }
+
+        .importproduct-add-page .page-header .breadcrumb-item a,
+        .importproduct-add-page .page-header .breadcrumb-item span {
+            display: inline-flex;
+            align-items: center;
+            line-height: 1;
+            margin-bottom: 0;
+            vertical-align: middle;
+        }
     </style>
 
-    <div class="page-inner">
+    <div class="page-inner importproduct-add-page">
         <div class="page-header">
             <x-breadcrumb :items="[['label' => 'Nhập hàng'], ['label' => 'Thêm']]" />
             {{-- <ul class="breadcrumbs mb-3">
@@ -141,7 +162,7 @@
                                 </ul>
                             </div>
                         @endif
-                        @if (! empty($productQueryWarning))
+                        @if (!empty($productQueryWarning))
                             <div class="alert alert-warning">
                                 {{ $productQueryWarning }}
                             </div>
@@ -160,22 +181,23 @@
                                         @if ($products)
                                             @foreach ($products as $item)
                                                 @php
-                                                    $isImeiTracked = $item->inventory_tracking === \App\Models\Product::INVENTORY_TRACKING_IMEI;
+                                                    $isImeiTracked =
+                                                        $item->inventory_tracking ===
+                                                        \App\Models\Product::INVENTORY_TRACKING_IMEI;
                                                 @endphp
                                                 <li data-id="{{ $item->id }}" class="product_inventory">
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width:80px; height:70px;"
-                                                                src="{{ showImage($item->thumbnail) }}"
-                                                                alt="Sản phẩm">
+                                                                src="{{ showImage($item->thumbnail) }}" alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">
                                                             <p class="txtB ng-binding">{{ $item->name }}
-                                                                <span class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }}">
+                                                                <span
+                                                                    class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }}">
                                                                     {{ $isImeiTracked ? 'Quản lý IMEI' : 'Theo số lượng' }}
                                                                 </span>
-                                                                <span
-                                                                    class="sugg-attr ng-binding"> </span>
+                                                                <span class="sugg-attr ng-binding"> </span>
                                                                 <span class="sugg-unit ng-binding"></span>
                                                             </p>
                                                             <p class="ng-binding">
@@ -553,9 +575,9 @@
                 }
             });
 
-            $j('.product_inventory').click(function(e) {
+            $j(document).on('click', '.product_inventory', function(e) {
                 e.preventDefault();
-                var product = $(this).data('id');
+                var product = $j(this).data('id');
                 var existingRow = $j(`#import-data-product tr[data-product="${product}"]`);
 
                 if (existingRow.length) {
@@ -565,7 +587,7 @@
                         existingRow.removeClass('table-warning');
                     }, 1200);
 
-                    $('#search').val('');
+                    $j('#search').val('');
                     $j('#results').hide();
                     return;
                 }
@@ -578,7 +600,7 @@
                         product: product,
                     },
                     success: function(data) {
-                        $('#search').val('');
+                        $j('#search').val('');
                         $j('#results').hide();
                         updateimport(data.import, data.total);
                         updateReceiptTotal(data.total);
@@ -613,7 +635,8 @@
                     alert(MAX_IMPORT_QUANTITY_MESSAGE);
                 }
 
-                var removedValues = isImeiProduct ? currentValues.slice(value).filter(imei => imei.trim() !== '') : [];
+                var removedValues = isImeiProduct ? currentValues.slice(value).filter(imei => imei
+                    .trim() !== '') : [];
 
                 if (isImeiProduct && value < previousQuantity && removedValues.length > 0) {
                     var shouldReduce = confirm(
@@ -645,8 +668,10 @@
                     },
                     error: function(xhr) {
                         const errors = xhr.responseJSON?.errors || {};
-                        const firstError = Object.values(errors).reduce((message, fieldErrors) => {
-                            return message || (Array.isArray(fieldErrors) ? fieldErrors[0] : fieldErrors);
+                        const firstError = Object.values(errors).reduce((message,
+                            fieldErrors) => {
+                            return message || (Array.isArray(fieldErrors) ? fieldErrors[
+                                0] : fieldErrors);
                         }, '');
 
                         input.val(previousQuantity);
@@ -687,34 +712,49 @@
                 }
             });
 
-
-            $j('table').on('click', '.delete i', function(e) {
+            $j(document).on('click', '.btn-delete-product, .delete-btn, .delete', function(e) {
                 e.preventDefault();
-                var id = $j(this).closest('tr').data('id');
-                var productId = $j(this).closest('tr').data('product');
-                var warehouse = $j('#inventory-data-product');
-                var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm có mã " + '#' + productId +
-                    " không ?");
-                if (confirmDelete) {
-                    $j.ajax({
-                        url: '{{ route('admin.importproduct.import.delete') }}',
-                        method: 'GET',
-                        data: {
-                            _token: '{{ csrf_token() }}',
-                            id: id,
-                        },
-                        success: function(data) {
-                            updateimport(data.import, data.total);
-                            updateReceiptTotal(data.total);
+                e.stopPropagation();
 
-                        },
-                    });
+                var btn = $j(this).hasClass('btn-delete-product') ? $j(this) : $j(this).closest('tr').find('.btn-delete-product');
+                var tr = $j(this).closest('tr');
+                var id = btn.length && btn.data('id') ? btn.data('id') : tr.data('id');
+                var productId = btn.length && btn.data('product-id') ? btn.data('product-id') : tr.data('product');
+                var productName = btn.length ? btn.data('product-name') : '';
+                var productCode = btn.length ? btn.data('product-code') : '';
+
+                if (!id) {
+                    return;
                 }
+
+                var displayLabel = productName ? (productName + (productCode ? ' (' + productCode + ')' : '')) : ('#' + (productCode || productId));
+                var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm " + displayLabel + " khỏi phiếu nhập không?");
+                if (!confirmDelete) {
+                    return;
+                }
+
+                delete imeiValues[id];
+
+                $j.ajax({
+                    url: '{{ route('admin.importproduct.import.delete') }}',
+                    method: 'GET',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        id: id,
+                    },
+                    success: function(data) {
+                        updateimport(data.import, data.total);
+                        updateReceiptTotal(data.total);
+                    },
+                    error: function(xhr) {
+                        alert(xhr.responseJSON?.error || 'Không thể xóa sản phẩm. Vui lòng thử lại.');
+                    }
+                });
             });
 
             // chọn danh sách  sản phẩm theo loại
             $j('.submit_hang').on('click', function() {
-                var atLeastOneChecked = $('#checkboxForm_category input[type="checkbox"]:checked').length >
+                var atLeastOneChecked = $j('#checkboxForm_category input[type="checkbox"]:checked').length >
                     0;
                 if (!atLeastOneChecked) {
                     alert('Vui lòng chọn ít nhất một loại hàng!');
@@ -722,7 +762,7 @@
                 }
                 var selectedValues = [];
                 $j('#checkboxForm_category input[type="checkbox"]:checked').each(function() {
-                    selectedValues.push($(this).val());
+                    selectedValues.push($j(this).val());
                 });
                 $j.ajax({
                     url: '{{ route('admin.importproduct.import.addCategory') }}',
@@ -732,7 +772,7 @@
                         selectedValues: selectedValues,
                     },
                     success: function(data) {
-                        $('input[type="checkbox"]').prop('checked', false);
+                        $j('input[type="checkbox"]').prop('checked', false);
                         updateimport(data.import, data.total);
                         updateReceiptTotal(data.total);
                     },
@@ -774,7 +814,7 @@
 
             function updateReceiptTotal(total) {
                 const rawTotal = Math.round(parseMoneyValue(total));
-                $('#total_input').val(rawTotal);
+                $j('#total_input').val(rawTotal);
                 $j('#payment').val(rawTotal);
                 $j('.cantra').text(formatMoneyValue(rawTotal));
                 $j('#tientra').text(formatMoneyValue(rawTotal));
@@ -785,15 +825,31 @@
                 var importhtml = $j('#import-data-product');
                 var tieptuc = $j('#tieptuc');
                 updateReceiptTotal(total || 0);
-                if (parseMoneyValue(total) <= 0) {
+
+                const validIds = new Set((importproduct || []).map(item => String(item.id)));
+                Object.keys(imeiValues).forEach(id => {
+                    if (!validIds.has(String(id))) {
+                        delete imeiValues[id];
+                    }
+                });
+
+                if (parseMoneyValue(total) <= 0 || !importproduct || importproduct.length === 0) {
                     tieptuc.css('display', 'none');
                 } else {
                     tieptuc.css('display', 'block');
                 }
                 importhtml.empty();
 
-                if (importproduct.length === 0) {} else {
-                    $.each(importproduct, function(index, item) {
+                if (!importproduct || importproduct.length === 0) {
+                    importhtml.html(`
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Chưa có sản phẩm nào trong phiếu nhập. Vui lòng tìm kiếm sản phẩm để thêm vào.
+                            </td>
+                        </tr>
+                    `);
+                } else {
+                    $j.each(importproduct, function(index, item) {
                         const product = item.product || {};
                         const productCode = product.code || item.code || '';
                         const productName = product.name || '';
@@ -802,11 +858,18 @@
                         const rowTotal = parseMoneyValue(item.total);
                         var productHtml = `
                 <tr data-id='${item.id}' data-product='${item.product_id ?? ""}' data-tracking="${tracking}">
-                    <td class='delete'>
+                    <td class='text-center align-middle'>
                         <input type="hidden" form="addimport" name="items[${item.id}][product_id]" value="${item.product_id ?? ''}">
                         <input type="hidden" form="addimport" name="items[${item.id}][quantity]" value="${item.quantity ?? ''}">
                         <input type="hidden" form="addimport" name="items[${item.id}][import_price]" value="${price}">
-                        <i class="fas fa-trash-alt"></i>
+                        <button type="button" class="btn btn-link text-danger p-0 border-0 btn-delete-product"
+                            data-id="${item.id}"
+                            data-product-id="${item.product_id ?? ''}"
+                            data-product-code="${escapeHtml(productCode)}"
+                            data-product-name="${escapeHtml(productName)}"
+                            title="Xóa sản phẩm">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </td>
                     <td>${ index + 1 }</td>
                     <td>${escapeHtml(productCode)}</td>
@@ -897,7 +960,7 @@
                     return '<span class="badge bg-info ms-1">Quản lý IMEI</span>';
                 }
 
-                return '<span class="badge bg-secondary ms-1">Theo số lượng</span>';
+                return '<span class="badge bg-secondary ms-1">Sản phẩm thường</span>';
             }
 
             function captureImeiValues() {

@@ -28,7 +28,7 @@ class StoreImportCouponRequest extends FormRequest
             }
 
             $normalized[$importId] = array_map(
-                fn ($imei) => trim((string) $imei),
+                fn($imei) => trim((string) $imei),
                 $imeis
             );
         }
@@ -65,7 +65,7 @@ class StoreImportCouponRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             $ownerIds = collect([$this->user()?->id, $this->user()?->manager_id])
                 ->filter()
-                ->map(fn ($id) => (int) $id)
+                ->map(fn($id) => (int) $id)
                 ->unique()
                 ->values()
                 ->all();
@@ -84,7 +84,7 @@ class StoreImportCouponRequest extends FormRequest
             }
 
             $submitted = (array) $this->input('imeis', []);
-            $knownIds = $imports->pluck('id')->map(fn ($id) => (string) $id);
+            $knownIds = $imports->pluck('id')->map(fn($id) => (string) $id);
             $duplicatedProductId = $imports->pluck('product_id')
                 ->duplicates()
                 ->first();
@@ -125,7 +125,7 @@ class StoreImportCouponRequest extends FormRequest
                     if ($hasSubmittedImeis) {
                         $validator->errors()->add(
                             "imeis.{$import->id}",
-                            "Sản phẩm {$productName} được quản lý theo số lượng nên không được gửi danh sách IMEI."
+                            "Sản phẩm {$productName} là sản phẩm thường nên không được gửi danh sách IMEI."
                         );
                     }
 

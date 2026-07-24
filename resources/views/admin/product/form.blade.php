@@ -56,8 +56,7 @@
                                             <input class="form-check-input" type="radio" name="inventory_tracking"
                                                 id="inventory_tracking_imei"
                                                 value="{{ \App\Models\Product::INVENTORY_TRACKING_IMEI }}"
-                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_IMEI)
-                                                @disabled($trackingLocked)>
+                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_IMEI) @disabled($trackingLocked)>
                                             <label class="form-check-label" for="inventory_tracking_imei">
                                                 Quản lý theo IMEI
                                             </label>
@@ -66,10 +65,9 @@
                                             <input class="form-check-input" type="radio" name="inventory_tracking"
                                                 id="inventory_tracking_quantity"
                                                 value="{{ \App\Models\Product::INVENTORY_TRACKING_QUANTITY }}"
-                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_QUANTITY)
-                                                @disabled($trackingLocked)>
+                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_QUANTITY) @disabled($trackingLocked)>
                                             <label class="form-check-label" for="inventory_tracking_quantity">
-                                                Quản lý theo số lượng
+                                                Sản phẩm thường
                                             </label>
                                         </div>
                                     </div>

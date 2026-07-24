@@ -108,7 +108,7 @@ class ProductImeiManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->get("/admin/products/{$product->id}/imeis")
             ->assertOk()
-            ->assertSee('Sản phẩm này được quản lý theo số lượng và không có dữ liệu IMEI.')
+            ->assertSee('Sản phẩm này là sản phẩm thường và không có dữ liệu IMEI.')
             ->assertDontSee('Danh sách IMEI');
     }
 
@@ -236,7 +236,7 @@ class ProductImeiManagementTest extends TestCase
             ->assertSee('10/07/2026')
             ->assertSee(route('admin.products.imeis.index', $product), false)
             ->assertSee(route('admin.importproduct.importCoupon.detail', $coupon->id), false)
-            ->assertViewHas('statistics', fn (array $statistics) => $statistics === [
+            ->assertViewHas('statistics', fn(array $statistics) => $statistics === [
                 'total' => 3,
                 'in_stock' => 1,
                 'sold' => 1,
@@ -408,7 +408,7 @@ class ProductImeiManagementTest extends TestCase
     {
         return Product::create(array_merge([
             'user_id' => $user->id,
-            'code' => 'SP'.fake()->unique()->numerify('######'),
+            'code' => 'SP' . fake()->unique()->numerify('######'),
             'name' => 'iPhone Test',
             'price' => 20000000,
             'price_buy' => 18000000,
