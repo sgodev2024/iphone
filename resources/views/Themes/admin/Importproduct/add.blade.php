@@ -1,10 +1,8 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
@@ -344,7 +342,8 @@
                                     <ul class="results" id="results">
                                         @if ($products)
                                             @foreach ($products as $item)
-                                                <li data-id="{{ $item->id }}" class="product_inventory">
+                                                <li data-id="{{ $item->id }}"
+                                                    data-category-id="{{ $item->category_id }}" class="product_inventory">
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width: 80px ; height: 70px;"
@@ -368,6 +367,10 @@
                                                 </li>
                                             @endforeach
                                         @endif
+                                        <li class="no-results"
+                                            style="display: none; text-align: center; color: #888; padding: 15px;">
+                                            Không tìm thấy sản phẩm phù hợp
+                                        </li>
                                     </ul>
                                 </form>
                                 <div class="modal fade" id="listcategory" tabindex="-1" role="dialog"
@@ -386,7 +389,7 @@
                                                 <div class="row">
                                                     <div class="col-lg-12 mb-3" id="searh_category">
                                                         <input type="text" class="form-control"
-                                                            placeholder="Tìm kiếm nhóm hàng">
+                                                            id="search_category_input" placeholder="Tìm kiếm nhóm hàng">
                                                     </div>
                                                     <div class="col-lg-12">
                                                         <div class="form-check" style="margin: 0;">
@@ -397,20 +400,20 @@
                                                             </label>
                                                         </div>
                                                         <form id="checkboxForm_category">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox"
-                                                                    value="" id="checkbox2">
-                                                                <label class="form-check-label" for="checkbox2">
-                                                                    Checkbox 2
-                                                                </label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox"
-                                                                    value="" id="checkbox3">
-                                                                <label class="form-check-label" for="checkbox3">
-                                                                    Checkbox 3
-                                                                </label>
-                                                            </div>
+                                                            @if (!empty($category))
+                                                                @foreach ($category as $index => $item)
+                                                                    <div class="form-check category-item"
+                                                                        style="margin:0px; padding-top:4px; padding-bottom:4px;">
+                                                                        <input class="form-check-input category-checkbox"
+                                                                            type="checkbox" value="{{ $item->id }}"
+                                                                            id="checkbox_{{ $item->id }}">
+                                                                        <label class="form-check-label"
+                                                                            for="checkbox_{{ $item->id }}">
+                                                                            {{ $item->name }}
+                                                                        </label>
+                                                                    </div>
+                                                                @endforeach
+                                                            @endif
                                                         </form>
                                                     </div>
                                                 </div>
@@ -419,8 +422,7 @@
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary miss_model"
                                                     data-dismiss="modal">Bỏ qua</button>
-                                                <button type="button" class="btn btn-primary submit_hang"
-                                                    data-dismiss="modal">Xong</button>
+                                                <button type="button" class="btn btn-primary submit_hang">Xong</button>
                                             </div>
                                         </div>
                                     </div>
@@ -604,13 +606,54 @@
             }
         }
     </script>
-    <!-- Include jQuery -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 
     <script>
         var $j = jQuery.noConflict();
 
         $j(document).ready(function() {
+            var appliedCategoryIds = [];
+
+            function filterProducts() {
+                var query = $j('#search').val().toLowerCase().trim();
+                var visibleCount = 0;
+
+                $j('#results li.product_inventory').each(function() {
+                    var $li = $j(this);
+                    var catId = String($li.data('category-id') || '');
+                    var text = $li.text().toLowerCase();
+
+                    var matchCat = (appliedCategoryIds.length === 0) || appliedCategoryIds.includes(catId);
+                    var matchQuery = (query.length === 0) || text.includes(query);
+
+                    if (matchCat && matchQuery) {
+                        $li.show();
+                        visibleCount++;
+                    } else {
+                        $li.hide();
+                    }
+                });
+
+                if (visibleCount > 0) {
+                    $j('.no-results').hide();
+                } else {
+                    $j('.no-results').show();
+                }
+            }
+
+            function syncModalCheckboxes() {
+                var total = $j('#checkboxForm_category .category-checkbox').length;
+                if (appliedCategoryIds.length === 0 || appliedCategoryIds.length === total) {
+                    $j('#selectAll').prop('checked', true);
+                    $j('#checkboxForm_category .category-checkbox').prop('checked', true);
+                } else {
+                    $j('#selectAll').prop('checked', false);
+                    $j('#checkboxForm_category .category-checkbox').each(function() {
+                        var val = String($j(this).val());
+                        $j(this).prop('checked', appliedCategoryIds.includes(val));
+                    });
+                }
+            }
+
             $j.ajax({
                 url: '{{ route('admin.importproduct.import') }}',
                 type: 'GET',
@@ -626,18 +669,19 @@
                     cantra.html(data.total);
                     tientra.empty();
                     tientra.html(data.total);
-                    var list_category = data.category;
+                    var list_category = data.category || [];
                     list_category.forEach(function(item, index) {
                         var categoryHtml = `
-                        <div class="form-check" style='margin:0px; padding-top:0px;'>
-                            <input class="form-check-input" type="checkbox" value="${item.id}" id="${'checkbox' + index}">
-                            <label class="form-check-label" for="${'checkbox' + index}">
+                        <div class="form-check category-item" style='margin:0px; padding-top:4px; padding-bottom:4px;'>
+                            <input class="form-check-input category-checkbox" type="checkbox" value="${item.id}" id="${'checkbox_' + item.id}">
+                            <label class="form-check-label" for="${'checkbox_' + item.id}">
                                ${item.name}
                             </label>
                         </div>
                     `;
                         category.append(categoryHtml);
                     });
+                    syncModalCheckboxes();
                 },
                 error: function(xhr, status, error) {
                     console.log('AJAX Error: ' + status + error);
@@ -709,30 +753,39 @@
 
             });
 
-            $j("#search").on("keyup", function() {
-                var query = $j(this).val().toLowerCase();
-                var hasResults = false;
-                if (query.length > 0) {
-                    $j("#results").show();
-                    $j("#results li").each(function() {
-                        var name = $j(this).text().toLowerCase();
-                        if (name.includes(query)) {
-                            $j(this).show();
-                            hasResults = true;
-                        } else if (!$j(this).hasClass("no-results")) {
-                            $j(this).hide();
-                        }
-                    });
-                    if (hasResults) {
-                        $j(".no-results").hide();
-                    } else {
-                        $j(".no-results").show();
-                    }
-                } else {
-                    $j("#results").hide();
+            $j("#search").on("keyup input focus", function() {
+                filterProducts();
+                $j("#results").show();
+            });
+
+            $j(document).on('click', function(e) {
+                if (!$j(e.target).closest('#search, #results, .list-icon, #listcategory').length) {
+                    $j('#results').hide();
                 }
             });
 
+            $j(document).on('change', '#selectAll', function() {
+                var isChecked = $j(this).is(':checked');
+                $j('#checkboxForm_category .category-checkbox').prop('checked', isChecked);
+            });
+
+            $j(document).on('change', '#checkboxForm_category .category-checkbox', function() {
+                var total = $j('#checkboxForm_category .category-checkbox').length;
+                var checked = $j('#checkboxForm_category .category-checkbox:checked').length;
+                $j('#selectAll').prop('checked', total > 0 && total === checked);
+            });
+
+            $j(document).on('keyup input', '#search_category_input', function() {
+                var q = $j(this).val().toLowerCase().trim();
+                $j('#checkboxForm_category .category-item').each(function() {
+                    var labelText = $j(this).text().toLowerCase();
+                    if (!q || labelText.includes(q)) {
+                        $j(this).show();
+                    } else {
+                        $j(this).hide();
+                    }
+                });
+            });
 
             $j('table').on('click', '.delete i', function(e) {
                 e.preventDefault();
@@ -767,40 +820,32 @@
                 }
             });
 
-            // chọn danh sách  sản phẩm theo loại
-            $j('.submit_hang').on('click', function() {
-                var atLeastOneChecked = $('#checkboxForm_category input[type="checkbox"]:checked').length >
-                    0;
-                if (!atLeastOneChecked) {
-                    alert('Vui lòng chọn ít nhất một loại hàng!');
-                    return false;
-                }
-                var selectedValues = [];
-                $j('#checkboxForm_category input[type="checkbox"]:checked').each(function() {
-                    selectedValues.push($(this).val());
-                });
-                console.log(selectedValues);
-                $j.ajax({
-                    url: '{{ route('admin.importproduct.import.addCategory') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        selectedValues: selectedValues,
-                    },
-                    success: function(data) {
-                        $('input[type="checkbox"]').prop('checked', false);
-                        updateimport(data.import);
-                        var cantra = $j('.cantra');
-                        var tientra = $j('#tientra');
-                        cantra.empty();
-                        cantra.html(data.total);
-                        tientra.empty();
-                        tientra.html(data.total);
-                        var payment = $j('#payment');
-                        payment.val(data.total);
-                    },
-                });
+            // chọn danh sách sản phẩm theo loại
+            $j('.submit_hang').on('click', function(e) {
+                e.preventDefault();
+                var checked = $j('#checkboxForm_category .category-checkbox:checked');
+                var total = $j('#checkboxForm_category .category-checkbox');
 
+                if (checked.length === 0 || checked.length === total.length) {
+                    appliedCategoryIds = [];
+                } else {
+                    appliedCategoryIds = [];
+                    checked.each(function() {
+                        appliedCategoryIds.push(String($j(this).val()));
+                    });
+                }
+
+                $j('#listcategory').modal('hide');
+                filterProducts();
+                $j('#results').show();
+            });
+
+            $j('#listcategory').on('show.bs.modal', function() {
+                syncModalCheckboxes();
+            });
+
+            $j('.miss_model').on('click', function() {
+                syncModalCheckboxes();
             });
 
             $j(document).on('input', '.giaban', function() {

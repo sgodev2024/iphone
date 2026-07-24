@@ -1,9 +1,7 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <style>
         .numberInput {
             width: 100px;
@@ -185,7 +183,8 @@
                                                         $item->inventory_tracking ===
                                                         \App\Models\Product::INVENTORY_TRACKING_IMEI;
                                                 @endphp
-                                                <li data-id="{{ $item->id }}" class="product_inventory">
+                                                <li data-id="{{ $item->id }}"
+                                                    data-category-id="{{ $item->category_id }}" class="product_inventory">
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width:80px; height:70px;"
@@ -211,6 +210,10 @@
                                                 </li>
                                             @endforeach
                                         @endif
+                                        <li class="no-results"
+                                            style="display: none; text-align: center; color: #888; padding: 15px;">
+                                            Không tìm thấy sản phẩm phù hợp
+                                        </li>
                                     </ul>
                                 </form>
                                 <div class="modal fade" id="listcategory" tabindex="-1" role="dialog"
@@ -219,7 +222,7 @@
                                         <div class="modal-content" style="max-width:440px; margin: 0px auto;">
                                             <div class="modal-header">
                                                 <h5 class="modal-title" id="listcategoryLabel">Chọn nhóm hàng</h5>
-                                                <button type="button" class="close" data-dismiss="modal"
+                                                <button type="button" class="btn-close" data-dismiss="modal"
                                                     aria-label="Close">
                                                     <span aria-hidden="true">&times;</span>
                                                 </button>
@@ -229,7 +232,7 @@
                                                 <div class="row">
                                                     <div class="col-lg-12 mb-3" id="searh_category">
                                                         <input type="text" class="form-control"
-                                                            placeholder="Tìm kiếm nhóm hàng">
+                                                            id="search_category_input" placeholder="Tìm kiếm nhóm hàng">
                                                     </div>
                                                     <div class="col-lg-12">
                                                         <div class="form-check" style="margin: 0;">
@@ -240,20 +243,20 @@
                                                             </label>
                                                         </div>
                                                         <form id="checkboxForm_category">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox"
-                                                                    value="" id="checkbox2">
-                                                                <label class="form-check-label" for="checkbox2">
-                                                                    Checkbox 2
-                                                                </label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="checkbox"
-                                                                    value="" id="checkbox3">
-                                                                <label class="form-check-label" for="checkbox3">
-                                                                    Checkbox 3
-                                                                </label>
-                                                            </div>
+                                                            @if (!empty($category))
+                                                                @foreach ($category as $index => $item)
+                                                                    <div class="form-check category-item"
+                                                                        style="margin:0px; padding-top:4px; padding-bottom:4px;">
+                                                                        <input class="form-check-input category-checkbox"
+                                                                            type="checkbox" value="{{ $item->id }}"
+                                                                            id="checkbox_{{ $item->id }}">
+                                                                        <label class="form-check-label"
+                                                                            for="checkbox_{{ $item->id }}">
+                                                                            {{ $item->name }}
+                                                                        </label>
+                                                                    </div>
+                                                                @endforeach
+                                                            @endif
                                                         </form>
                                                     </div>
                                                 </div>
@@ -262,8 +265,9 @@
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary miss_model"
                                                     data-dismiss="modal">Bỏ qua</button>
-                                                <button type="button" class="btn btn-primary submit_hang"
-                                                    data-dismiss="modal">Xong</button>
+                                                <button type="button" class="btn btn-primary submit_hang">
+                                                    Xong
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -497,8 +501,6 @@
             }
         }
     </script>
-    <!-- Include jQuery -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 
     <script>
         var $j = jQuery.noConflict();
@@ -549,6 +551,50 @@
                 return false;
             });
 
+            var appliedCategoryIds = [];
+
+            function filterProducts() {
+                var query = $j('#search').val().toLowerCase().trim();
+                var visibleCount = 0;
+
+                $j('#results li.product_inventory').each(function() {
+                    var $li = $j(this);
+                    var catId = String($li.attr('data-category-id') || $li.data('category-id') || '')
+                        .trim();
+                    var text = $li.text().toLowerCase();
+
+                    var matchCat = (appliedCategoryIds.length === 0) || appliedCategoryIds.includes(catId);
+                    var matchQuery = (query.length === 0) || text.includes(query);
+
+                    if (matchCat && matchQuery) {
+                        $li.show();
+                        visibleCount++;
+                    } else {
+                        $li.hide();
+                    }
+                });
+
+                if (visibleCount > 0) {
+                    $j('.no-results').hide();
+                } else {
+                    $j('.no-results').show();
+                }
+            }
+
+            function syncModalCheckboxes() {
+                var total = $j('#checkboxForm_category .category-checkbox').length;
+                if (appliedCategoryIds.length === 0 || appliedCategoryIds.length === total) {
+                    $j('#selectAll').prop('checked', true);
+                    $j('#checkboxForm_category .category-checkbox').prop('checked', true);
+                } else {
+                    $j('#selectAll').prop('checked', false);
+                    $j('#checkboxForm_category .category-checkbox').each(function() {
+                        var val = String($j(this).val());
+                        $j(this).prop('checked', appliedCategoryIds.includes(val));
+                    });
+                }
+            }
+
             $j.ajax({
                 url: '{{ route('admin.importproduct.import') }}',
                 type: 'GET',
@@ -557,18 +603,19 @@
                     var category = $j('#checkboxForm_category');
                     category.empty();
                     updateReceiptTotal(data.total);
-                    var list_category = data.category;
+                    var list_category = data.category || [];
                     list_category.forEach(function(item, index) {
                         var categoryHtml = `
-                        <div class="form-check" style='margin:0px; padding-top:0px;'>
-                            <input class="form-check-input" type="checkbox" value="${item.id}" id="${'checkbox' + index}">
-                            <label class="form-check-label" for="${'checkbox' + index}">
-                               ${item.name}
+                        <div class="form-check category-item" style='margin:0px; padding-top:4px; padding-bottom:4px;'>
+                            <input class="form-check-input category-checkbox" type="checkbox" value="${item.id}" id="${'checkbox_' + item.id}">
+                            <label class="form-check-label" for="${'checkbox_' + item.id}">
+                               ${escapeHtml(item.name)}
                             </label>
                         </div>
                     `;
                         category.append(categoryHtml);
                     });
+                    syncModalCheckboxes();
                 },
                 error: function(xhr, status, error) {
                     alert('Không thể tải danh sách sản phẩm đang nhập. Vui lòng thử lại.');
@@ -688,38 +735,50 @@
                 updateImeiCounter($j(this).data('import-id'));
             });
 
-            $j("#search").on("keyup", function() {
-                var query = $j(this).val().toLowerCase();
-                var hasResults = false;
-                if (query.length > 0) {
-                    $j("#results").show();
-                    $j("#results li").each(function() {
-                        var name = $j(this).text().toLowerCase();
-                        if (name.includes(query)) {
-                            $j(this).show();
-                            hasResults = true;
-                        } else if (!$j(this).hasClass("no-results")) {
-                            $j(this).hide();
-                        }
-                    });
-                    if (hasResults) {
-                        $j(".no-results").hide();
-                    } else {
-                        $j(".no-results").show();
-                    }
-                } else {
-                    $j("#results").hide();
+            $j("#search").on("keyup input focus", function() {
+                filterProducts();
+                $j("#results").show();
+            });
+
+            $j(document).on('click', function(e) {
+                if (!$j(e.target).closest('#search, #results, .list-icon, #listcategory').length) {
+                    $j('#results').hide();
                 }
+            });
+
+            $j(document).on('change', '#selectAll', function() {
+                var isChecked = $j(this).is(':checked');
+                $j('#checkboxForm_category .category-checkbox').prop('checked', isChecked);
+            });
+
+            $j(document).on('change', '#checkboxForm_category .category-checkbox', function() {
+                var total = $j('#checkboxForm_category .category-checkbox').length;
+                var checked = $j('#checkboxForm_category .category-checkbox:checked').length;
+                $j('#selectAll').prop('checked', total > 0 && total === checked);
+            });
+
+            $j(document).on('keyup input', '#search_category_input', function() {
+                var q = $j(this).val().toLowerCase().trim();
+                $j('#checkboxForm_category .category-item').each(function() {
+                    var labelText = $j(this).text().toLowerCase();
+                    if (!q || labelText.includes(q)) {
+                        $j(this).show();
+                    } else {
+                        $j(this).hide();
+                    }
+                });
             });
 
             $j(document).on('click', '.btn-delete-product, .delete-btn, .delete', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                var btn = $j(this).hasClass('btn-delete-product') ? $j(this) : $j(this).closest('tr').find('.btn-delete-product');
+                var btn = $j(this).hasClass('btn-delete-product') ? $j(this) : $j(this).closest('tr').find(
+                    '.btn-delete-product');
                 var tr = $j(this).closest('tr');
                 var id = btn.length && btn.data('id') ? btn.data('id') : tr.data('id');
-                var productId = btn.length && btn.data('product-id') ? btn.data('product-id') : tr.data('product');
+                var productId = btn.length && btn.data('product-id') ? btn.data('product-id') : tr.data(
+                    'product');
                 var productName = btn.length ? btn.data('product-name') : '';
                 var productCode = btn.length ? btn.data('product-code') : '';
 
@@ -727,8 +786,10 @@
                     return;
                 }
 
-                var displayLabel = productName ? (productName + (productCode ? ' (' + productCode + ')' : '')) : ('#' + (productCode || productId));
-                var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm " + displayLabel + " khỏi phiếu nhập không?");
+                var displayLabel = productName ? (productName + (productCode ? ' (' + productCode + ')' :
+                    '')) : ('#' + (productCode || productId));
+                var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm " + displayLabel +
+                    " khỏi phiếu nhập không?");
                 if (!confirmDelete) {
                     return;
                 }
@@ -747,37 +808,38 @@
                         updateReceiptTotal(data.total);
                     },
                     error: function(xhr) {
-                        alert(xhr.responseJSON?.error || 'Không thể xóa sản phẩm. Vui lòng thử lại.');
+                        alert(xhr.responseJSON?.error ||
+                            'Không thể xóa sản phẩm. Vui lòng thử lại.');
                     }
                 });
             });
 
-            // chọn danh sách  sản phẩm theo loại
-            $j('.submit_hang').on('click', function() {
-                var atLeastOneChecked = $j('#checkboxForm_category input[type="checkbox"]:checked').length >
-                    0;
-                if (!atLeastOneChecked) {
-                    alert('Vui lòng chọn ít nhất một loại hàng!');
-                    return false;
-                }
-                var selectedValues = [];
-                $j('#checkboxForm_category input[type="checkbox"]:checked').each(function() {
-                    selectedValues.push($j(this).val());
-                });
-                $j.ajax({
-                    url: '{{ route('admin.importproduct.import.addCategory') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        selectedValues: selectedValues,
-                    },
-                    success: function(data) {
-                        $j('input[type="checkbox"]').prop('checked', false);
-                        updateimport(data.import, data.total);
-                        updateReceiptTotal(data.total);
-                    },
-                });
+            // chọn danh sách sản phẩm theo loại
+            $j('.submit_hang').on('click', function(e) {
+                e.preventDefault();
+                var checked = $j('#checkboxForm_category .category-checkbox:checked');
+                var total = $j('#checkboxForm_category .category-checkbox');
 
+                if (checked.length === 0 || checked.length === total.length) {
+                    appliedCategoryIds = [];
+                } else {
+                    appliedCategoryIds = [];
+                    checked.each(function() {
+                        appliedCategoryIds.push(String($j(this).val()));
+                    });
+                }
+
+                $j('#listcategory').modal('hide');
+                filterProducts();
+                $j('#results').show();
+            });
+
+            $j('#listcategory').on('show.bs.modal', function() {
+                syncModalCheckboxes();
+            });
+
+            $j('.miss_model').on('click', function() {
+                syncModalCheckboxes();
             });
 
             $j(document).on('focus', '.giaban', function() {
@@ -992,13 +1054,6 @@
     </script>
 
     <script>
-        document.getElementById('selectAll').addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('#checkboxForm_category .form-check-input');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-        });
-
         document.getElementById('tientra').addEventListener('focus', function() {
             this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
         });
