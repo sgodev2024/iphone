@@ -114,7 +114,7 @@ class DebtController extends Controller
         }
 
         $suppliersQuery = DB::table('suppliers as s')
-            ->select('s.id', 's.name', 's.code', 's.phone');
+            ->select('s.id', 's.name', 's.phone');
 
         if ($nameFilter) {
             $suppliersQuery->where('s.name', 'like', "%$nameFilter%");
@@ -153,7 +153,7 @@ class DebtController extends Controller
                 $endingBalance = ($openingDebit + $periodDebit) - ($openingCredit + $periodCredit);
 
                 return (object)[
-                    'supplier_code' => $supplier->code,
+                    'supplier_code' => 'NCC' . str_pad($supplier->id, 5, '0', STR_PAD_LEFT),
                     'supplier_name' => $supplier->name,
                     'supplier_phone' => $supplier->phone,
                     'opening_debit' => $openingDebit,
