@@ -74,7 +74,7 @@ class importCouponController extends Controller
         $storageId = (int) $request->validated('storage');
         $ownerIds = collect([$user?->id, $user?->manager_id])
             ->filter()
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -120,7 +120,7 @@ class importCouponController extends Controller
             if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
                 if (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
                     throw ValidationException::withMessages([
-                        "imeis.{$import->id}" => "Sản phẩm {$productName} được quản lý theo số lượng nên không được gửi danh sách IMEI.",
+                        "imeis.{$import->id}" => "Sản phẩm {$productName} là sản phẩm thường nên không được gửi danh sách IMEI.",
                     ]);
                 }
 
@@ -183,7 +183,7 @@ class importCouponController extends Controller
             if ($product->isImeiTracked()) {
                 $imeis = array_values((array) ($submittedImeis[$import->id] ?? $submittedImeis[(string) $import->id] ?? []));
                 $importDetail->imeis()->createMany(array_map(
-                    fn (string $imei) => [
+                    fn(string $imei) => [
                         'product_id' => $product->id,
                         'imei' => $imei,
                         'status' => ProductImei::STATUS_IN_STOCK,
@@ -192,7 +192,7 @@ class importCouponController extends Controller
                 ));
             } elseif (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
                 throw ValidationException::withMessages([
-                    "imeis.{$import->id}" => "Sản phẩm {$product->name} được quản lý theo số lượng nên không được gửi danh sách IMEI.",
+                    "imeis.{$import->id}" => "Sản phẩm {$product->name} là sản phẩm thường nên không được gửi danh sách IMEI.",
                 ]);
             }
 
@@ -287,7 +287,7 @@ class importCouponController extends Controller
             'description' => 'Nhập hàng NCC',
             'type' => 'expense',
             'document_type' => 'import',
-            'reference_number' => 'IMP-'.now()->format('YmdHis'),
+            'reference_number' => 'IMP-' . now()->format('YmdHis'),
             'created_by' => $userId,
         ]);
 
