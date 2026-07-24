@@ -3,7 +3,7 @@
 @section('content')
     <div class="page-inner">
         <div class="page-header">
-            <x-breadcrumb :items="[['label' => 'BÁO CÁO'],['label' => 'HÔM NAY']]" />
+            <x-breadcrumb :items="[['label' => 'BÁO CÁO'], ['label' => 'HÔM NAY']]" />
             {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
@@ -44,7 +44,8 @@
                         </div>
                     </div>
                     <div class="card-header">
-                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm nay</h4>
+                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm
+                            nay</h4>
                     </div>
 
                     <div class="card-body">
@@ -82,10 +83,14 @@
                                                         </td>
                                                         <td>{{ $import->created_at->format('d/m/Y') }}</td>
                                                         <td>
-                                                            <a style="color:black"
-                                                                href="{{ route('admin.client.detail', ['id' => $import->company->id]) }}">
-                                                                {{ $import->company->name ?? '' }}
-                                                            </a>
+                                                            @if ($import->company)
+                                                                <a style="color:black"
+                                                                    href="{{ route('admin.client.detail', ['id' => $import->company->id]) }}">
+                                                                    {{ $import->company->name }}
+                                                                </a>
+                                                            @else
+                                                                <span class="text-muted">Nhà cung cấp không tồn tại</span>
+                                                            @endif
                                                         </td>
                                                         <td>
                                                             @if ($import->status == 1)
@@ -133,7 +138,8 @@
                         </div>
                     </div>
                     <div class="card-header">
-                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách sản phẩm nhập hôm nay
+                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách sản phẩm nhập hôm
+                            nay
                         </h4>
                     </div>
 

@@ -172,8 +172,8 @@
 
                                         <input type="text" class="form-control" placeholder="Tìm kiếm sản phẩm"
                                             name="search" id="search">
-                                        <i class="fas fa-list list-icon" data-toggle="modal"
-                                            data-target="#listcategory"></i>
+                                        <i class="fas fa-list list-icon" data-bs-toggle="modal"
+                                            data-bs-target="#listcategory"></i>
                                     </div>
                                     <ul class="results" id="results">
                                         @if ($products)
@@ -222,9 +222,8 @@
                                         <div class="modal-content" style="max-width:440px; margin: 0px auto;">
                                             <div class="modal-header">
                                                 <h5 class="modal-title" id="listcategoryLabel">Chọn nhóm hàng</h5>
-                                                <button type="button" class="btn-close" data-dismiss="modal"
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"
                                                     aria-label="Close">
-                                                    <span aria-hidden="true">&times;</span>
                                                 </button>
                                             </div>
                                             <div class="modal-body" id="category_kho">
@@ -264,7 +263,9 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary miss_model"
-                                                    data-dismiss="modal">Bỏ qua</button>
+                                                    data-bs-dismiss="modal">
+                                                    Bỏ qua
+                                                </button>
                                                 <button type="button" class="btn btn-primary submit_hang">
                                                     Xong
                                                 </button>
@@ -304,8 +305,9 @@
                             </div>
                             <!-- End Table -->
                             <div id="next" style="display: flex; justify-content: end">
-                                <a class="btn btn-primary" data-toggle="modal" id="tieptuc" style="display: none"
-                                    data-target="#exampleModal">Tiếp tục</a>
+                                <button type="button" class="btn btn-primary" id="tieptuc" style="display: none;">
+                                    Tiếp tục
+                                </button>
                             </div>
                             <!-- Modal -->
                             <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel"
@@ -314,9 +316,8 @@
                                     <div class="modal-content" style="max-width:440px; margin: 0px auto;">
                                         <div class="modal-header">
                                             <h5 class="modal-title" id="exampleModalLabel">Thông tin chi tiết</h5>
-                                            <button type="button" class="close" data-dismiss="modal"
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"
                                                 aria-label="Close">
-                                                <span aria-hidden="true">&times;</span>
                                             </button>
                                         </div>
                                         <form action="{{ route('admin.importproduct.importCoupon.add') }}" id="addimport"
@@ -386,50 +387,59 @@
                                                     </div>
 
                                                     <!-- Tổng tiền hàng -->
-                                                    <div class="form-group">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
+                                                    <div
+                                                        class="form-group mb-1 d-flex justify-content-between align-items-center w-100">
+                                                        <div class="user-created control-label ng-binding">
                                                             Tổng tiền hàng
                                                         </div>
-                                                        <div class="pull-right cantra">
+
+                                                        <div class="cantra text-end text-nowrap">
                                                             100000
                                                         </div>
                                                     </div>
 
                                                     <!-- Cần trả nhà cung cấp -->
-                                                    <div class="form-group">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
+                                                    <div
+                                                        class="form-group mb-1 d-flex justify-content-between align-items-center w-100">
+                                                        <div class="user-created control-label ng-binding">
                                                             Cần trả nhà cung cấp
                                                         </div>
-                                                        <div class="pull-right cantra">
+
+                                                        <div class="cantra text-end text-nowrap">
                                                             100000
                                                         </div>
                                                     </div>
-                                                    <input type="text" id='total_input' name="total"
+
+                                                    <input type="text" id="total_input" name="total"
                                                         style="display: none;">
-                                                    <div class="form-group">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-money"
-                                                                    title="Tiền trả nhà cung cấp"></i></span>
+
+                                                    <!-- Tiền trả nhà cung cấp -->
+                                                    <div
+                                                        class="form-group mb-0 d-flex justify-content-between align-items-start w-100">
+                                                        <div class="user-created control-label ng-binding">
                                                             Tiền trả nhà cung cấp
                                                         </div>
-                                                        <div class="pull-right" style="width: 80px;">
-                                                            <div style="border-bottom: 1px solid; text-align: end; color: #007bff"
-                                                                id='tientra' class="editable" contenteditable="true">
+
+                                                        <div class="d-flex flex-column align-items-end"
+                                                            style="min-width: 120px; white-space: nowrap;">
+
+                                                            <div id="tientra" class="editable text-end"
+                                                                contenteditable="true"
+                                                                style="width: 100%; border-bottom: 1px solid; color: #007bff; white-space: nowrap;">
                                                             </div>
+
+                                                            <button type="button" class="btn btn-primary mt-3"
+                                                                style="white-space: nowrap; min-width: 100px;"
+                                                                onclick="submitadd(event)">
+                                                                Xác nhận
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <input type="text" id='payment' value="" name="totalncc"
+
+                                                    <input type="text" id="payment" name="totalncc"
                                                         style="display: none;">
 
                                                 </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-primary"
-                                                    onclick="submitadd(event)">Xác nhận nhập kho</button>
                                             </div>
                                         </form>
                                     </div>
@@ -534,22 +544,48 @@
                 imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
             });
 
-            $j('#tieptuc').on('click', function(event) {
-                captureImeiValues();
-                const firstMissingImei = Array.from(document.querySelectorAll('.imei-input'))
-                    .find(input => input.value.trim() === '');
+            $j(document)
+                .off('click.importContinue', '#tieptuc')
+                .on('click.importContinue', '#tieptuc', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
 
-                if (!firstMissingImei) {
-                    return true;
-                }
+                    captureImeiValues();
 
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                firstMissingImei.focus();
-                alert('Vui lòng nhập đầy đủ IMEI trước khi tiếp tục.');
+                    const firstMissingImei = Array.from(
+                        document.querySelectorAll('.imei-input')
+                    ).find(function(input) {
+                        return input.value.trim() === '';
+                    });
 
-                return false;
-            });
+                    if (firstMissingImei) {
+                        alert('Vui lòng nhập đầy đủ IMEI trước khi tiếp tục.');
+
+                        setTimeout(function() {
+                            firstMissingImei.focus();
+                        }, 100);
+
+                        return false;
+                    }
+
+                    const modalElement = document.getElementById('exampleModal');
+
+                    if (
+                        !modalElement ||
+                        typeof bootstrap === 'undefined' ||
+                        !bootstrap.Modal
+                    ) {
+                        console.error('Không tìm thấy Bootstrap Modal hoặc #exampleModal.');
+                        alert('Không thể mở form xác nhận. Vui lòng tải lại trang.');
+                        return false;
+                    }
+
+                    bootstrap.Modal
+                        .getOrCreateInstance(modalElement)
+                        .show();
+
+                    return false;
+                });
 
             var appliedCategoryIds = [];
 
@@ -815,23 +851,49 @@
             });
 
             // chọn danh sách sản phẩm theo loại
-            $j('.submit_hang').on('click', function(e) {
+            $j(document).on('click', '.submit_hang', function(e) {
                 e.preventDefault();
-                var checked = $j('#checkboxForm_category .category-checkbox:checked');
-                var total = $j('#checkboxForm_category .category-checkbox');
+                e.stopPropagation();
 
-                if (checked.length === 0 || checked.length === total.length) {
-                    appliedCategoryIds = [];
-                } else {
-                    appliedCategoryIds = [];
+                const checked = $j(
+                    '#checkboxForm_category .category-checkbox:checked'
+                );
+
+                const total = $j(
+                    '#checkboxForm_category .category-checkbox'
+                );
+
+                appliedCategoryIds = [];
+
+                // Chọn riêng một hoặc nhiều nhóm
+                if (checked.length > 0 && checked.length < total.length) {
                     checked.each(function() {
-                        appliedCategoryIds.push(String($j(this).val()));
+                        appliedCategoryIds.push(
+                            String($j(this).val()).trim()
+                        );
                     });
                 }
 
-                $j('#listcategory').modal('hide');
+                console.log('Danh mục đã chọn:', appliedCategoryIds);
+
+                // Phải lọc trước khi đóng modal
                 filterProducts();
                 $j('#results').show();
+
+                // Đóng modal bằng Bootstrap 5
+                const modalElement = document.getElementById('listcategory');
+
+                if (
+                    modalElement &&
+                    typeof bootstrap !== 'undefined' &&
+                    bootstrap.Modal
+                ) {
+                    bootstrap.Modal
+                        .getOrCreateInstance(modalElement)
+                        .hide();
+                } else {
+                    console.error('Bootstrap 5 JavaScript chưa được tải.');
+                }
             });
 
             $j('#listcategory').on('show.bs.modal', function() {
