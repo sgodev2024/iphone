@@ -26,27 +26,8 @@
                                     <input type="text" class="form-control" name="name"
                                         value="{{ optional($product)->name }}" placeholder="Nhập tên sản phẩm">
                                 </div>
-
-                                <div class="col-md-6">
-                                    <label for="price" class="form-label mb-1 fw-bold">Giá nhập</label>
-                                    <input type="text" class="form-control format-price" name="price"
-                                        value="{{ formatPrice(optional($product)->price) }}">
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label for="price_buy" class="form-label mb-1 fw-bold">Giá bán</label>
-                                    <input type="text" class="form-control format-price" name="price_buy"
-                                        value="{{ formatPrice(optional($product)->price_buy) }}">
-                                </div>
-
                                 <div class="col-md-12">
-                                    <label for="product_unit" class="form-label mb-1 fw-bold">Đơn vị</label>
-                                    <input type="text" class="form-control" name="product_unit"
-                                        value="{{ optional($product)->product_unit }}">
-                                </div>
-
-                                <div class="col-md-12">
-                                    <label class="form-label mb-1 fw-bold">Phương thức quản lý tồn kho</label>
+                                    <label class="form-label mb-1 fw-bold">Loại sản phẩm</label>
                                     @if ($trackingLocked)
                                         <input type="hidden" name="inventory_tracking"
                                             value="{{ optional($product)->inventory_tracking }}">
@@ -74,6 +55,24 @@
                                     @if ($trackingLocked && $inventoryTrackingLockedMessage)
                                         <small class="text-muted d-block mt-2">{{ $inventoryTrackingLockedMessage }}</small>
                                     @endif
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="price" class="form-label mb-1 fw-bold">Giá nhập</label>
+                                    <input type="text" class="form-control format-price" name="price"
+                                        value="{{ formatPrice(optional($product)->price) }}">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="price_buy" class="form-label mb-1 fw-bold">Giá bán</label>
+                                    <input type="text" class="form-control format-price" name="price_buy"
+                                        value="{{ formatPrice(optional($product)->price_buy) }}">
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label for="product_unit" class="form-label mb-1 fw-bold">Đơn vị</label>
+                                    <input type="text" class="form-control" name="product_unit"
+                                        value="{{ optional($product)->product_unit }}">
                                 </div>
 
                                 <div class="col-md-6">
