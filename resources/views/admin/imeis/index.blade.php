@@ -222,7 +222,7 @@
                             <tr>
                                 <th>STT</th>
                                 <th>IMEI</th>
-                                <th>Mã sản phẩm</th>
+                                {{-- <th>Mã sản phẩm</th> --}}
                                 <th>Sản phẩm</th>
                                 <th>Phiếu nhập</th>
                                 <th>Nhà cung cấp</th>
@@ -244,7 +244,7 @@
                                 <tr>
                                     <td>{{ $imeis->firstItem() + $loop->index }}</td>
                                     <td class="font-monospace text-nowrap">{{ $productImei->imei }}</td>
-                                    <td>{{ $product?->code ?: '—' }}</td>
+                                    {{-- <td>{{ $product?->code ?: '—' }}</td> --}}
                                     <td>{{ $product?->name ?: 'Sản phẩm không tồn tại' }}</td>
                                     <td>
                                         @if ($importCoupon)
