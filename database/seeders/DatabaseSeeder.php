@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
+            CitySeeder::class,
             BankSeeder::class,
             ConfigSeeder::class,
             UsersTableSeeder::class,
