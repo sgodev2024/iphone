@@ -120,7 +120,7 @@ class Product extends Model
 
     public function getInventoryTrackingLabelAttribute(): string
     {
-        return $this->isImeiTracked() ? 'IMEI' : 'Theo số lượng';
+        return $this->isImeiTracked() ? 'IMEI' : 'Sản phẩm thường';
     }
 
     public function hasInventoryTrackingActivity(): bool

@@ -149,7 +149,7 @@ class ProductImeiManagementTest extends TestCase
         $this->assertStringContainsString("/admin/products/{$product->id}/imeis", $html);
         $this->assertStringNotContainsString("/admin/products/{$quantityProduct->id}/imeis", $html);
         $this->assertStringContainsString('IMEI', $html);
-        $this->assertStringContainsString('Theo số lượng', $html);
+        $this->assertStringContainsString('Sản phẩm thường', $html);
         $this->assertMatchesRegularExpression('/<td>\s*1\s*<\/td>/', $html);
         $this->assertMatchesRegularExpression('/<td>\s*20\s*<\/td>/', $html);
         $this->assertStringNotContainsString('<td>99</td>', $html);

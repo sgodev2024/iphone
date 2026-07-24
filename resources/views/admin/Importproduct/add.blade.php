@@ -194,7 +194,7 @@
                                                             <p class="txtB ng-binding">{{ $item->name }}
                                                                 <span
                                                                     class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }}">
-                                                                    {{ $isImeiTracked ? 'Quản lý IMEI' : 'Theo số lượng' }}
+                                                                    {{ $isImeiTracked ? 'Quản lý IMEI' : 'Sản phẩm thường' }}
                                                                 </span>
                                                                 <span class="sugg-attr ng-binding"> </span>
                                                                 <span class="sugg-unit ng-binding"></span>

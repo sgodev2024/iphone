@@ -29,7 +29,7 @@
                 <td>
                     {{ $product->name }}
                     <span class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }} ms-1">
-                        {{ $isImeiTracked ? 'IMEI' : 'Theo số lượng' }}
+                        {{ $isImeiTracked ? 'IMEI' : 'Sản phẩm thường' }}
                     </span>
                 </td>
                 <td>{{ number_format($product->price, 0, ',', '.') }}</td>
@@ -56,8 +56,8 @@
                             aria-label="Chỉnh sửa sản phẩm">
                             <i class="fa-solid fa-pen-to-square"></i>
                         </a>
-                        <button class="btn btn-danger btn-sm btn-delete product-action-btn" data-id="{{ $product->id }}"
-                            title="Xóa sản phẩm" aria-label="Xóa sản phẩm">
+                        <button class="btn btn-danger btn-sm btn-delete product-action-btn"
+                            data-id="{{ $product->id }}" title="Xóa sản phẩm" aria-label="Xóa sản phẩm">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </div>

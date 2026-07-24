@@ -2,7 +2,10 @@
 @section('content')
     <div class="page-inner">
         <div class="page-header">
-            <x-breadcrumb :items="[['label' => 'Nhập hàng','url' => route('admin.importproduct.index')], ['label' => 'Chi tiết phiếu nhập']]" />
+            <x-breadcrumb :items="[
+                ['label' => 'Nhập hàng', 'url' => route('admin.importproduct.index')],
+                ['label' => 'Chi tiết phiếu nhập'],
+            ]" />
             {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
@@ -125,7 +128,7 @@
                                                 <td>{{ number_format($detail->price) }}</td>
                                                 <td>
                                                     @if ($detail->product?->isQuantityTracked())
-                                                        <span class="text-muted">Theo số lượng</span>
+                                                        <span class="text-muted">Sản phẩm thường</span>
                                                     @else
                                                         @forelse ($detail->imeis as $imei)
                                                             <div class="font-monospace">{{ $imei->imei }}</div>
