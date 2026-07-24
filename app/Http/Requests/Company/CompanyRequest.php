@@ -34,6 +34,7 @@ class CompanyRequest extends FormRequest
             'bank_id' => 'required|exists:banks,id',
             'note' => 'nullable|max:255',
             'city_id' => 'nullable|exists:city,id',
+            'status' => 'required|in:0,1',
         ];
     }
 
@@ -54,6 +55,7 @@ class CompanyRequest extends FormRequest
             'bank_id' => 'Ngân hàng',
             'note' => 'Ghi chú',
             'city_id' => 'Thành phố',
+            'status' => 'Trạng thái',
         ];
     }
 }

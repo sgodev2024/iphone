@@ -263,6 +263,11 @@ class AdminCrudAuditTest extends TestCase
         $company = Company::where('email', 'company@example.com')->first();
         $this->assertSame($admin->id, (int) $company->user_id);
 
+        $this->assertDatabaseHas('companies', [
+            'id' => $company->id,
+            'status' => 1,
+        ]);
+
         $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
             'name' => 'NCC Apple Update',
             'phone' => '0905000001',
@@ -279,6 +284,24 @@ class AdminCrudAuditTest extends TestCase
             'id' => $company->id,
             'name' => 'NCC Apple Update',
             'user_id' => $admin->id,
+            'status' => 0,
+        ]);
+
+        $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
+            'name' => 'NCC Apple Update',
+            'phone' => '0905000001',
+            'email' => 'company@example.com',
+            'address' => 'Sai Gon',
+            'tax_number' => 'TAX001',
+            'bank_account' => '123456',
+            'bank_id' => $bankId,
+            'city_id' => null,
+            'status' => '1',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('companies', [
+            'id' => $company->id,
+            'status' => 1,
         ]);
 
         $this->actingAs($admin)->postJson('/admin/company', [
@@ -429,6 +452,7 @@ class AdminCrudAuditTest extends TestCase
             $table->string('bank_account');
             $table->unsignedBigInteger('bank_id');
             $table->text('note')->nullable();
+            $table->boolean('status')->default(false);
             $table->timestamps();
         });
 
