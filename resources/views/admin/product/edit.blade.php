@@ -30,7 +30,7 @@
     </style>
     <div class="page-inner">
         <div class="page-header">
-            <x-breadcrumb :items="[['label' => 'Sản phẩm'],'url' => route('admin.product.store'),['label' => 'thêm']]" />
+            <x-breadcrumb :items="[['label' => 'Sản phẩm'], 'url' => route('admin.product.store'), ['label' => 'thêm']]" />
             {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
                     <a href="{{ route('admin.dashboard') }}">
@@ -132,8 +132,8 @@
                                                 <label for="example-search-input" class="form-label">Giá bán<span
                                                         class="text text-danger">*</span></label>
                                                 <input min='1'
-                                                    class="form-control @error('price_buy') is-invalid @enderror" name="price_buy"
-                                                    type="number" id="price_buy"
+                                                    class="form-control @error('price_buy') is-invalid @enderror"
+                                                    name="price_buy" type="number" id="price_buy"
                                                     value="{{ old('price_buy', $products->price_buy) }}">
                                                 @error('price_buy')
                                                     <small class="text-danger">{{ $message }}</small>
@@ -164,7 +164,6 @@
                                                 </div>
                                             </div>
 
-
                                         </div>
 
                                         <div class="col-lg-12 add_product">
@@ -192,7 +191,6 @@
     </div>
     <script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
     <script>
-
         $(document).ready(function() {
             $('.delete-image').on('click', function() {
                 const imageWrapper = $(this).closest('.image-wrapper');

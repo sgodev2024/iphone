@@ -11,6 +11,7 @@ use App\Models\ProductImei;
 use App\Models\ProductStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\Response;
@@ -75,19 +76,26 @@ class ProductController extends Controller
     {
         return transaction(function () use ($request) {
 
-            $credentials = $request->validated();
+            $data = $request->validated();
 
             if ($request->hasFile('thumbnail')) {
-                $credentials['thumbnail'] = uploadImages('thumbnail', 'products');
+                $data['thumbnail'] = uploadImages('thumbnail', 'products');
             }
 
-            $credentials['user_id'] = Auth::id();
-            $credentials['code'] = generateCode('products', 'SP');
-            $credentials['quantity'] = 0;
+            $data['user_id'] = Auth::id();
+            $data['code'] = generateCode('products', 'SP');
+            $data['quantity'] = 0;
 
-            Product::create($credentials);
+            Product::create($data);
 
             return successResponse('Thêm mới sản phẩm thành công.', code: Response::HTTP_CREATED);
+        }, function (\Throwable $e) {
+            Log::error('Failed to store product.', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
         });
     }
 
@@ -119,21 +127,29 @@ class ProductController extends Controller
 
             $oldThumbnail = $product->thumbnail;
 
-            $credentials = $request->validated();
+            $data = $request->validated();
 
             if ($request->hasFile('thumbnail')) {
-                $credentials['thumbnail'] = uploadImages('thumbnail', 'products');
+                $data['thumbnail'] = uploadImages('thumbnail', 'products');
             }
 
-            $credentials['is_featured'] ??= 0;
+            $data['is_featured'] ??= 0;
 
-            $updated = $product->update($credentials);
+            $updated = $product->update($data);
 
             if ($updated && $request->hasFile('thumbnail')) {
                 deleteImage($oldThumbnail);
             }
 
             return successResponse('Cập nhật sản phẩm thành công.');
+        }, function (\Throwable $e) use ($id) {
+            Log::error('Failed to update product.', [
+                'product_id' => (int) $id,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
         });
     }
 

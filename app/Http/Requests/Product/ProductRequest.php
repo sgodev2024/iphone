@@ -33,7 +33,7 @@ class ProductRequest extends FormRequest
             'category_id'  => 'required|exists:categories,id',
             'brands_id'    => 'nullable|exists:brands,id',
             'inventory_tracking' => ['required', Rule::in(Product::INVENTORY_TRACKING_OPTIONS)],
-            'description'  => 'required|string',
+            'description'  => ['nullable', 'string'],
             'is_featured'  => 'nullable|in:1',
             'status'       => ['required', Rule::in(['published', 'inactive', 'scheduled'])],
             'thumbnail'    => ($id ? 'nullable' : 'required') . '|image|mimes:jpeg,png,jpg,gif|max:2048',

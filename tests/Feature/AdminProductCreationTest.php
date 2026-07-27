@@ -100,6 +100,125 @@ class AdminProductCreationTest extends TestCase
         $this->assertSame(Product::INVENTORY_TRACKING_QUANTITY, $product->inventory_tracking);
     }
 
+    public function test_admin_can_create_product_with_empty_description(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+
+        $response = $this->actingAs($admin)->post('/admin/products', [
+            'name' => 'iPhone Empty Description',
+            'price' => 22000000,
+            'price_buy' => 25000000,
+            'product_unit' => 'chiec',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'category_id' => $category->id,
+            'description' => '',
+            'status' => 'published',
+            'thumbnail' => UploadedFile::fake()->image('iphone-empty-description.jpg'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $product = Product::where('name', 'iPhone Empty Description')->first();
+
+        $this->assertNotNull($product);
+        $this->assertNull($product->description);
+        $this->assertSame(Product::INVENTORY_TRACKING_QUANTITY, $product->inventory_tracking);
+    }
+
+    public function test_admin_can_clear_product_description_on_update_without_changing_thumbnail(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+        $product = Product::create([
+            'user_id' => $admin->id,
+            'category_id' => $category->id,
+            'code' => 'SPDESC001',
+            'name' => 'iPhone Clear Description',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'thumbnail' => 'products/existing.webp',
+            'product_unit' => 'chiec',
+            'quantity' => 0,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => 'May moi',
+            'status' => 'published',
+        ]);
+
+        $response = $this->actingAs($admin)->put("/admin/products/{$product->id}", [
+            'name' => 'iPhone Clear Description',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => '',
+            'status' => 'published',
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true);
+
+        $product->refresh();
+
+        $this->assertNull($product->description);
+        $this->assertSame('products/existing.webp', $product->thumbnail);
+        $this->assertSame(Product::INVENTORY_TRACKING_QUANTITY, $product->inventory_tracking);
+    }
+
+    public function test_admin_can_update_product_with_description_without_affecting_inventory_or_imei(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+        $product = Product::create([
+            'user_id' => $admin->id,
+            'category_id' => $category->id,
+            'code' => 'SPDESC002',
+            'name' => 'iPhone Keep Description',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'thumbnail' => 'products/existing.webp',
+            'product_unit' => 'chiec',
+            'quantity' => 1,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'description' => 'Mo ta cu',
+            'status' => 'published',
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => 1,
+            'quantity' => 1,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'imei' => '123456789012345',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+
+        $response = $this->actingAs($admin)->put("/admin/products/{$product->id}", [
+            'name' => 'iPhone Keep Description',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'description' => 'Mo ta moi',
+            'status' => 'published',
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true);
+
+        $product->refresh();
+
+        $this->assertSame('Mo ta moi', $product->description);
+        $this->assertSame('products/existing.webp', $product->thumbnail);
+        $this->assertSame(Product::INVENTORY_TRACKING_IMEI, $product->inventory_tracking);
+        $this->assertSame(1, ProductStorage::where('product_id', $product->id)->count());
+        $this->assertSame(1, ProductImei::where('product_id', $product->id)->count());
+    }
+
     public function test_create_and_edit_product_forms_do_not_render_quantity_field(): void
     {
         $admin = $this->createAdmin();
