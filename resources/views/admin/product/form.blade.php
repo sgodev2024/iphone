@@ -22,38 +22,42 @@
                             <div class="row gy-4">
 
                                 <div class="col-md-12">
-                                    <label for="name" class="form-label mb-1 fw-bold">Tên sản phẩm</label>
+                                    <label for="name" class="form-label mb-1 fw-bold">
+                                        Tên sản phẩm <span class="text-danger">*</span>
+                                    </label>
                                     <input type="text" class="form-control" name="name"
                                         value="{{ optional($product)->name }}" placeholder="Nhập tên sản phẩm">
                                 </div>
                                 <div class="col-md-12">
-                                    <label class="form-label mb-1 fw-bold">Loại sản phẩm</label>
+                                    <label for="inventory_tracking" class="form-label mb-1 fw-bold">
+                                        Loại sản phẩm <span class="text-danger">*</span>
+                                    </label>
+
                                     @if ($trackingLocked)
+                                        {{-- Select bị disabled sẽ không gửi dữ liệu nên cần input hidden --}}
                                         <input type="hidden" name="inventory_tracking"
                                             value="{{ optional($product)->inventory_tracking }}">
                                     @endif
-                                    <div class="d-flex flex-wrap gap-3">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="inventory_tracking"
-                                                id="inventory_tracking_imei"
-                                                value="{{ \App\Models\Product::INVENTORY_TRACKING_IMEI }}"
-                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_IMEI) @disabled($trackingLocked)>
-                                            <label class="form-check-label" for="inventory_tracking_imei">
-                                                Quản lý theo IMEI
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="inventory_tracking"
-                                                id="inventory_tracking_quantity"
-                                                value="{{ \App\Models\Product::INVENTORY_TRACKING_QUANTITY }}"
-                                                @checked($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_QUANTITY) @disabled($trackingLocked)>
-                                            <label class="form-check-label" for="inventory_tracking_quantity">
-                                                Sản phẩm thường
-                                            </label>
-                                        </div>
-                                    </div>
-                                    @if ($trackingLocked && $inventoryTrackingLockedMessage)
-                                        <small class="text-muted d-block mt-2">{{ $inventoryTrackingLockedMessage }}</small>
+
+                                    <select name="inventory_tracking" id="inventory_tracking"
+                                        class="form-select form-control" @disabled($trackingLocked)>
+                                        <option value="">-- Chọn loại sản phẩm --</option>
+
+                                        <option value="{{ \App\Models\Product::INVENTORY_TRACKING_IMEI }}"
+                                            @selected($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_IMEI)>
+                                            Quản lý theo IMEI
+                                        </option>
+
+                                        <option value="{{ \App\Models\Product::INVENTORY_TRACKING_QUANTITY }}"
+                                            @selected($selectedInventoryTracking === \App\Models\Product::INVENTORY_TRACKING_QUANTITY)>
+                                            Sản phẩm thường
+                                        </option>
+                                    </select>
+
+                                    @if ($trackingLocked && !empty($inventoryTrackingLockedMessage))
+                                        <small class="text-muted d-block mt-2">
+                                            {{ $inventoryTrackingLockedMessage }}
+                                        </small>
                                     @endif
                                 </div>
 
@@ -76,7 +80,8 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="category_id" class="form-label mb-1 fw-bold">Danh mục</label>
+                                    <label for="category_id" class="form-label mb-1 fw-bold">Danh mục <span
+                                            class="text-danger">*</span></label>
                                     <select name="category_id" id="category_id" class="form-control form-select">
                                         <option value="">-- Chọn danh mục --</option>
                                         @foreach ($categories as $categoryId => $categoryName)
@@ -87,7 +92,8 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="brands_id" class="form-label mb-1 fw-bold">Thương hiệu</label>
+                                    <label for="brands_id" class="form-label mb-1 fw-bold">Thương hiệu <span
+                                            class="text-danger">*</span></label>
                                     <select name="brands_id" id="brands_id" class="form-control form-select">
                                         <option value="">-- Chọn thương hiệu --</option>
                                         @foreach ($brands as $brandId => $brandName)
