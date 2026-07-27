@@ -25,17 +25,32 @@ return new class extends Migration
             ->groupBy('code')
             ->pluck('total', 'code');
 
+        $imeiBarcodes = Schema::hasTable('product_imeis')
+            ? DB::table('product_imeis')
+                ->whereNotNull('barcode')
+                ->pluck('barcode')
+                ->flip()
+            : collect();
+
         DB::table('products')
             ->select(['id', 'code', 'barcode'])
             ->orderBy('id')
-            ->chunkById(100, function ($products) use ($codeCounts): void {
+            ->chunkById(100, function ($products) use ($codeCounts, $imeiBarcodes): void {
                 foreach ($products as $product) {
                     $code = trim((string) $product->code);
 
                     if (
                         $this->isCode128Compatible($code)
                         && (int) ($codeCounts[$code] ?? 0) === 1
+                        && ! $imeiBarcodes->has($code)
                     ) {
+                        DB::table('products')
+                            ->where('id', $product->id)
+                            ->update([
+                                'barcode' => $code,
+                                'updated_at' => now(),
+                            ]);
+
                         continue;
                     }
 

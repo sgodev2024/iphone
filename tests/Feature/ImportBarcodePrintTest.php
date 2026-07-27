@@ -106,7 +106,7 @@ class ImportBarcodePrintTest extends TestCase
             });
 
         $this->assertDatabaseCount('product_imeis', 0);
-        $this->assertNull($product->fresh()->barcode);
+        $this->assertSame('CABLE-001', $product->fresh()->barcode);
     }
 
     public function test_mixed_import_lists_and_prints_imei_and_product_labels(): void

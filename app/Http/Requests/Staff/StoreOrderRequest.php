@@ -19,6 +19,8 @@ class StoreOrderRequest extends FormRequest
 
                 $item['product_id'] = $item['product_id'] ?? $item['id'] ?? null;
                 $item['quantity'] = $item['quantity'] ?? $item['qty'] ?? null;
+                $item['tracking_type'] = $item['tracking_type'] ?? null;
+                $item['product_imei_id'] = $item['product_imei_id'] ?? null;
 
                 return $item;
             })
@@ -42,6 +44,10 @@ class StoreOrderRequest extends FormRequest
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.qty' => ['nullable', 'integer', 'min:1'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.tracking_type' => ['nullable', 'in:imei,quantity'],
+            'items.*.product_imei_id' => ['nullable', 'integer', 'exists:product_imeis,id'],
+            'items.*.imei' => ['nullable', 'string', 'max:15'],
+            'items.*.barcode' => ['nullable', 'string', 'max:50'],
 
             'subtotal' => ['required', 'numeric', 'min:0'],
             'discountType' => ['nullable', 'in:percent,amount'],

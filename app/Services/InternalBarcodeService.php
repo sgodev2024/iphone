@@ -20,14 +20,22 @@ class InternalBarcodeService
 
     public function resolveProductBarcode(Product $product): string
     {
-        if ($this->productCodeCanBeBarcode($product)) {
-            return trim((string) $product->code);
-        }
-
         $currentBarcode = trim((string) ($product->barcode ?? ''));
 
         if ($this->productBarcodeCanBeUsed($product, $currentBarcode)) {
             return $currentBarcode;
+        }
+
+        if ($this->productCodeCanBeBarcode($product)) {
+            $barcode = trim((string) $product->code);
+
+            if (Schema::hasColumn('products', 'barcode')) {
+                $product->forceFill([
+                    'barcode' => $barcode,
+                ])->save();
+            }
+
+            return $barcode;
         }
 
         $barcode = $this->generateProductBarcode($product);

@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Bank;
 use App\Models\Config;
+use App\Models\ImportCoupon;
+use App\Models\ImportDetail;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
+use App\Models\ProductImei;
 use App\Models\ProductStorage;
 use App\Models\Storage;
 use App\Models\Transaction;
@@ -276,6 +279,346 @@ class StaffPosSaleTest extends TestCase
             ->assertJsonMissing(['product_id' => $otherStorageProduct->id]);
     }
 
+    public function test_barcode_resolve_returns_valid_imei_device_from_staff_storage(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'iPhone IMEI',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+            'price_buy' => 12000000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012345');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imei->barcode,
+            ])
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => Product::INVENTORY_TRACKING_IMEI,
+                'product_id' => $product->id,
+                'product_imei_id' => $imei->id,
+                'imei' => '123456789012345',
+                'barcode' => $imei->barcode,
+                'quantity' => 1,
+            ]);
+    }
+
+    public function test_barcode_resolve_returns_valid_quantity_product(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'Cap sac',
+            'barcode' => 'CABLE-001',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'price_buy' => 250000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'CABLE-001',
+            ])
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => Product::INVENTORY_TRACKING_QUANTITY,
+                'product_id' => $product->id,
+                'barcode' => 'CABLE-001',
+                'available_quantity' => 10,
+                'quantity' => 1,
+            ]);
+    }
+
+    public function test_barcode_resolve_reports_missing_barcode(): void
+    {
+        [, , $staff] = $this->createStaffContext();
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'UNKNOWN-BARCODE',
+            ])
+            ->assertNotFound()
+            ->assertJsonFragment([
+                'message' => 'Không tìm thấy barcode.',
+            ]);
+    }
+
+    public function test_barcode_resolve_rejects_sold_imei(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012346', [
+            'status' => ProductImei::STATUS_SOLD,
+        ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imei->barcode,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Thiết bị đã bán.',
+            ]);
+    }
+
+    public function test_barcode_resolve_rejects_imei_from_another_storage(): void
+    {
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $otherStorage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $otherStorage, '123456789012347');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imei->barcode,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Thiết bị không thuộc kho hiện tại.',
+            ]);
+    }
+
+    public function test_barcode_resolve_rejects_duplicate_imei_already_in_cart(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012348');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imei->barcode,
+                'cart_imei_ids' => [$imei->id],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Thiết bị đã có trong giỏ.',
+            ]);
+    }
+
+    public function test_quantity_barcode_can_be_scanned_repeatedly_until_stock_limit(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'barcode' => 'CASE-001',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 2]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'CASE-001',
+                'cart_product_quantities' => [
+                    $product->id => 1,
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'quantity' => 1,
+            ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'CASE-001',
+                'cart_product_quantities' => [
+                    $product->id => 2,
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Số lượng yêu cầu vượt tồn kho.',
+            ]);
+    }
+
+    public function test_staff_can_checkout_imei_only_order_and_marks_device_sold(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'iPhone IMEI',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+            'price_buy' => 12000000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012349');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                [
+                    'product_id' => $product->id,
+                    'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                    'product_imei_id' => $imei->id,
+                    'qty' => 1,
+                ],
+            ], 12000000))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $product->id,
+            'product_imei_id' => $imei->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+            'price' => 12000000,
+        ]);
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 0,
+        ]);
+        $this->assertSame('0', (string) $product->fresh()->quantity);
+    }
+
+    public function test_staff_can_checkout_mixed_quantity_and_imei_order(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $imeiProduct = $this->createProduct([
+            'name' => 'iPhone IMEI',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+            'price_buy' => 12000000,
+        ]);
+        $quantityProduct = $this->createProduct([
+            'name' => 'Cap sac',
+            'barcode' => 'CABLE-MIX',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'quantity' => 5,
+            'price_buy' => 250000,
+        ]);
+        ProductStorage::create(['product_id' => $imeiProduct->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        ProductStorage::create(['product_id' => $quantityProduct->id, 'storage_id' => $storage->id, 'quantity' => 5]);
+        $imei = $this->createImeiInStorage($imeiProduct, $storage, '123456789012350');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                [
+                    'product_id' => $imeiProduct->id,
+                    'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                    'product_imei_id' => $imei->id,
+                    'qty' => 1,
+                ],
+                [
+                    'product_id' => $quantityProduct->id,
+                    'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+                    'qty' => 2,
+                ],
+            ], 12500000))
+            ->assertCreated();
+
+        $this->assertDatabaseCount('order_details', 2);
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $imeiProduct->id,
+            'product_imei_id' => $imei->id,
+            'quantity' => 1,
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $quantityProduct->id,
+            'product_imei_id' => null,
+            'quantity' => 2,
+        ]);
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $imeiProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 0,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $quantityProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 3,
+        ]);
+    }
+
+    public function test_checkout_late_failure_rolls_back_imei_order_stock_and_accounting(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        Account::create(['code' => '131', 'name' => 'Receivable']);
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+            'price_buy' => 12000000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012351');
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                [
+                    'product_id' => $product->id,
+                    'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                    'product_imei_id' => $imei->id,
+                    'qty' => 1,
+                ],
+            ], 12000000))
+            ->assertInternalServerError()
+            ->assertJsonFragment([
+                'message' => 'Không tìm thấy tài khoản TMCH',
+            ]);
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('order_details', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertDatabaseCount('transaction_entries', 0);
+        $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+    }
+
+    public function test_same_imei_cannot_be_sold_twice(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 1,
+            'price_buy' => 12000000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012352');
+        $payload = $this->orderPayload([
+            [
+                'product_id' => $product->id,
+                'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                'product_imei_id' => $imei->id,
+                'qty' => 1,
+            ],
+        ], 12000000);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertCreated();
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Thiết bị đã bán.',
+            ]);
+
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseCount('order_details', 1);
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -334,6 +677,7 @@ class StaffPosSaleTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('code')->nullable();
+            $table->string('barcode', 50)->nullable()->unique();
             $table->string('name');
             $table->decimal('price', 15, 2)->default(0);
             $table->decimal('price_buy', 15, 2)->default(0);
@@ -360,6 +704,44 @@ class StaffPosSaleTest extends TestCase
             $table->integer('quantity')->default(0);
             $table->timestamps();
             $table->unique(['product_id', 'storage_id']);
+        });
+
+        Schema::create('import_coupon', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('companies_id')->nullable();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('supplier_id')->nullable();
+            $table->integer('total')->nullable();
+            $table->integer('payment_ncc')->nullable();
+            $table->string('status')->nullable();
+            $table->string('coupon_code')->nullable()->unique();
+            $table->unsignedBigInteger('storage_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('import_detail', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('import_id');
+            $table->unsignedBigInteger('product_id');
+            $table->integer('quantity');
+            $table->integer('price');
+            $table->integer('old_price')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('product_imeis', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->string('imei', 15)->unique();
+            $table->string('barcode', 50)->nullable()->unique();
+            $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
+            $table->timestamp('printed_at')->nullable();
+            $table->unsignedInteger('print_count')->default(0);
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->string('delete_reason', 500)->nullable();
+            $table->softDeletes();
+            $table->timestamps();
         });
 
         Schema::create('carts', function (Blueprint $table) {
@@ -418,6 +800,7 @@ class StaffPosSaleTest extends TestCase
             $table->unsignedBigInteger('order_id');
             $table->unsignedBigInteger('storage_id')->nullable();
             $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('product_imei_id')->nullable();
             $table->decimal('price', 12, 2)->default(0);
             $table->integer('quantity')->default(0);
             $table->timestamps();
@@ -486,6 +869,7 @@ class StaffPosSaleTest extends TestCase
         return Product::create(array_merge([
             'user_id' => 1,
             'code' => uniqid('IP'),
+            'barcode' => null,
             'name' => 'iPhone 15',
             'price' => 90000,
             'price_buy' => 100000,
@@ -496,6 +880,41 @@ class StaffPosSaleTest extends TestCase
             'description' => 'Test product',
             'status' => true,
         ], $overrides));
+    }
+
+    private function createImeiInStorage(
+        Product $product,
+        Storage $storage,
+        string $imei,
+        array $overrides = []
+    ): ProductImei {
+        $coupon = ImportCoupon::create([
+            'user_id' => 1,
+            'total' => 0,
+            'payment_ncc' => 0,
+            'storage_id' => $storage->id,
+        ]);
+        $detail = ImportDetail::create([
+            'import_id' => $coupon->id,
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => (int) $product->price_buy,
+            'old_price' => (int) $product->price_buy,
+        ]);
+        $productImei = ProductImei::create(array_merge([
+            'product_id' => $product->id,
+            'import_detail_id' => $detail->id,
+            'imei' => $imei,
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ], $overrides));
+
+        if (! $productImei->barcode) {
+            $productImei->forceFill([
+                'barcode' => sprintf('TEL-%08d', $productImei->id),
+            ])->save();
+        }
+
+        return $productImei->fresh();
     }
 
     private function seedAccounts(): void

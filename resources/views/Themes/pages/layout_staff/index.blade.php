@@ -56,6 +56,10 @@
             font-weight: 500;
         }
 
+        .barcode-feedback {
+            min-height: 20px;
+        }
+
         .cart-empty {
             padding: 2rem;
             text-align: center;
@@ -142,6 +146,16 @@
                                 <!-- Kết quả sản phẩm sẽ render ở đây -->
                                 <div id="productList" class="list-group list-group-flush"></div>
                             </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label mb-1" for="barcodeInput">Quét hoặc nhập barcode</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fa-solid fa-barcode"></i></span>
+                                <input id="barcodeInput" type="text" class="form-control"
+                                    placeholder="Quét hoặc nhập barcode rồi nhấn Enter" autocomplete="off" />
+                            </div>
+                            <div id="barcodeFeedback" class="barcode-feedback small text-muted mt-1"></div>
                         </div>
 
                         <div class="mt-3 small text-muted">Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm
@@ -496,10 +510,101 @@
             const productSearch = qs('#productSearch');
             const productPopup = qs('#productPopup');
             const productList = qs('#productList');
+            const barcodeInput = qs('#barcodeInput');
+            const barcodeFeedback = qs('#barcodeFeedback');
             let isCallApiProducts = true;
             let isCallApiClients = true;
+            let barcodeResolving = false;
+            let lastBarcode = '';
+            let lastBarcodeAt = 0;
 
             let searchTimer = null;
+            setTimeout(() => barcodeInput?.focus(), 100);
+
+            barcodeInput?.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+
+                event.preventDefault();
+                resolveBarcode(barcodeInput.value.trim());
+            });
+
+            function resolveBarcode(barcode) {
+                if (!barcode || barcodeResolving) return;
+
+                const now = Date.now();
+                if (barcode === lastBarcode && now - lastBarcodeAt < 800) {
+                    barcodeInput.value = '';
+                    barcodeInput.focus();
+                    return;
+                }
+
+                barcodeResolving = true;
+                lastBarcode = barcode;
+                lastBarcodeAt = now;
+                barcodeFeedback.textContent = 'Đang xử lý barcode...';
+
+                $.ajax({
+                    url: '/ban-hang/barcode/resolve',
+                    method: 'POST',
+                    data: {
+                        barcode,
+                        cart_imei_ids: currentCartImeiIds(),
+                        cart_product_quantities: currentCartProductQuantities(),
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    success: (product) => {
+                        addToCart(product);
+                        productPopup.style.display = 'none';
+                        barcodeFeedback.textContent = `${product.product_name || product.name} đã được thêm vào giỏ.`;
+                        Toast.fire({
+                            icon: "success",
+                            title: "Đã thêm barcode vào giỏ."
+                        });
+                    },
+                    error: (xhr) => {
+                        const message = xhr.responseJSON?.message || 'Không thể xử lý barcode.';
+                        barcodeFeedback.textContent = message;
+                        Toast.fire({
+                            icon: "error",
+                            title: message
+                        });
+                    },
+                    complete: () => {
+                        barcodeResolving = false;
+                        barcodeInput.value = '';
+                        barcodeInput.focus();
+                    }
+                });
+            }
+
+            function currentCartImeiIds() {
+                return [...cart.values()]
+                    .filter(({
+                        product
+                    }) => product.tracking_type === 'imei')
+                    .map(({
+                        product
+                    }) => product.product_imei_id);
+            }
+
+            function currentCartProductQuantities() {
+                const quantities = {};
+
+                for (const {
+                        product,
+                        qty
+                    }
+                    of cart.values()) {
+                    if (product.tracking_type === 'quantity') {
+                        quantities[product.product_id] = qty;
+                    }
+                }
+
+                return quantities;
+            }
+
             productSearch.addEventListener('input', debounce((e) => {
                 fetchProducts(e.target.value.trim());
             }, 300));
@@ -559,32 +664,81 @@
             }
 
             // --------- Cart Logic ---------
-            const cart = new Map(); // key: productId -> {product, qty}
+            const cart = new Map(); // key: quantity:{productId} hoặc imei:{productImeiId}
             const cartBody = qs('#cartBody');
             const cartEmptyRow = qs('#cartEmptyRow');
 
             function addToCart(product) {
-                const item = cart.get(product.id) || {
-                    product,
+                const trackingType = product.tracking_type || product.type || 'quantity';
+
+                if (trackingType === 'imei') {
+                    const key = `imei:${product.product_imei_id}`;
+
+                    if (cart.has(key)) {
+                        Toast.fire({
+                            icon: "error",
+                            title: "Thiết bị đã có trong giỏ."
+                        });
+                        return;
+                    }
+
+                    cart.set(key, {
+                        product: normalizeCartProduct(product, 'imei'),
+                        qty: 1
+                    });
+                    renderCart();
+                    return;
+                }
+
+                const normalized = normalizeCartProduct(product, 'quantity');
+                const key = `quantity:${normalized.product_id}`;
+                const item = cart.get(key) || {
+                    product: normalized,
                     qty: 0
                 };
-                item.qty = Math.min(item.qty + 1, product.quantity);
-                cart.set(product.id, item);
+                const maxQty = Number(normalized.available_quantity || normalized.quantity || 0);
+
+                if (item.qty + 1 > maxQty) {
+                    Toast.fire({
+                        icon: "error",
+                        title: "Số lượng yêu cầu vượt tồn kho."
+                    });
+                    return;
+                }
+
+                item.qty += 1;
+                cart.set(key, item);
                 renderCart();
             }
 
-            function removeFromCart(id) {
-                cart.delete(id);
+            function normalizeCartProduct(product, trackingType) {
+                const productId = Number(product.product_id || product.id);
+
+                return {
+                    ...product,
+                    id: productId,
+                    product_id: productId,
+                    tracking_type: trackingType,
+                    quantity: Number(product.available_quantity || product.quantity || 1),
+                    available_quantity: Number(product.available_quantity || product.quantity || 1),
+                    price_buy: Number(product.price_buy || product.price || 0),
+                };
+            }
+
+            function removeFromCart(key) {
+                cart.delete(key);
                 renderCart();
             }
 
-            function updateQty(id, qty) {
+            function updateQty(key, qty) {
 
-                const item = cart.get(id);
+                const item = cart.get(key);
                 if (!item) return;
-                const q = Math.max(1, Math.min(Number(qty) || 1, item.product.quantity));
+                if (item.product.tracking_type === 'imei') return;
+
+                const q = Math.max(1, Math.min(Number(qty) || 1, item.product.available_quantity));
                 item.qty = q;
-                cart.set(id, item);
+                cart.set(key, item);
                 renderCartTotals();
             }
 
@@ -597,30 +751,40 @@
                 } else {
                     cartEmptyRow.style.display = 'none';
 
-                    for (const [id, {
+                    for (const [key, {
                             product,
                             qty
                         }] of cart.entries()) {
 
+                        const isImei = product.tracking_type === 'imei';
+                        const stockText = isImei ? `IMEI: ${product.imei}` :
+                            `Tồn kho: ${product.available_quantity}`;
+                        const quantityControl = isImei ?
+                            '<span class="badge bg-secondary">1</span>' :
+                            `<input type="number" min="1" max="${product.available_quantity}" value="${qty}"
+                                class="form-control form-control-sm text-center qty-input" style="width: 80px" />`;
+
                         const row = document.createElement('div');
                         row.className = 'cart-row';
-                        row.dataset.rowId = id;
+                        row.dataset.rowId = key;
                         row.innerHTML = `
                         <img class="cart-thumb" src="${path}/storage/${product.thumbnail}" alt="${product.name}">
                         <div class="cart-info">
                         <div class="fw-semibold">${product.name}</div>
                         <div class="small text-muted">Giá: ${money(product.price_buy)}</div>
-                        <div class="small text-muted">Tồn kho: ${product.quantity}</div>
+                        <div class="small text-muted">${stockText}</div>
+                        ${isImei ? `<div class="small text-muted">Barcode: ${product.barcode}</div>` : ''}
                         </div>
                         <div class="cart-actions">
-                        <input type="number" min="1" max="${product.quantity}" value="${qty}"
-                            class="form-control form-control-sm text-center qty-input" style="width: 80px" />
+                        ${quantityControl}
                         <button class="btn btn-sm btn-outline-danger remove-btn">&times;</button>
                         </div>
                     `;
-                        qs('.qty-input', row).addEventListener('input', (e) => updateQty(product.id, e.target
-                            .value));
-                        qs('.remove-btn', row).addEventListener('click', () => removeFromCart(product.id));
+                        const qtyInput = qs('.qty-input', row);
+                        if (qtyInput) {
+                            qtyInput.addEventListener('input', (e) => updateQty(key, e.target.value));
+                        }
+                        qs('.remove-btn', row).addEventListener('click', () => removeFromCart(key));
                         cartBody.appendChild(row);
                     }
                 }
@@ -751,11 +915,14 @@
                     product,
                     qty
                 }], index) => {
+                    const itemName = product.tracking_type === 'imei' ?
+                        `${product.name}<div class="small text-muted">IMEI: ${product.imei}</div>` :
+                        product.name;
 
                     _html += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td class="text-start">${product.name}</td>
+                            <td class="text-start">${itemName}</td>
                             <td>${qty}</td>
                             <td> ${ money(product.price_buy) }</td>
                             <td>${ money(product.price_buy * qty) }</td>
@@ -818,9 +985,15 @@
                         qty
                     }) => ({
                         id: product.id,
+                        product_id: product.product_id,
+                        tracking_type: product.tracking_type,
+                        product_imei_id: product.product_imei_id || null,
+                        imei: product.imei || null,
+                        barcode: product.barcode || null,
                         name: product.name,
                         price: product.price,
-                        qty
+                        qty,
+                        quantity: qty
                     })),
                     subtotal: calcSubtotal(),
                     discountType: discountType.value,
@@ -952,9 +1125,15 @@
                         qty
                     }) => ({
                         id: product.id,
+                        product_id: product.product_id,
+                        tracking_type: product.tracking_type,
+                        product_imei_id: product.product_imei_id || null,
+                        imei: product.imei || null,
+                        barcode: product.barcode || null,
                         name: product.name,
                         price: product.price_buy,
-                        qty
+                        qty,
+                        quantity: qty
                     })),
                     subtotal: calcSubtotal(),
                     discountType: discountType.value,

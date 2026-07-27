@@ -39,6 +39,7 @@ use App\Http\Controllers\Client\SignUpController;
 use App\Http\Controllers\MultipleController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Staff\CheckInventoryController as staffcheckController;
+use App\Http\Controllers\Staff\BarcodeController as StaffBarcodeController;
 use App\Http\Controllers\Staff\ClientController as StaffClientController;
 use App\Http\Controllers\Staff\OrderController as StaffOrderController;
 use App\Http\Controllers\Staff\ProductController as StaffProductController;
@@ -403,6 +404,7 @@ Route::middleware(['auth'])
 // bán hàng
 Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staff.')->group(function () {
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
+    Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');
     Route::get('get-clients', [StaffProductController::class, 'getClients']);
     Route::get('', [StaffProductController::class, 'index'])->name('index');
     Route::post('/cart/add', [StaffProductController::class, 'addToCart'])->name('cart.add');

@@ -78,7 +78,13 @@ class ProductController extends Controller
             ->where('quantity', '>', 0)
             ->whereHas('product', function ($query) use ($searchText, $userId) {
                 $query->where('user_id', $userId)
-                    ->where('status', true)
+                    ->where('inventory_tracking', Product::INVENTORY_TRACKING_QUANTITY)
+                    ->where(function ($query) {
+                        $query->where('status', true)
+                            ->orWhere('status', 1)
+                            ->orWhere('status', '1')
+                            ->orWhere('status', 'published');
+                    })
                     ->when(!empty($searchText), function ($query) use ($searchText) {
                         $query->where(function ($query) use ($searchText) {
                             $query->where('name', 'like', "%$searchText%")
@@ -103,6 +109,8 @@ class ProductController extends Controller
             $data['available_quantity'] = (int) $stock->quantity;
             $data['storage_id'] = (int) $stock->storage_id;
             $data['images'] = $product->images;
+            $data['tracking_type'] = $product->inventory_tracking;
+            $data['barcode'] = $product->barcode;
 
             return $data;
         })->filter()->values();
@@ -284,7 +292,13 @@ class ProductController extends Controller
             ->where('quantity', '>', 0)
             ->whereHas('product', function ($query) use ($name, $userId) {
                 $query->where('user_id', $userId)
-                    ->where('status', true)
+                    ->where('inventory_tracking', Product::INVENTORY_TRACKING_QUANTITY)
+                    ->where(function ($query) {
+                        $query->where('status', true)
+                            ->orWhere('status', 1)
+                            ->orWhere('status', '1')
+                            ->orWhere('status', 'published');
+                    })
                     ->where('name', 'like', "%{$name}%");
             })
             ->orderByDesc('created_at')
@@ -304,6 +318,8 @@ class ProductController extends Controller
                 'available_quantity' => (int) $storage->quantity,
                 'storage_id' => (int) $storage->storage_id,
                 'product_unit' => $product->product_unit,
+                'tracking_type' => $product->inventory_tracking,
+                'barcode' => $product->barcode,
                 'images' => $product->images
             ];
         }
