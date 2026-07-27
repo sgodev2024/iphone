@@ -3,13 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Responses\ApiResponse;
 use App\Models\Storage;
 use App\Services\StorageService;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -25,33 +23,39 @@ class StorageController extends Controller
 
     public function index(Request $request)
     {
+        $title = 'Kho hàng';
 
         if ($request->ajax()) {
-            $searchText = $request->query('s');
+            $searchText = trim((string) $request->query('s'));
 
-            $storages = Storage::query()
-                ->where('user_id', Auth::id())
-                ->when(!empty($searchText), function ($query) use ($searchText) {
-                    $query->where('name', 'like', "%{$searchText}%");
+            $storages = $this->storageQuery()
+                ->when($searchText !== '', function (Builder $query) use ($searchText) {
+                    $query->where(function (Builder $query) use ($searchText) {
+                        $query->where('name', 'like', "%{$searchText}%")
+                            ->orWhere('location', 'like', "%{$searchText}%");
+
+                        if (ctype_digit($searchText)) {
+                            $query->orWhere('id', (int) $searchText);
+                        }
+                    });
                 })
                 ->latest()
-                ->paginate(10);
+                ->paginate(10)
+                ->appends($request->query());
 
             $html = view('admin.storage.table', compact('storages'))->render();
 
             return response()->json(['html' => $html]);
         }
 
-        return view('admin.storage.index');
+        return view('admin.storage.index', compact('title'));
     }
 
     public function show($id)
     {
-        $storage = Storage::query()
-            ->where('user_id', Auth::id())
-            ->find($id);
+        $storage = $this->storageQuery()->find($id);
 
-        if (!$storage) return errorResponse('Không tin thấy kho tên hệ thống!', Response::HTTP_NOT_FOUND);
+        if (!$storage) return errorResponse('Không tìm thấy kho trên hệ thống!', Response::HTTP_NOT_FOUND);
 
         return successResponse(data: $storage, isToastr: false);
     }
@@ -73,9 +77,7 @@ class StorageController extends Controller
 
         return transaction(function () use ($credentials, $id) {
 
-            $userId = Auth::id();
-
-            if (!$storage = Storage::query()->where('user_id', $userId)->find($id)) return errorResponse('Không tìm thấy kho trên hệ thống!', Response::HTTP_NOT_FOUND);
+            if (!$storage = $this->storageQuery()->find($id)) return errorResponse('Không tìm thấy kho trên hệ thống!', Response::HTTP_NOT_FOUND);
 
             $storage->update($credentials);
 
@@ -101,8 +103,8 @@ class StorageController extends Controller
             'name' => [
                 'required',
                 'max:255',
-                Rule::unique('storages') // thay bằng tên bảng thực tế
-                    ->where(fn($q) => $q->where('user_id', Auth::id()))
+                Rule::unique('storages')
+                    ->where(fn($q) => $this->applyStorageScope($q))
                     ->ignore($id),
             ],
             'location' => 'nullable|max:255',
@@ -110,5 +112,36 @@ class StorageController extends Controller
             'name' => 'Tên kho',
             'location' => 'Địa chỉ',
         ]);
+    }
+
+    private function storageQuery(): Builder
+    {
+        return $this->applyStorageScope(Storage::query());
+    }
+
+    private function applyStorageScope($query)
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $ownerIds = collect([$user->id, $user->manager_id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $query->where(function ($query) use ($ownerIds, $user) {
+            if (!empty($ownerIds)) {
+                $query->whereIn('user_id', $ownerIds);
+            }
+
+            if ($user->storage_id) {
+                $query->orWhere('id', (int) $user->storage_id);
+            }
+        });
     }
 }

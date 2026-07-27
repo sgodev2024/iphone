@@ -2,8 +2,9 @@
     <thead>
         <tr>
             <th style="width: 3%" class="text-center"><input type="checkbox" id="check-all"></th>
-            <th style="width: 15%"># | ngày tạo</th>
-            <th>Tên danh mục</th>
+            <th style="width: 8%">ID</th>
+            <th style="width: 15%">Ngày tạo</th>
+            <th>TÊN KHO</th>
             <th>Địa chỉ</th>
             <th class="text-center" style="width: 13%">Hành động</th>
         </tr>
@@ -12,12 +13,10 @@
         @forelse ($storages as $storage)
             <tr>
                 <td><input type="checkbox" class="checked-item" value="{{ $storage->id }}"></td>
-                <td>
-                    {{ ($storages->currentPage() - 1) * $storages->perPage() + $loop->iteration }}
-                    | {{ $storage->created_at->format('d/m/Y') }}
-                </td>
+                <td>{{ $storage->id }}</td>
+                <td>{{ optional($storage->created_at)->format('d/m/Y') ?? '-' }}</td>
                 <td>{{ $storage->name }}</td>
-                <td>{{ $storage->location }}</td>
+                <td>{{ $storage->location ?? '-' }}</td>
                 <td>
                     <div class="d-flex gap-2 justify-content-center">
                         <button class="btn btn-primary btn-sm btn-show" data-id="{{ $storage->id }}">
@@ -31,7 +30,7 @@
             </tr>
         @empty
             <tr>
-                <td class="text-center" colspan="6">Không có danh mục</td>
+                <td class="text-center" colspan="6">Không có kho hàng</td>
             </tr>
         @endforelse
     </tbody>

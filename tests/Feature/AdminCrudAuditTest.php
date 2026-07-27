@@ -181,6 +181,84 @@ class AdminCrudAuditTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_storage_index_uses_inventory_storage_scope_with_search_and_pagination(): void
+    {
+        $manager = $this->createUser('manager-storage@example.com', '0903100001', 1);
+        $warehouseUser = $this->createUser('warehouse-storage@example.com', '0903100002', 4);
+
+        $warehouseUser->update(['manager_id' => $manager->id]);
+
+        $storageA = Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho A',
+            'location' => 'Ha Noi',
+        ]);
+
+        $storageB = Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho B',
+            'location' => 'Sai Gon',
+        ]);
+
+        $assignedStorage = Storage::create([
+            'user_id' => null,
+            'name' => 'Kho duoc gan',
+            'location' => 'Da Nang',
+        ]);
+
+        Storage::create([
+            'user_id' => $manager->id + 999,
+            'name' => 'Kho ngoai pham vi',
+            'location' => 'Can Tho',
+        ]);
+
+        for ($i = 1; $i <= 9; $i++) {
+            Storage::create([
+                'user_id' => $manager->id,
+                'name' => sprintf('Kho phu %02d', $i),
+                'location' => 'Ha Noi',
+            ]);
+        }
+
+        $warehouseUser->update(['storage_id' => $assignedStorage->id]);
+
+        $response = $this->actingAs($warehouseUser)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Kho');
+
+        $response->assertOk();
+
+        $html = $response->json('html');
+
+        $this->assertStringContainsString((string) $storageA->id, $html);
+        $this->assertStringContainsString('Kho A', $html);
+        $this->assertStringContainsString('Kho B', $html);
+        $this->assertStringContainsString('page=2', $html);
+        $this->assertStringContainsString('s=Kho', $html);
+        $this->assertStringNotContainsString('Kho ngoai pham vi', $html);
+
+        $searchResponse = $this->actingAs($warehouseUser)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Kho%20B');
+
+        $searchHtml = $searchResponse->assertOk()->json('html');
+
+        $this->assertStringContainsString((string) $storageB->id, $searchHtml);
+        $this->assertStringContainsString('Kho B', $searchHtml);
+        $this->assertStringNotContainsString('Kho A', $searchHtml);
+
+        $emptyResponse = $this->actingAs($warehouseUser)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Khong%20ton%20tai');
+
+        $this->assertStringContainsString('Không có kho hàng', $emptyResponse->assertOk()->json('html'));
+
+        $this->actingAs($warehouseUser)
+            ->getJson("/admin/storage/{$storageA->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $storageA->id);
+    }
+
     public function test_supplier_create_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
