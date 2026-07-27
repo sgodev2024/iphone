@@ -149,6 +149,153 @@ class AdminEmployeeCreationTest extends TestCase
         ]);
     }
 
+    public function test_employee_index_uses_management_scope_with_search_and_pagination(): void
+    {
+        $admin = $this->createAdmin();
+        $branch = User::create([
+            'name' => 'Branch Account',
+            'email' => 'branch@example.com',
+            'phone' => '0903333300',
+            'password' => 'password',
+            'role_id' => 2,
+            'manager_id' => $admin->id,
+            'status' => 'active',
+        ]);
+        $otherAdmin = $this->createAdmin('other-scope-admin@example.com', '0904444400');
+
+        $adminStorage = Storage::create([
+            'user_id' => $admin->id,
+            'name' => 'Admin Storage',
+        ]);
+        $branchStorage = Storage::create([
+            'user_id' => $branch->id,
+            'name' => 'Branch Storage',
+        ]);
+        $otherStorage = Storage::create([
+            'user_id' => $otherAdmin->id,
+            'name' => 'Other Storage',
+        ]);
+
+        for ($i = 1; $i <= 8; $i++) {
+            User::create([
+                'name' => sprintf('Pager Staff %02d', $i),
+                'email' => sprintf('pager%02d@example.com', $i),
+                'phone' => sprintf('09100000%02d', $i),
+                'password' => 'password',
+                'role_id' => 3,
+                'manager_id' => $admin->id,
+                'storage_id' => $adminStorage->id,
+                'status' => 'active',
+            ]);
+        }
+
+        $directEmployee = User::create([
+            'name' => 'Direct Staff',
+            'email' => 'direct-staff@example.com',
+            'phone' => '0911000001',
+            'password' => 'password',
+            'role_id' => 3,
+            'manager_id' => $admin->id,
+            'storage_id' => $adminStorage->id,
+            'status' => 'active',
+        ]);
+        $branchEmployee = User::create([
+            'name' => 'Branch Staff Inactive',
+            'email' => 'branch-staff@example.com',
+            'phone' => '0911000002',
+            'password' => 'password',
+            'role_id' => 3,
+            'manager_id' => $branch->id,
+            'storage_id' => $branchStorage->id,
+            'status' => 'inactive',
+        ]);
+        $storageEmployee = User::create([
+            'name' => 'Storage Staff Locked',
+            'email' => 'storage-staff@example.com',
+            'phone' => '0911000003',
+            'password' => 'password',
+            'role_id' => 3,
+            'manager_id' => $otherAdmin->id,
+            'storage_id' => $branchStorage->id,
+            'status' => 'locked',
+        ]);
+
+        User::create([
+            'name' => 'Outside Staff',
+            'email' => 'outside-staff@example.com',
+            'phone' => '0911000004',
+            'password' => 'password',
+            'role_id' => 3,
+            'manager_id' => $otherAdmin->id,
+            'storage_id' => $otherStorage->id,
+            'status' => 'active',
+        ]);
+        User::create([
+            'name' => 'Admin Staff Name',
+            'email' => 'admin-staff-name@example.com',
+            'phone' => '0911000005',
+            'password' => 'password',
+            'role_id' => 1,
+            'manager_id' => $admin->id,
+            'storage_id' => $adminStorage->id,
+            'status' => 'active',
+        ]);
+        User::create([
+            'name' => 'Branch Account Staff Name',
+            'email' => 'branch-account-staff@example.com',
+            'phone' => '0911000006',
+            'password' => 'password',
+            'role_id' => 2,
+            'manager_id' => $admin->id,
+            'storage_id' => $branchStorage->id,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/employees?s=Staff');
+
+        $html = $response->assertOk()->json('html');
+
+        $this->assertStringContainsString('page=2', $html);
+        $this->assertStringContainsString('s=Staff', $html);
+
+        foreach ([$directEmployee, $branchEmployee, $storageEmployee] as $employee) {
+            $employeeHtml = $this->actingAs($admin)
+                ->withHeader('X-Requested-With', 'XMLHttpRequest')
+                ->get('/admin/employees?s=' . urlencode($employee->email))
+                ->assertOk()
+                ->json('html');
+
+            $this->assertStringContainsString((string) $employee->id, $employeeHtml);
+            $this->assertStringContainsString($employee->name, $employeeHtml);
+            $this->assertStringContainsString($employee->email, $employeeHtml);
+            $this->assertStringContainsString($employee->phone, $employeeHtml);
+        }
+
+        foreach (['outside-staff@example.com', 'admin-staff-name@example.com', 'branch-account-staff@example.com'] as $search) {
+            $emptyHtml = $this->actingAs($admin)
+                ->withHeader('X-Requested-With', 'XMLHttpRequest')
+                ->get('/admin/employees?s=' . urlencode($search))
+                ->assertOk()
+                ->json('html');
+
+            $this->assertStringContainsString('Không có dữ liệu', $emptyHtml);
+        }
+
+        $this->actingAs($admin)
+            ->get("/admin/employees/{$branchEmployee->id}/edit")
+            ->assertOk()
+            ->assertSee('Branch Staff Inactive')
+            ->assertSee('Branch Storage');
+
+        $this->actingAs($admin)
+            ->get("/admin/employees/{$storageEmployee->id}/edit")
+            ->assertOk()
+            ->assertSee('Storage Staff Locked')
+            ->assertSee('Branch Storage');
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -174,6 +321,24 @@ class AdminEmployeeCreationTest extends TestCase
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('config', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('bank_id')->nullable();
+            $table->string('bank_account')->nullable();
+            $table->string('receiver')->nullable();
+            $table->string('logo')->nullable();
+            $table->string('qr')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('orders', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->boolean('notification')->default(false);
             $table->timestamps();
         });
     }

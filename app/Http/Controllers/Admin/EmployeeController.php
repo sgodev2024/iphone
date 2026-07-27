@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\SendMailInfo;
 use App\Models\Storage;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,7 @@ use Throwable;
 
 class EmployeeController extends Controller
 {
+    private const BRANCH_ROLE_ID = 2;
     private const EMPLOYEE_ROLE_ID = 3;
 
     public function index(Request $request)
@@ -25,17 +27,25 @@ class EmployeeController extends Controller
         $title = "Nhân viên bán hàng";
         $mode = 'employees';
         if ($request->ajax()) {
-            $searchText = $request->query('s');
+            $searchText = trim((string) $request->query('s'));
 
-            $users = User::query()
-                ->where(['manager_id' => Auth::id(), 'role_id' => self::EMPLOYEE_ROLE_ID])
-                ->when(!empty($searchText), function ($query) use ($searchText) {
-                    $query->where('name', 'like', "%{$searchText}%");
+            $employees = $this->employeeQuery()
+                ->when($searchText !== '', function (Builder $query) use ($searchText) {
+                    $query->where(function (Builder $query) use ($searchText) {
+                        $query->where('name', 'like', "%{$searchText}%")
+                            ->orWhere('email', 'like', "%{$searchText}%")
+                            ->orWhere('phone', 'like', "%{$searchText}%");
+
+                        if (ctype_digit($searchText)) {
+                            $query->orWhere('id', (int) $searchText);
+                        }
+                    });
                 })
                 ->latest()
-                ->paginate(10);
+                ->paginate(10)
+                ->appends($request->query());
 
-            $html = view('admin.employee.table', compact('users', 'mode'))->render();
+            $html = view('admin.employee.table', compact('employees', 'mode'))->render();
 
             return response()->json(['html' => $html]);
         }
@@ -108,14 +118,14 @@ class EmployeeController extends Controller
     private function storageOptions()
     {
         return Storage::query()
-            ->where('user_id', Auth::id())
+            ->whereIn('id', $this->managedStorageIds())
             ->orderBy('name')
             ->get(['id', 'name']);
     }
 
     public function edit(string $id)
     {
-        $user = User::query()->where('role_id', self::EMPLOYEE_ROLE_ID)->findOrFail($id);
+        $user = $this->employeeQuery()->findOrFail($id);
         $title = "Sửa tài khoản nhân viên - $user->name";
         $api = "/admin/employees/$user->id";
         $storages = $this->storageOptions();
@@ -130,7 +140,7 @@ class EmployeeController extends Controller
 
         return transaction(function () use ($credentials, $id) {
 
-            if (! $user = User::query()->where('role_id', self::EMPLOYEE_ROLE_ID)->find($id)) return errorResponse(message: 'Tài khoản không tồn tại', code: Response::HTTP_NOT_FOUND);
+            if (! $user = $this->employeeQuery()->find($id)) return errorResponse(message: 'Tài khoản không tồn tại', code: Response::HTTP_NOT_FOUND);
 
             if (empty($credentials['password'])) {
                 unset($credentials['password']);
@@ -159,7 +169,7 @@ class EmployeeController extends Controller
             'storage_id' => [
                 'required',
                 'integer',
-                Rule::exists('storages', 'id')->where(fn ($query) => $query->where('user_id', Auth::id())),
+                Rule::exists('storages', 'id')->where(fn ($query) => $query->whereIn('id', $this->managedStorageIds())),
             ],
             'status'     => ['required', 'in:active,inactive,locked'],
             'img_url'    => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:2048'],
@@ -176,5 +186,70 @@ class EmployeeController extends Controller
             'status'     => 'Trạng thái',
             'img_url'    => 'Ảnh đại diện',
         ]);
+    }
+
+    private function employeeQuery(): Builder
+    {
+        $managedUserIds = $this->managedUserIds();
+        $managedStorageIds = $this->managedStorageIds();
+
+        return User::query()
+            ->where('role_id', self::EMPLOYEE_ROLE_ID)
+            ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
+                if (empty($managedUserIds) && empty($managedStorageIds)) {
+                    $query->whereRaw('1 = 0');
+
+                    return;
+                }
+
+                if (!empty($managedUserIds)) {
+                    $query->whereIn('manager_id', $managedUserIds);
+                }
+
+                if (!empty($managedStorageIds)) {
+                    $query->orWhereIn('storage_id', $managedStorageIds);
+                }
+            });
+    }
+
+    private function managedUserIds(): array
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return [];
+        }
+
+        $branchIds = User::query()
+            ->where('manager_id', $user->id)
+            ->where('role_id', self::BRANCH_ROLE_ID)
+            ->pluck('id');
+
+        return collect([(int) $user->id])
+            ->merge($branchIds)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function managedStorageIds(): array
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return [];
+        }
+
+        $storageIds = Storage::query()
+            ->whereIn('user_id', $this->managedUserIds())
+            ->pluck('id');
+
+        return collect([$user->storage_id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->merge($storageIds)
+            ->unique()
+            ->values()
+            ->all();
     }
 }
