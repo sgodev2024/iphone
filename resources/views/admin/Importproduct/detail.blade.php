@@ -152,6 +152,13 @@
                             <a href="{{ route('admin.imeis.index') }}" class="btn btn-primary w-md">
                                 <i class="fas fa-arrow-left"></i> Quay lại
                             </a>
+                            <a href="{{ route('admin.importproduct.barcodes.index', [
+                                'id' => $importdetail->id,
+                            ]) }}"
+                                class="btn btn-success">
+                                <i class="fas fa-barcode"></i>
+                                In tem barcode
+                            </a>
                         </div>
                     </div>
                 </div>

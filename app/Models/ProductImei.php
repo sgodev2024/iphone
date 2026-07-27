@@ -22,11 +22,16 @@ class ProductImei extends Model
         'product_id',
         'import_detail_id',
         'imei',
+        'barcode',
         'status',
+        'printed_at',
+        'print_count',
         'deleted_by',
         'delete_reason',
     ];
-
+    protected $casts = [
+        'printed_at' => 'datetime',
+    ];
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

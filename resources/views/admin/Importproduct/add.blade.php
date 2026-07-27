@@ -1055,24 +1055,54 @@
                 }
 
                 return `
-                    <tr class="imei-detail-row" data-import-id="${item.id}">
-                        <td></td>
-                        <td colspan="6">
-                            <div class="imei-entry-panel">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <strong>Danh sách IMEI - ${escapeHtml(productName)}</strong>
-                                    <span class="imei-counter" data-import-id="${item.id}">Đã nhập 0/${quantity} IMEI</span>
-                                </div>
-                                <div class="imei-entry-meta text-muted mb-2">
-                                    <span>Sản phẩm: <strong class="text-dark">${escapeHtml(productName)}</strong></span>
-                                    ${productCode ? `<span>Mã sản phẩm: <strong class="text-dark">${escapeHtml(productCode)}</strong></span>` : ''}
-                                    <span>Số lượng: <strong class="text-dark">${quantity}${productUnit ? ` ${escapeHtml(productUnit)}` : ''}</strong></span>
-                                </div>
-                                <div class="imei-entry-grid">${fields.join('')}</div>
-                            </div>
-                        </td>
-                    </tr>
-                `;
+    <tr class="imei-detail-row" data-import-id="${item.id}">
+        <td></td>
+        <td colspan="6">
+            <div class="imei-entry-panel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>Danh sách IMEI - ${escapeHtml(productName)}</strong>
+                    <span class="imei-counter" data-import-id="${item.id}">
+                        Đã nhập 0/${quantity} IMEI
+                    </span>
+                </div>
+
+                <div class="imei-entry-meta text-muted mb-2">
+                    <span>
+                        Sản phẩm:
+                        <strong class="text-dark">
+                            ${escapeHtml(productName)}
+                        </strong>
+                    </span>
+
+                    ${productCode ? `
+                            <span>
+                                Mã sản phẩm:
+                                <strong class="text-dark">
+                                    ${escapeHtml(productCode)}
+                                </strong>
+                            </span>
+                        ` : ''}
+
+                    <span>
+                        Số lượng:
+                        <strong class="text-dark">
+                            ${quantity}${productUnit ? ` ${escapeHtml(productUnit)}` : ''}
+                        </strong>
+                    </span>
+                </div>
+
+                <div class="imei-entry-grid">
+                    ${fields.join('')}
+                </div>
+
+                <div class="mt-2 text-muted small">
+                    <i class="fa fa-barcode me-1"></i>
+                    Barcode nội bộ sẽ được tự động tạo sau khi xác nhận nhập kho.
+                </div>
+            </div>
+        </td>
+    </tr>
+`;
             }
 
             function getInventoryTracking(item) {
@@ -1129,5 +1159,113 @@
             document.getElementById('payment').value = Math.round(parseMoneyValue(this.innerText));
             this.innerText = formatMoneyValue(this.innerText);
         });
+    </script>
+    <script>
+        function normalizeImei(value) {
+            return String(value ?? '').trim();
+        }
+
+        function isValidImei(value) {
+            return /^\d{15}$/.test(normalizeImei(value));
+        }
+
+        function showImeiError(input, message) {
+            input.classList.add('is-invalid');
+
+            let feedback = input.parentElement.querySelector(
+                '.imei-invalid-feedback'
+            );
+
+            if (!feedback) {
+                feedback = document.createElement('div');
+                feedback.className =
+                    'invalid-feedback imei-invalid-feedback';
+                input.parentElement.appendChild(feedback);
+            }
+
+            feedback.textContent = message;
+        }
+
+        function clearImeiError(input) {
+            input.classList.remove('is-invalid');
+
+            const feedback = input.parentElement.querySelector(
+                '.imei-invalid-feedback'
+            );
+
+            if (feedback) {
+                feedback.remove();
+            }
+        }
+
+        const importForm = document.getElementById('addimport');
+
+        if (importForm) {
+            importForm.addEventListener('submit', function(event) {
+                const imeiInputs = Array.from(
+                    importForm.querySelectorAll(
+                        'input[name^="imeis["][name$="][]"]'
+                    )
+                );
+
+                const usedImeis = new Set();
+                let firstInvalidInput = null;
+                let hasError = false;
+
+                imeiInputs.forEach(function(input) {
+                    clearImeiError(input);
+
+                    const imei = normalizeImei(input.value);
+
+                    // Gán lại giá trị đã được trim.
+                    input.value = imei;
+
+                    if (!isValidImei(imei)) {
+                        showImeiError(
+                            input,
+                            'IMEI phải gồm đúng 15 chữ số.'
+                        );
+
+                        firstInvalidInput ??= input;
+                        hasError = true;
+
+                        return;
+                    }
+
+                    if (usedImeis.has(imei)) {
+                        showImeiError(
+                            input,
+                            'IMEI này đang bị nhập trùng trong phiếu.'
+                        );
+
+                        firstInvalidInput ??= input;
+                        hasError = true;
+
+                        return;
+                    }
+
+                    usedImeis.add(imei);
+                });
+
+                if (hasError) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    firstInvalidInput?.focus();
+
+                    return false;
+                }
+            });
+
+            importForm.addEventListener('input', function(event) {
+                if (
+                    event.target.matches(
+                        'input[name^="imeis["][name$="][]"]'
+                    )
+                ) {
+                    clearImeiError(event.target);
+                }
+            });
+        }
     </script>
 @endsection

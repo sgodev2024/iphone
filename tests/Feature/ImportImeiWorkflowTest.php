@@ -11,6 +11,7 @@ use App\Models\ProductImei;
 use App\Models\Storage;
 use App\Models\User;
 use App\Services\CompanyProductService;
+use App\Services\InternalBarcodeService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Schema;
@@ -315,14 +316,14 @@ class ImportImeiWorkflowTest extends TestCase
                 '223456789012345',
             ]));
 
-        $response->assertRedirect('/admin/importproduct')
-            ->assertSessionHas('success', 'Nhập hàng thành công.');
-
         $coupon = ImportCoupon::first();
         $detail = ImportDetail::first();
 
         $this->assertNotNull($coupon);
         $this->assertNotNull($detail);
+        $response->assertRedirect(route('admin.importproduct.importCoupon.detail', ['id' => $coupon->id]))
+            ->assertSessionHas('success', 'Nhập hàng thành công. Barcode nội bộ đã được tạo.');
+
         $this->assertSame($coupon->id, $detail->import_id);
         $this->assertDatabaseHas('product_imeis', [
             'product_id' => $this->product->id,
@@ -342,6 +343,15 @@ class ImportImeiWorkflowTest extends TestCase
             'imei' => '223456789012345',
             'status' => ProductImei::STATUS_IN_STOCK,
         ]);
+        ProductImei::query()
+            ->orderBy('id')
+            ->get()
+            ->each(function (ProductImei $productImei): void {
+                $this->assertSame(
+                    sprintf('TEL-%08d', $productImei->id),
+                    $productImei->barcode
+                );
+            });
         $this->assertDatabaseHas('product_storage', [
             'product_id' => $this->product->id,
             'storage_id' => $this->storage->id,
@@ -370,14 +380,16 @@ class ImportImeiWorkflowTest extends TestCase
                 ],
             ]);
 
-        $response->assertRedirect('/admin/importproduct')
-            ->assertSessionHas('success', 'Nhập hàng thành công.');
-
         $imeiDetail = ImportDetail::where('product_id', $this->product->id)->first();
         $quantityDetail = ImportDetail::where('product_id', $this->quantityProduct->id)->first();
+        $coupon = ImportCoupon::first();
 
+        $this->assertNotNull($coupon);
         $this->assertNotNull($imeiDetail);
         $this->assertNotNull($quantityDetail);
+        $response->assertRedirect(route('admin.importproduct.importCoupon.detail', ['id' => $coupon->id]))
+            ->assertSessionHas('success', 'Nhập hàng thành công. Barcode nội bộ đã được tạo.');
+
         $this->assertSame(2, (int) $imeiDetail->quantity);
         $this->assertSame(20, (int) $quantityDetail->quantity);
         $this->assertDatabaseCount('product_imeis', 2);
@@ -410,9 +422,13 @@ class ImportImeiWorkflowTest extends TestCase
         $item = $this->createImportItem(quantity: 1);
         $payload = $this->validPayload($item, ['123456789012345']);
 
-        $this->actingAs($this->admin)
-            ->post('/admin/importproduct/importCoupon', $payload)
-            ->assertRedirect('/admin/importproduct');
+        $response = $this->actingAs($this->admin)
+            ->post('/admin/importproduct/importCoupon', $payload);
+
+        $coupon = ImportCoupon::first();
+
+        $this->assertNotNull($coupon);
+        $response->assertRedirect(route('admin.importproduct.importCoupon.detail', ['id' => $coupon->id]));
 
         $this->actingAs($this->admin)
             ->from('/admin/importproduct/add')
@@ -500,6 +516,31 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseCount('product_imeis', 0);
         $this->assertDatabaseCount('product_storage', 0);
         $this->assertSame('0', (string) $this->quantityProduct->fresh()->quantity);
+    }
+
+    public function test_barcode_generation_failure_rolls_back_receipt_details_imeis_and_inventory(): void
+    {
+        $item = $this->createImportItem(quantity: 1);
+        $barcodeService = Mockery::mock(InternalBarcodeService::class);
+        $barcodeService->shouldReceive('generate')
+            ->once()
+            ->andThrow(new RuntimeException('Barcode failure'));
+        $this->app->instance(InternalBarcodeService::class, $barcodeService);
+
+        $response = $this->actingAs($this->admin)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', $this->validPayload($item, [
+                '123456789012345',
+            ]));
+
+        $response->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHas('error');
+        $this->assertDatabaseCount('import_coupon', 0);
+        $this->assertDatabaseCount('import_detail', 0);
+        $this->assertDatabaseCount('product_imeis', 0);
+        $this->assertDatabaseCount('product_storage', 0);
+        $this->assertSame('0', (string) $this->product->fresh()->quantity);
+        $this->assertDatabaseHas('import', ['id' => $item->id]);
     }
 
     public static function invalidPayloadProvider(): array
@@ -765,7 +806,10 @@ class ImportImeiWorkflowTest extends TestCase
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
             $table->string('imei', 15)->unique();
+            $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
+            $table->timestamp('printed_at')->nullable();
+            $table->unsignedInteger('print_count')->default(0);
             $table->unsignedBigInteger('deleted_by')->nullable();
             $table->string('delete_reason', 500)->nullable();
             $table->softDeletes();

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Services\InternalBarcodeService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Import\StoreImportCouponRequest;
 use App\Models\Account;
@@ -37,19 +38,22 @@ class importCouponController extends Controller
         protected CompanyService $companyService,
         protected ProductStorageService $productStorageService,
         protected CompanyProductService $companyProductService,
+        protected InternalBarcodeService $internalBarcodeService,
     ) {}
 
     public function add(StoreImportCouponRequest $request): RedirectResponse
     {
         try {
-            DB::transaction(function () use ($request) {
-                $this->confirmImportCoupon($request);
+            $importCouponId = DB::transaction(function () use ($request): int {
+                return $this->confirmImportCoupon($request);
             });
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (UniqueConstraintViolationException) {
             return back()
-                ->withErrors(['imeis' => 'Có IMEI đã tồn tại trong hệ thống. Phiếu nhập chưa được lưu.'])
+                ->withErrors([
+                    'imeis' => 'Có IMEI hoặc barcode đã tồn tại. Phiếu nhập chưa được lưu.',
+                ])
                 ->withInput();
         } catch (Throwable $exception) {
             Log::error('Failed to confirm import coupon with IMEIs.', [
@@ -63,11 +67,16 @@ class importCouponController extends Controller
         }
 
         return redirect()
-            ->route('admin.importproduct.index')
-            ->with('success', 'Nhập hàng thành công.');
+            ->route('admin.importproduct.importCoupon.detail', [
+                'id' => $importCouponId,
+            ])
+            ->with(
+                'success',
+                'Nhập hàng thành công. Barcode nội bộ đã được tạo.'
+            );
     }
 
-    private function confirmImportCoupon(StoreImportCouponRequest $request): void
+    private function confirmImportCoupon(StoreImportCouponRequest $request): int
     {
         $user = $request->user();
         $supplierId = (int) $request->validated('supplier');
@@ -107,39 +116,135 @@ class importCouponController extends Controller
 
         $submittedImeis = (array) $request->input('imeis', []);
 
+        /*
+|--------------------------------------------------------------------------
+| Chuẩn hóa và kiểm tra toàn bộ IMEI trước khi tạo phiếu nhập
+|--------------------------------------------------------------------------
+*/
+        $validatedImeisByImportId = [];
+
         foreach ($imports as $import) {
-            $productName = $import->product?->name ?? "#{$import->product_id}";
-            $tracking = $import->product?->inventory_tracking;
+            $product = $import->product;
+            $productName = $product?->name ?? "#{$import->product_id}";
+            $tracking = $product?->inventory_tracking;
 
             if (! in_array($tracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
                 throw ValidationException::withMessages([
-                    "items.{$import->id}" => "Sản phẩm {$productName} chưa có phương thức quản lý tồn kho hợp lệ.",
+                    "items.{$import->id}" =>
+                    "Sản phẩm {$productName} chưa có phương thức quản lý tồn kho hợp lệ.",
                 ]);
             }
 
+            $rawImeis = (array) (
+                $submittedImeis[$import->id]
+                ?? $submittedImeis[(string) $import->id]
+                ?? []
+            );
+
+            $normalizedImeis = collect($rawImeis)
+                ->map(fn($imei) => trim((string) $imei))
+                ->filter(fn(string $imei) => $imei !== '')
+                ->values();
+
+            /*
+    |--------------------------------------------------------------------------
+    | Sản phẩm quản lý theo số lượng không được nhập IMEI
+    |--------------------------------------------------------------------------
+    */
             if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
-                if (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
+                if ($normalizedImeis->isNotEmpty()) {
                     throw ValidationException::withMessages([
-                        "imeis.{$import->id}" => "Sản phẩm {$productName} là sản phẩm thường nên không được gửi danh sách IMEI.",
+                        "imeis.{$import->id}" =>
+                        "Sản phẩm {$productName} quản lý theo số lượng nên không được nhập IMEI.",
                     ]);
                 }
+
+                $validatedImeisByImportId[$import->id] = [];
 
                 continue;
             }
 
-            if ((int) $import->quantity > ProductImei::MAX_IMPORT_QUANTITY) {
+            /*
+    |--------------------------------------------------------------------------
+    | Chỉ xử lý từ đây với sản phẩm quản lý IMEI
+    |--------------------------------------------------------------------------
+    */
+            $expectedQuantity = (int) $import->quantity;
+
+            if ($expectedQuantity > ProductImei::MAX_IMPORT_QUANTITY) {
                 throw ValidationException::withMessages([
-                    "imeis.{$import->id}" => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
+                    "imeis.{$import->id}" =>
+                    'Mỗi lần chỉ được nhập tối đa ' . ProductImei::MAX_IMPORT_QUANTITY . ' thiết bị.',
                 ]);
             }
 
-            $imeis = array_values((array) ($submittedImeis[$import->id] ?? $submittedImeis[(string) $import->id] ?? []));
-
-            if (count($imeis) !== (int) $import->quantity) {
+            if ($normalizedImeis->count() !== $expectedQuantity) {
                 throw ValidationException::withMessages([
-                    "imeis.{$import->id}" => "Số IMEI phải bằng số lượng nhập của sản phẩm {$productName}.",
+                    "imeis.{$import->id}" =>
+                    "Sản phẩm {$productName} cần {$expectedQuantity} IMEI, " .
+                        "nhưng hiện có {$normalizedImeis->count()} IMEI.",
                 ]);
             }
+
+            /*
+    |--------------------------------------------------------------------------
+    | Kiểm tra đúng 15 chữ số
+    |--------------------------------------------------------------------------
+    */
+            $invalidImei = $normalizedImeis->first(
+                fn(string $imei) => ! preg_match('/^\d{15}$/', $imei)
+            );
+
+            if ($invalidImei !== null) {
+                throw ValidationException::withMessages([
+                    "imeis.{$import->id}" =>
+                    "IMEI {$invalidImei} của sản phẩm {$productName} phải gồm đúng 15 chữ số.",
+                ]);
+            }
+
+            $validatedImeisByImportId[$import->id] = $normalizedImeis->all();
+        }
+
+        /*
+|--------------------------------------------------------------------------
+| Kiểm tra IMEI trùng trong toàn bộ phiếu nhập
+|--------------------------------------------------------------------------
+*/
+        $allSubmittedImeis = collect($validatedImeisByImportId)
+            ->flatten()
+            ->values();
+
+        $duplicatedImeis = $allSubmittedImeis
+            ->duplicates()
+            ->unique()
+            ->values();
+
+        if ($duplicatedImeis->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'imeis' =>
+                'IMEI bị nhập trùng trong phiếu: ' . $duplicatedImeis->implode(', '),
+            ]);
+        }
+
+        /*
+|--------------------------------------------------------------------------
+| Kiểm tra IMEI đã tồn tại trong database
+|--------------------------------------------------------------------------
+|
+| Dùng withTrashed để không cho tái sử dụng IMEI đã bị xóa mềm.
+*/
+        $existingImeis = ProductImei::query()
+            ->withTrashed()
+            ->whereIn('imei', $allSubmittedImeis->all())
+            ->pluck('imei')
+            ->unique()
+            ->values();
+
+        if ($existingImeis->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'imeis' =>
+                'IMEI đã tồn tại trong hệ thống: ' . $existingImeis->implode(', '),
+            ]);
         }
 
         $total = (int) $imports->sum('total');
@@ -181,19 +286,60 @@ class importCouponController extends Controller
             ]);
 
             if ($product->isImeiTracked()) {
-                $imeis = array_values((array) ($submittedImeis[$import->id] ?? $submittedImeis[(string) $import->id] ?? []));
-                $importDetail->imeis()->createMany(array_map(
-                    fn(string $imei) => [
+                $imeis = $validatedImeisByImportId[$import->id] ?? [];
+
+                foreach ($imeis as $imei) {
+                    /*
+        |--------------------------------------------------------------------------
+        | Bước 1: Tạo IMEI để lấy ID tự tăng
+        |--------------------------------------------------------------------------
+        */
+                    $productImei = $importDetail->imeis()->create([
                         'product_id' => $product->id,
                         'imei' => $imei,
                         'status' => ProductImei::STATUS_IN_STOCK,
-                    ],
-                    $imeis
-                ));
-            } elseif (array_key_exists($import->id, $submittedImeis) || array_key_exists((string) $import->id, $submittedImeis)) {
-                throw ValidationException::withMessages([
-                    "imeis.{$import->id}" => "Sản phẩm {$product->name} là sản phẩm thường nên không được gửi danh sách IMEI.",
-                ]);
+                    ]);
+
+                    /*
+        |--------------------------------------------------------------------------
+        | Bước 2: Sinh barcode từ ID vừa tạo
+        |--------------------------------------------------------------------------
+        |
+        | Ví dụ ID 125 -> TEL-00000125
+        */
+                    $barcode = $this->internalBarcodeService->generate($productImei);
+
+                    /*
+        |--------------------------------------------------------------------------
+        | Bước 3: Lưu barcode
+        |--------------------------------------------------------------------------
+        */
+                    $productImei->forceFill([
+                        'barcode' => $barcode,
+                    ])->save();
+                }
+            } else {
+                $this->internalBarcodeService->resolveProductBarcode($product);
+
+                if (
+                    array_key_exists($import->id, $submittedImeis)
+                    || array_key_exists((string) $import->id, $submittedImeis)
+                ) {
+                    $quantityProductImeis = collect(
+                        $submittedImeis[$import->id]
+                            ?? $submittedImeis[(string) $import->id]
+                            ?? []
+                    )
+                        ->map(fn($imei) => trim((string) $imei))
+                        ->filter(fn(string $imei) => $imei !== '');
+
+                    if ($quantityProductImeis->isNotEmpty()) {
+                        throw ValidationException::withMessages([
+                            "imeis.{$import->id}" =>
+                            "Sản phẩm {$product->name} là sản phẩm thường nên không được gửi danh sách IMEI.",
+                        ]);
+                    }
+                }
             }
 
             $product->update(['price' => $import->price]);
@@ -210,6 +356,7 @@ class importCouponController extends Controller
         $this->recordAccountingEntries($user->id, $supplierId, $total, $debtAmount);
 
         Import::query()->whereKey($imports->modelKeys())->delete();
+        return (int) $importCoupon->id;
     }
 
     private function recordSupplierDebt(int $supplierId, int $debtAmount): void

@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\importCouponController;
 use App\Http\Controllers\Admin\ImportProductController;
+use App\Http\Controllers\Admin\ImportBarcodeController;
 use App\Http\Controllers\Admin\JournalEntryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
@@ -307,9 +308,21 @@ Route::middleware(['auth'])
                 Route::get('/import/delete', [ImportProductController::class, 'importdelete'])->name('import.delete');
                 Route::post('/import/addCategory', [ImportProductController::class, 'addCategory'])->name('import.addCategory');
 
-                // tạo phiếu
-                Route::post('/importCoupon', [importCouponController::class, 'add'])->name('importCoupon.add');
-                Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])->name('importCoupon.detail');
+                // Tạo phiếu nhập
+                Route::post('/importCoupon', [importCouponController::class, 'add'])
+                    ->name('importCoupon.add');
+
+                // Chi tiết phiếu nhập
+                Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])
+                    ->name('importCoupon.detail');
+
+                // Danh sách barcode của phiếu nhập
+                Route::get('/detail/{id}/barcodes', [ImportBarcodeController::class, 'index'])
+                    ->name('barcodes.index');
+
+                // Xem trước và in barcode
+                Route::post('/detail/{id}/barcodes/print', [ImportBarcodeController::class, 'print'])
+                    ->name('barcodes.print');
             });
 
             Route::prefix('storage')

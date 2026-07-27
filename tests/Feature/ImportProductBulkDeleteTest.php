@@ -324,7 +324,10 @@ class ImportProductBulkDeleteTest extends TestCase
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
             $table->string('imei', 15)->unique();
+            $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default('in_stock');
+            $table->timestamp('printed_at')->nullable();
+            $table->unsignedInteger('print_count')->default(0);
             $table->unsignedBigInteger('deleted_by')->nullable();
             $table->string('delete_reason', 500)->nullable();
             $table->softDeletes();

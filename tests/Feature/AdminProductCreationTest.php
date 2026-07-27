@@ -433,7 +433,10 @@ class AdminProductCreationTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->string('imei', 15)->unique();
+            $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
+            $table->timestamp('printed_at')->nullable();
+            $table->unsignedInteger('print_count')->default(0);
             $table->timestamps();
 
             $table->unsignedBigInteger('deleted_by')->nullable();
