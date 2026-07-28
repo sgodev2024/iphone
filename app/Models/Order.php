@@ -20,15 +20,11 @@ class Order extends Model
         'zip_code',
         'name',
         'phone',
-        'email',
-        'address',
+        'receive_address',
         'total_money',
-        'discount_value',
-        'discount_type',
-        'payment_method',
         'status',
         'note',
-        'created_by'
+        'notification',
     ];
 
     protected $casts = [

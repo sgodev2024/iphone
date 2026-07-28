@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class SaleService
@@ -113,22 +114,23 @@ class SaleService
                 ]);
             }
 
-            $order = Order::create([
+            $orderData = [
                 'client_id' => $data['customer']['id'] ?? null,
                 'user_id' => $this->resolveOrderOwnerId($user),
                 'code' => generateCode('orders', 'ODR'),
                 'name' => $data['customer']['name'],
-                'email' => $data['customer']['email'] ?? null,
                 'phone' => $data['customer']['phone'],
-                'address' => $data['customer']['address'] ?? null,
-                'payment_method' => $data['customer']['payment'],
+                'receive_address' => $data['customer']['address'] ?? null,
                 'note' => $data['customer']['note'] ?? null,
-                'discount_value' => $discount,
-                'discount_type' => $data['discountType'] ?? null,
                 'total_money' => $grand,
                 'status' => 1,
-                'created_by' => $user->id,
-            ]);
+                'notification' => 1,
+            ];
+
+            $order = Order::create(array_intersect_key(
+                $orderData,
+                array_flip(Schema::getColumnListing('orders'))
+            ));
 
             foreach ($orderItems as $item) {
                 $order->orderDetails()->create([
@@ -167,8 +169,6 @@ class SaleService
             foreach ($productIds as $productId) {
                 $this->syncProductTotalQuantity((int) $productId);
             }
-
-            $this->createAccountingEntries($order, $data['customer']['payment'], $grand);
 
             return $order;
         }, 3);
