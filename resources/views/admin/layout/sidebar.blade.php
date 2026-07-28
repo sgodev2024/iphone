@@ -234,7 +234,7 @@
                             </li>
                             <li class="{{ request()->routeIs('admin.debts.customer') ? 'active' : '' }}">
                                 <a href="{{ route('admin.debts.customer') }}">
-                                    <span class="sub-item">Công nợ khác hàng</span>
+                                    <span class="sub-item">Công nợ khách hàng</span>
                                 </a>
                             </li>
                             <li class="{{ request()->routeIs('admin.debts.supplier') ? 'active' : '' }}">

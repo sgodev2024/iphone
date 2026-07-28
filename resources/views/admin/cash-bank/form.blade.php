@@ -133,7 +133,7 @@
                         </div>
                         <div class="section-content">
                             <div class="mb-3">
-                                <label class="form-label required">Số tiền (USD)</label>
+                                <label class="form-label required">Số tiền (VND)</label>
                                 <input type="text" name="amount" class="form-control usd-price-format"
                                     value="{{ $mainEntry ? ($mainEntry->debit_amount > 0 ? formatPrice($mainEntry->debit_amount) : formatPrice($mainEntry->credit_amount)) : '' }}"
                                     placeholder="0" required>
@@ -262,7 +262,7 @@
                             error: function() {
                                 $('#object-search-result').html(
                                     '<div class="p-2 text-muted text-center">Lỗi khi tìm kiếm</div>'
-                                    ).show();
+                                ).show();
                             }
                         });
                     }, doneTypingInterval);

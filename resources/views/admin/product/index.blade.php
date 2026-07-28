@@ -100,6 +100,14 @@
             let searchText = '';
             let resetCooldown = false
 
+            const initTableTooltips = () => {
+                if (!window.bootstrap || !bootstrap.Tooltip) return
+
+                document.querySelectorAll('#table-wrapper [data-bs-toggle="tooltip"]').forEach((el) => {
+                    bootstrap.Tooltip.getOrCreateInstance(el)
+                })
+            }
+
             $(document).on('click', 'a.page-link', function(e) {
                 e.preventDefault();
 
@@ -154,6 +162,7 @@
                     },
                     success: (res) => {
                         $('#table-wrapper').html(res.data.html)
+                        initTableTooltips()
                         currentPage = page
                     },
                     error: (xhr) => {

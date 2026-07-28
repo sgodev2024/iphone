@@ -41,6 +41,13 @@
             border-radius: .5rem;
         }
 
+        .product-thumb-placeholder {
+            flex: 0 0 auto;
+            background: #f1f5f9;
+            border: 1px solid #e5e7eb;
+            color: #64748b;
+        }
+
         .sticky-summary {
             position: sticky;
             bottom: 0;
@@ -134,32 +141,60 @@
                 <!-- Section: Sản phẩm + search -->
                 <div class="card mb-4">
                     <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between mb-3">
-                            <h5 class="card-title mb-0">Tìm & chọn sản phẩm</h5>
-                            <span class="text-muted small">Nhập tên, mã hoặc từ khóa…</span>
-                        </div>
+                        <div class="row g-3">
+                            {{-- Tìm kiếm sản phẩm --}}
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <label for="productSearch" class="form-label fw-semibold mb-0">
+                                        Tìm & chọn sản phẩm
+                                    </label>
 
-                        <div class="search-wrapper">
-                            <input id="productSearch" type="text" class="form-control" placeholder="Tìm kiếm sản phẩm…"
-                                autocomplete="off" />
-                            <div id="productPopup" class="search-popup">
-                                <!-- Kết quả sản phẩm sẽ render ở đây -->
-                                <div id="productList" class="list-group list-group-flush"></div>
+                                </div>
+
+                                <div class="search-wrapper">
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <i class="fa-solid fa-magnifying-glass"></i>
+                                        </span>
+
+                                        <input id="productSearch" type="text" class="form-control"
+                                            placeholder="Tìm kiếm sản phẩm..." autocomplete="off" />
+                                    </div>
+
+                                    <div id="productPopup" class="search-popup">
+                                        <div id="productList" class="list-group list-group-flush"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Quét hoặc nhập barcode --}}
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <label for="barcodeInput" class="form-label fw-semibold mb-0">
+                                        Quét hoặc nhập barcode
+                                    </label>
+
+                                    <span class="text-muted small">
+                                        Nhấn Enter để thêm vào giỏ
+                                    </span>
+                                </div>
+
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fa-solid fa-barcode"></i>
+                                    </span>
+
+                                    <input id="barcodeInput" type="text" class="form-control"
+                                        placeholder="Quét hoặc nhập barcode..." autocomplete="off" />
+                                </div>
+
+                                <div id="barcodeFeedback" class="barcode-feedback small text-muted mt-1"></div>
                             </div>
                         </div>
 
-                        <div class="mt-3">
-                            <label class="form-label mb-1" for="barcodeInput">Quét hoặc nhập barcode</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fa-solid fa-barcode"></i></span>
-                                <input id="barcodeInput" type="text" class="form-control"
-                                    placeholder="Quét hoặc nhập barcode rồi nhấn Enter" autocomplete="off" />
-                            </div>
-                            <div id="barcodeFeedback" class="barcode-feedback small text-muted mt-1"></div>
+                        <div class="mt-3 small text-muted">
+                            Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm vào giỏ.
                         </div>
-
-                        <div class="mt-3 small text-muted">Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm
-                            vào giỏ.</div>
                     </div>
                 </div>
 
@@ -416,7 +451,7 @@
                         </div>
 
                         <!-- QR Section -->
-                        <div class="qr-section text-center my-4">
+                        <div id="bank-transfer-info" class="qr-section text-center my-4 d-none">
                             <p>Cảm ơn quý khách!</p>
                             @if (!empty($missingConfigMessage))
                                 <p class="text-warning mb-2">{{ $missingConfigMessage }}</p>
@@ -445,6 +480,79 @@
             const money = n => (parseFloat(n) || 0).toLocaleString('vi-VN');
             const qs = (s, el = document) => el.querySelector(s);
             const qsa = (s, el = document) => [...el.querySelectorAll(s)];
+            const appBaseUrl = @json(rtrim(config('app.url'), '/'));
+            const storageBaseUrl = `${appBaseUrl}/storage`;
+            const paymentMethodLabels = {
+                cash: 'Tiền mặt',
+                bank_transfer: 'Chuyển khoản',
+                debt: 'Công nợ',
+            };
+            const bankCode = @json($bankCode);
+            const bankAccount = @json($bankAccountForQr);
+            let currentInvoiceGrand = 0;
+
+            function escapeHtml(value) {
+                return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                } [char]));
+            }
+
+            function safeText(value, fallback = '') {
+                const text = String(value ?? '').trim();
+
+                return text === '' ? fallback : text;
+            }
+
+            function selectedPaymentMethod() {
+                return qs('#paymentMethod')?.value || '';
+            }
+
+            function resetBankTransferInfo() {
+                $('#bank-transfer-info').addClass('d-none');
+                $('#qr-code').attr('src', '').attr('alt', 'QR Code');
+            }
+
+            function renderInvoicePayment(paymentMethod, grand) {
+                $('#payment-method').text(paymentMethodLabels[paymentMethod] || 'Không xác định');
+                resetBankTransferInfo();
+
+                if (paymentMethod !== 'bank_transfer') {
+                    return;
+                }
+
+                $('#bank-transfer-info').removeClass('d-none');
+
+                if (bankCode && bankAccount) {
+                    $('#qr-code')
+                        .attr('src',
+                            `https://img.vietqr.io/image/${bankCode}-${bankAccount}-compact.png?amount=${grand}&addInfo=ThanhToanDonHang`
+                        )
+                        .attr('alt', 'QR Code chuyển khoản');
+                } else {
+                    $('#qr-code').attr('alt', 'Chưa cấu hình QR chuyển khoản');
+                }
+            }
+
+            function productThumbHtml(product, className = 'product-thumb') {
+                const name = escapeHtml(safeText(product?.name, 'Sản phẩm'));
+                const thumbnail = safeText(product?.thumbnail);
+
+                if (!thumbnail) {
+                    return `<div class="${className} product-thumb-placeholder d-flex align-items-center justify-content-center" aria-label="${name}">
+                        <i class="fa-solid fa-box-open"></i>
+                    </div>`;
+                }
+
+                return `<img class="${className}" src="${storageBaseUrl}/${encodeURI(thumbnail)}" alt="${name}" />`;
+            }
+
+            function focusBarcodeInput() {
+                setTimeout(() => barcodeInput?.focus(), 0);
+            }
 
             function debounce(fn, delay = 500) {
                 let timer;
@@ -557,7 +665,8 @@
                     success: (product) => {
                         addToCart(product);
                         productPopup.style.display = 'none';
-                        barcodeFeedback.textContent = `${product.product_name || product.name} đã được thêm vào giỏ.`;
+                        barcodeFeedback.textContent =
+                            `${product.product_name || product.name} đã được thêm vào giỏ.`;
                         Toast.fire({
                             icon: "success",
                             title: "Đã thêm barcode vào giỏ."
@@ -606,9 +715,19 @@
             }
 
             productSearch.addEventListener('input', debounce((e) => {
-                fetchProducts(e.target.value.trim());
+                const keyword = e.target.value.trim();
+
+                productPopup.style.display = 'block';
+                fetchProducts(keyword);
             }, 300));
 
+            productSearch.addEventListener('focus', () => {
+                productPopup.style.display = 'block';
+
+                if (productList.children.length === 0) {
+                    fetchProducts('');
+                }
+            });
             productSearch.addEventListener('focus', async () => {
                 isCallApiProducts && await fetchProducts()
 
@@ -621,8 +740,20 @@
                 }
             });
 
-            function renderProductResults(products) {
-                const path = "{{ config('app.url') }}"
+            function normalizeProductResponse(response) {
+                if (Array.isArray(response)) {
+                    return response;
+                }
+
+                if (Array.isArray(response?.data)) {
+                    return response.data;
+                }
+
+                return [];
+            }
+
+            function renderProductResults(response) {
+                const products = normalizeProductResponse(response).filter(Boolean);
                 productList.innerHTML = '';
 
                 if (products.length === 0) {
@@ -631,31 +762,65 @@
                     return;
                 }
 
-                products.forEach(p => {
+                products.forEach(product => {
+                    const p = product || {};
+                    const trackingType = p.tracking_type || p.inventory_tracking || 'quantity';
+                    const isImeiProduct = trackingType === 'imei_product';
+                    const availableQuantity = Number(p.available_quantity ?? p.quantity ?? 0);
+                    const productName = safeText(p.name, 'Sản phẩm chưa có tên');
+                    const productCode = safeText(p.code);
+                    const productBarcode = safeText(p.barcode);
+                    const badgeText = isImeiProduct ? 'Quản lý theo IMEI' : 'Sản phẩm thường';
+                    const stockText = isImeiProduct ?
+                        `Thiết bị còn tồn: ${availableQuantity}` :
+                        `Tồn: ${availableQuantity}`;
+                    const badgeClass = isImeiProduct ? 'bg-warning text-dark' : 'bg-light text-dark border';
 
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'list-group-item list-group-item-action product-row';
                     row.innerHTML = `
                     <div class="d-flex align-items-center gap-3">
-                        <img class="product-thumb" src="${path}/storage/${p.thumbnail}" alt="${p.name}" />
+                        ${productThumbHtml(p)}
                         <div class="flex-grow-1">
-                        <div class="fw-semibold">${p.name}</div>
+                        <div class="fw-semibold">${escapeHtml(productName)}</div>
                         <div class="small text-muted">${money(p.price_buy)}</div>
+                        <div class="small text-muted">
+                            ${productCode ? `Mã: ${escapeHtml(productCode)}` : ''}
+                            ${productCode && productBarcode ? ' · ' : ''}
+                            ${productBarcode ? `Barcode: ${escapeHtml(productBarcode)}` : ''}
                         </div>
-                        <div class="text-end">
-                        <span class="badge border badge-stock text-dark">Tồn: ${p.quantity}</span>
+                        </div>
+                        <div class="text-end d-flex flex-column align-items-end gap-1">
+                        <span class="badge ${badgeClass}">${badgeText}</span>
+                        <span class="badge border badge-stock text-dark">${stockText}</span>
                         </div>
                     </div>`;
 
                     row.addEventListener('click', () => {
 
-                        if (p.quantity <= 0) return Toast.fire({
+                        if (isImeiProduct) {
+                            Toast.fire({
+                                icon: "info",
+                                title: "Sản phẩm này quản lý theo IMEI. Vui lòng quét barcode của thiết bị cụ thể để thêm vào giỏ."
+                            });
+                            productPopup.style.display = 'none';
+                            productSearch.value = '';
+                            focusBarcodeInput();
+                            return;
+                        }
+
+                        if (availableQuantity <= 0) return Toast.fire({
                             icon: "error",
                             title: "Số lượng tồn kho không đủ!"
                         })
 
-                        addToCart(p);
+                        addToCart({
+                            ...p,
+                            tracking_type: 'quantity',
+                            quantity: availableQuantity,
+                            available_quantity: availableQuantity
+                        });
                         productPopup.style.display = 'none';
                         productSearch.value = '';
                     });
@@ -743,8 +908,6 @@
             }
 
             function renderCart() {
-                const path = "{{ config('app.url') }}"
-
                 cartBody.innerHTML = '';
                 if (cart.size === 0) {
                     cartEmptyRow.style.display = '';
@@ -757,8 +920,10 @@
                         }] of cart.entries()) {
 
                         const isImei = product.tracking_type === 'imei';
-                        const stockText = isImei ? `IMEI: ${product.imei}` :
-                            `Tồn kho: ${product.available_quantity}`;
+                        const productName = escapeHtml(safeText(product.name, 'Sản phẩm chưa có tên'));
+                        const productBarcode = escapeHtml(safeText(product.barcode));
+                        const stockText = isImei ? `IMEI: ${escapeHtml(safeText(product.imei))}` :
+                            `Tồn kho: ${Number(product.available_quantity || 0)}`;
                         const quantityControl = isImei ?
                             '<span class="badge bg-secondary">1</span>' :
                             `<input type="number" min="1" max="${product.available_quantity}" value="${qty}"
@@ -768,12 +933,12 @@
                         row.className = 'cart-row';
                         row.dataset.rowId = key;
                         row.innerHTML = `
-                        <img class="cart-thumb" src="${path}/storage/${product.thumbnail}" alt="${product.name}">
+                        ${productThumbHtml(product, 'cart-thumb')}
                         <div class="cart-info">
-                        <div class="fw-semibold">${product.name}</div>
+                        <div class="fw-semibold">${productName}</div>
                         <div class="small text-muted">Giá: ${money(product.price_buy)}</div>
                         <div class="small text-muted">${stockText}</div>
-                        ${isImei ? `<div class="small text-muted">Barcode: ${product.barcode}</div>` : ''}
+                        ${isImei && productBarcode ? `<div class="small text-muted">Barcode: ${productBarcode}</div>` : ''}
                         </div>
                         <div class="cart-actions">
                         ${quantityControl}
@@ -937,13 +1102,14 @@
                     discount = Math.min(discount, sub);
                 }
                 const grand = Math.max(0, sub - discount);
+                const paymentMethod = selectedPaymentMethod();
+                currentInvoiceGrand = grand;
 
                 $('#invoice-subtotal').html(money(sub) + ' VND');
                 $('#invoice-discount').html('-' + money(discount) + ' VND');
                 $('#invoice-total').html(money(grand) + ' VND');
                 $('#total-text').html(convertNumberToWords(grand));
                 $('#invoice-note').html($('#orderNote').val());
-                $('#payment-method').html($('#paymentMethod option:selected').text());
                 $('#invoice-body').html(_html);
 
                 // Validate: thông tin khách hàng
@@ -1014,45 +1180,49 @@
                         email: qs('#custEmail').value.trim(),
                         phone,
                         address: qs('#custAddress').value.trim(),
-                        payment: qs('#paymentMethod').value,
+                        payment: paymentMethod,
                         note: qs('#orderNote')?.value || ''
                     }
                 };
 
-                const bankCode = @json($bankCode);
-                const bankAccount = @json($bankAccountForQr);
-
-                // https: //img.vietqr.io/image/MB-1080128122002-compact.png?amount=1000&addInfo=
-                if (bankCode && bankAccount) {
-                    $('#qr-code').attr('src',
-                        `https://img.vietqr.io/image/${bankCode}-${bankAccount}-compact.png?amount=${order.grand}&addInfo=ThanhToanDonHang`
-                    )
-                } else {
-                    $('#qr-code').attr('src', '').attr('alt', 'Chưa cấu hình QR chuyển khoản')
-                }
+                renderInvoicePayment(paymentMethod, order.grand);
 
                 $('#invoiceModal').modal('show')
             });
 
-            function fetchProducts(searchText) {
-                $.ajax({
-                    url: '/ban-hang/product',
+            function fetchProducts(search = '') {
+                productList.innerHTML = `
+        <div class="list-group-item text-center text-muted">
+            Đang tìm kiếm...
+        </div>
+    `;
+
+                productPopup.style.display = 'block';
+
+                return $.ajax({
+                    url: "{{ url('/ban-hang/product') }}",
                     method: 'GET',
                     data: {
-                        searchText
+                        search: search
                     },
-                    headers: {
-                        'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                    success: function(res) {
+                        renderProductResults(res);
+                        productPopup.style.display = 'block';
+                        isCallApiProducts = false;
                     },
-                    success: (res) => {
-                        isCallApiProducts = false
-                        renderProductResults(res)
-                    },
-                    error: (xhr) => {
+                    error: function(xhr) {
+                        console.error('Lỗi tìm kiếm sản phẩm:', xhr.responseText);
+
+                        productList.innerHTML = `
+                <div class="list-group-item text-center text-danger">
+                    Không thể tải danh sách sản phẩm
+                </div>
+            `;
+
                         Toast.fire({
-                            icon: "error",
+                            icon: 'error',
                             title: xhr.responseJSON?.message ||
-                                'Đã có lỗi xảy ra. Vui lòng thử lại sau!'
+                                'Không thể tìm kiếm sản phẩm.'
                         });
                     }
                 });
@@ -1074,7 +1244,11 @@
                         renderCustomerResults(res)
                     },
                     error: (xhr) => {
-                        alert('Đã có lỗi xảy ra. Vui lòng thử lại sau!')
+                        Toast.fire({
+                            icon: "error",
+                            title: xhr.responseJSON.message ||
+                                'Đã có lỗi xảy ra. Vui lòng thử lại sau!'
+                        });
                     }
                 });
             }
@@ -1118,7 +1292,16 @@
                 })
             })
 
+            $('#paymentMethod').on('change', function() {
+                if ($('#invoiceModal').hasClass('show')) {
+                    renderInvoicePayment(this.value, currentInvoiceGrand);
+                }
+            });
+
+            $('#invoiceModal').on('hidden.bs.modal', resetBankTransferInfo);
+
             $('#pay-button').on('click', function() {
+                const paymentMethod = selectedPaymentMethod();
                 const order = {
                     items: [...cart.values()].map(({
                         product,
@@ -1154,7 +1337,7 @@
                         email: qs('#custEmail').value.trim(),
                         phone: qs('#custPhone').value.trim(),
                         address: qs('#custAddress').value.trim(),
-                        payment: qs('#paymentMethod').value,
+                        payment: paymentMethod,
                         note: qs('#orderNote')?.value || ''
                     },
                 };

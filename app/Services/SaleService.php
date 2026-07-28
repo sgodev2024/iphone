@@ -3,16 +3,15 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\Client;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
 use App\Models\Transaction;
-use App\Models\TransactionEntry;
 use App\Models\User;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +22,8 @@ class SaleService
     {
         return DB::transaction(function () use ($user, $data) {
             $storageId = $this->resolveStorageId($user);
+            $ownerId = $this->resolveOrderOwnerId($user);
+            $paymentMethod = $data['customer']['payment'];
             $items = $this->normalizeItems($data['items']);
 
             if ($items->isEmpty()) {
@@ -116,14 +117,23 @@ class SaleService
 
             $orderData = [
                 'client_id' => $data['customer']['id'] ?? null,
-                'user_id' => $this->resolveOrderOwnerId($user),
+                'user_id' => $ownerId,
                 'code' => generateCode('orders', 'ODR'),
                 'name' => $data['customer']['name'],
                 'phone' => $data['customer']['phone'],
+                'email' => $data['customer']['email'] ?? null,
+                'address' => $data['customer']['address'] ?? null,
                 'receive_address' => $data['customer']['address'] ?? null,
                 'note' => $data['customer']['note'] ?? null,
                 'total_money' => $grand,
+                'discount_value' => $discount,
+                'discount_type' => $data['discountType'] ?? null,
+                'payment_method' => $paymentMethod,
+                'paid_amount' => $paymentMethod === 'debt' ? 0 : $grand,
+                'debt_amount' => $paymentMethod === 'debt' ? $grand : 0,
+                'payment_status' => $paymentMethod === 'debt' ? 'debt' : 'paid',
                 'status' => 1,
+                'created_by' => $user->id,
                 'notification' => 1,
             ];
 
@@ -169,6 +179,8 @@ class SaleService
             foreach ($productIds as $productId) {
                 $this->syncProductTotalQuantity((int) $productId);
             }
+
+            $this->createAccountingEntries($order, $paymentMethod, $grand, $user, $ownerId);
 
             return $order;
         }, 3);
@@ -433,75 +445,128 @@ class SaleService
         );
     }
 
-    private function createAccountingEntries(Order $order, string $paymentMethod, float $grand): void
+    private function createAccountingEntries(
+        Order $order,
+        string $paymentMethod,
+        float $grand,
+        User $creator,
+        int $ownerId
+    ): void
     {
-        if (! in_array($paymentMethod, ['cash', 'bank_transfer', 'debt'], true)) {
+        if (! in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
             return;
         }
+
+        if ($this->hasAccountingTransactionForOrder($order)) {
+            return;
+        }
+
+        $moneyAccountId = $paymentMethod === 'bank_transfer'
+            ? $this->resolveBankAccountId()
+            : $this->resolveCashAccountId();
+        $receivableAccountId = $this->resolveRequiredAccountId(
+            '131',
+            'tài khoản phải thu khách hàng'
+        );
+        $transactionType = $paymentMethod === 'bank_transfer' ? 'credit_notice' : 'income';
+        $paymentNote = $paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
 
         $transaction = Transaction::create([
-            'user_id' => Auth::id(),
-            'transaction_date' => now(),
-            'description' => "Bán hàng đơn {$order->code}",
-            'type' => 'income',
+            'user_id' => $ownerId,
+            'transaction_date' => now()->toDateString(),
+            'description' => "Thu tiền đơn hàng #{$order->id}",
+            'type' => $transactionType,
             'document_type' => 'order',
-            'reference_number' => $order->code,
-            'created_by' => Auth::id(),
+            'reference_number' => (string) $order->id,
+            'created_by' => $creator->id,
         ]);
 
-        if (in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
-            $moneyAccountCode = $paymentMethod === 'cash' ? 'TMCH' : 'tech';
-            $moneyAccountId = Account::where('code', $moneyAccountCode)->value('id');
-            $receivableAccountId = Account::where('code', '131')->value('id');
+        $transaction->entries()->create([
+            'transaction_id' => $transaction->id,
+            'account_id' => $moneyAccountId,
+            'debit_amount' => $grand,
+            'credit_amount' => 0,
+            'note' => $paymentNote,
+        ]);
 
-            if (! $moneyAccountId) {
-                throw new \Exception("Không tìm thấy tài khoản {$moneyAccountCode}");
-            }
-
-            if (! $receivableAccountId) {
-                throw new \Exception('Không tìm thấy tài khoản 131');
-            }
-
-            TransactionEntry::create([
-                'transaction_id' => $transaction->id,
-                'account_id' => $moneyAccountId,
-                'debit_amount' => $grand,
-                'credit_amount' => 0,
-            ]);
-
-            TransactionEntry::create([
-                'transaction_id' => $transaction->id,
-                'account_id' => $receivableAccountId,
-                'debit_amount' => 0,
-                'credit_amount' => $grand,
-                'tableable_type' => 'App\\Models\\Client',
-                'tableable_id' => $order->client_id,
-            ]);
-
-            return;
-        }
-
-        $receivableAccountId = Account::where('code', '131')->value('id');
-        $revenueAccountId = Account::where('code', '5111')->value('id');
-
-        if (! $receivableAccountId || ! $revenueAccountId) {
-            throw new \Exception('Không tìm thấy tài khoản 131 hoặc 511');
-        }
-
-        TransactionEntry::create([
+        $transaction->entries()->create([
             'transaction_id' => $transaction->id,
             'account_id' => $receivableAccountId,
             'debit_amount' => 0,
             'credit_amount' => $grand,
-        ]);
-
-        TransactionEntry::create([
-            'transaction_id' => $transaction->id,
-            'account_id' => $revenueAccountId,
-            'debit_amount' => $grand,
-            'credit_amount' => 0,
-            'tableable_type' => 'App\\Models\\Client',
+            'tableable_type' => $order->client_id ? Client::class : null,
             'tableable_id' => $order->client_id,
+            'note' => $paymentNote,
         ]);
+    }
+
+    private function hasAccountingTransactionForOrder(Order $order): bool
+    {
+        return Transaction::query()
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->exists();
+    }
+
+    private function resolveCashAccountId(): int
+    {
+        $parent = $this->resolveRequiredAccount('111', 'tài khoản tiền mặt');
+
+        return (int) $parent->id;
+    }
+
+    private function resolveBankAccountId(): int
+    {
+        $parent = $this->resolveRequiredAccount('112', 'tài khoản ngân hàng');
+
+        $account = Account::query()
+            ->where('parent_id', $parent->id)
+            ->where('status', true)
+            ->where('is_default', false)
+            ->orderBy('code')
+            ->first();
+
+        if (! $account) {
+            throw new \Exception(
+                'Không tìm thấy tài khoản ngân hàng đang hoạt động dưới 112. '
+                . 'Vui lòng vào Tài khoản kế toán (/admin/accounts) tạo tài khoản con của 112 '
+                . 'theo ngân hàng thật đang cấu hình, ví dụ 112MB - Tiền gửi ngân hàng MBBank.'
+            );
+        }
+
+        return (int) $account->id;
+    }
+
+    private function resolveRequiredAccount(string $code, string $label): Account
+    {
+        $account = Account::query()
+            ->where('code', $code)
+            ->first();
+
+        if (! $account) {
+            throw new \Exception(
+                "Không tìm thấy {$label} ({$code}). "
+                . 'Vui lòng cấu hình tại Tài khoản kế toán (/admin/accounts) hoặc chạy AccountingAccountSeeder.'
+            );
+        }
+
+        if (! (bool) $account->status) {
+            throw new \Exception("{$label} ({$code}) đang bị tắt. Vui lòng bật trạng thái tài khoản kế toán.");
+        }
+
+        return $account;
+    }
+
+    private function resolveRequiredAccountId(string $code, string $label): int
+    {
+        $accountId = Account::query()
+            ->where('code', $code)
+            ->value('id');
+
+        if (! $accountId) {
+            throw new \Exception("Không tìm thấy {$label} ({$code}).");
+        }
+
+        return (int) $accountId;
     }
 }

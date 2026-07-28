@@ -13,6 +13,7 @@ use App\Models\Employee;
 use App\Models\Supplier;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -509,7 +510,7 @@ class CashTransactionController extends Controller
             ->pluck('id');
 
         $entries = DB::table('transactions as t')
-            ->where('t.user_id', Auth::id())
+            ->whereIn('t.user_id', $this->transactionOwnerIds())
             ->join('transaction_entries as te', 'te.transaction_id', '=', 't.id')
             ->join('accounts as ma', 'ma.id', '=', 'te.account_id')
 
@@ -585,5 +586,32 @@ class CashTransactionController extends Controller
         }
 
         return $sorted;
+    }
+
+    private function transactionOwnerIds(): array
+    {
+        $user = Auth::user();
+
+        if (! $user) {
+            return [];
+        }
+
+        $ownerIds = collect([(int) $user->id]);
+
+        if ((int) $user->role_id === 3 && $user->manager_id) {
+            $ownerIds->push((int) $user->manager_id);
+        }
+
+        $managedBranchIds = User::query()
+            ->where('manager_id', $user->id)
+            ->where('role_id', 2)
+            ->pluck('id');
+
+        return $ownerIds
+            ->merge($managedBranchIds)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 }

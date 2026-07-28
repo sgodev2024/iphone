@@ -50,6 +50,22 @@
                                 aria-label="Quản lý IMEI">
                                 <i class="fa-solid fa-barcode"></i>
                             </a>
+                        @else
+                            @if ($product->latest_import_coupon_id)
+                                <a href="{{ route('admin.importproduct.importCoupon.detail', $product->latest_import_coupon_id) }}"
+                                    class="btn btn-info btn-sm product-action-btn" title="Xem phiếu nhập"
+                                    aria-label="Xem phiếu nhập" data-bs-toggle="tooltip">
+                                    <i class="fa-solid fa-eye"></i>
+                                </a>
+                            @else
+                                <span class="d-inline-block" title="Chưa có phiếu nhập" data-bs-toggle="tooltip">
+                                    <button type="button"
+                                        class="btn btn-outline-secondary btn-sm product-action-btn" disabled
+                                        aria-label="Chưa có phiếu nhập">
+                                        <i class="fa-solid fa-file-circle-xmark"></i>
+                                    </button>
+                                </span>
+                            @endif
                         @endif
                         <a href="/admin/products/{{ $product->id }}/edit"
                             class="btn btn-primary btn-sm product-action-btn" title="Chỉnh sửa sản phẩm"

@@ -92,6 +92,10 @@ Route::middleware('guest')->group(function () {
 Route::get('/', function () {
     return redirect()->route('auth.login');
 });
+Route::get(
+    '/ban-hang/product',
+    [ProductController::class, 'searchForSale']
+)->name('sale.products.search');
 Route::middleware(['auth'])
     ->prefix('admin')
     ->name('admin.')

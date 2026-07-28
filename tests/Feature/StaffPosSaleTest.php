@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\Bank;
+use App\Models\Client;
 use App\Models\Config;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
@@ -16,6 +17,7 @@ use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
+use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -63,6 +65,124 @@ class StaffPosSaleTest extends TestCase
             'price' => 100000,
         ]);
         $this->assertSame('9', (string) $product->fresh()->quantity);
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseCount('transaction_entries', 2);
+    }
+
+    public function test_bank_transfer_order_appears_in_bank_transactions_for_manager(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Nguyen Van A',
+            'phone' => '0912345678',
+            'address' => 'Ha Noi',
+        ]);
+        $product = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 3],
+            ], 300000, 'bank_transfer', $client->id))
+            ->assertCreated();
+
+        $order = Order::firstOrFail();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'user_id' => $manager->id,
+            'created_by' => $staff->id,
+            'payment_method' => 'bank_transfer',
+        ]);
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $manager->id,
+            'created_by' => $staff->id,
+            'description' => "Thu tiền đơn hàng #{$order->id}",
+            'reference_number' => (string) $order->id,
+            'type' => 'credit_notice',
+            'document_type' => 'order',
+        ]);
+
+        $transaction = Transaction::firstOrFail();
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $transaction->id,
+            'account_id' => $accounts['bank']->id,
+            'debit_amount' => 300000,
+            'credit_amount' => 0,
+            'note' => 'Chuyển khoản',
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $transaction->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 300000,
+            'tableable_type' => Client::class,
+            'tableable_id' => $client->id,
+            'note' => 'Chuyển khoản',
+        ]);
+
+        $response = $this->actingAs($manager)
+            ->getJson('/admin/transactions/bank/ajax/list');
+
+        $response->assertOk()->assertJson(['success' => true]);
+        $html = $response->json('html');
+
+        $this->assertStringContainsString($accounts['bank']->code, $html);
+        $this->assertStringContainsString($client->name, $html);
+        $this->assertStringContainsString('300.000', $html);
+    }
+
+    public function test_cash_order_does_not_appear_in_bank_transactions(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $product = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 3],
+            ], 300000, 'cash'))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('transaction_entries', [
+            'account_id' => $accounts['cashParent']->id,
+            'debit_amount' => 300000,
+            'credit_amount' => 0,
+            'note' => 'Tiền mặt',
+        ]);
+
+        $response = $this->actingAs($manager)
+            ->getJson('/admin/transactions/bank/ajax/list');
+
+        $response->assertOk()->assertJson(['success' => true]);
+        $html = $response->json('html');
+
+        $this->assertStringNotContainsString($accounts['cashParent']->code, $html);
+        $this->assertStringNotContainsString('300.000', $html);
+    }
+
+    public function test_accounting_entries_are_not_duplicated_for_same_order(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $product = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 3],
+            ], 300000, 'bank_transfer'))
+            ->assertCreated();
+
+        $order = Order::firstOrFail();
+        $service = app(SaleService::class);
+        $method = new \ReflectionMethod(SaleService::class, 'createAccountingEntries');
+        $method->setAccessible(true);
+        $method->invoke($service, $order, 'bank_transfer', 300000, $staff, $manager->id);
+
         $this->assertDatabaseCount('transactions', 1);
         $this->assertDatabaseCount('transaction_entries', 2);
     }
@@ -242,8 +362,11 @@ class StaffPosSaleTest extends TestCase
             ['id' => $product->id, 'qty' => 2],
         ], 200000));
 
-        $response->assertInternalServerError()
-            ->assertJsonFragment(['message' => 'Không tìm thấy tài khoản TMCH']);
+        $response->assertInternalServerError();
+        $this->assertStringContainsString(
+            'Không tìm thấy tài khoản tiền mặt (111).',
+            $response->json('message')
+        );
 
         $this->assertDatabaseCount('orders', 0);
         $this->assertDatabaseCount('order_details', 0);
@@ -277,6 +400,153 @@ class StaffPosSaleTest extends TestCase
                 'storage_id' => $storage->id,
             ])
             ->assertJsonMissing(['product_id' => $otherStorageProduct->id]);
+    }
+
+    public function test_product_endpoint_uses_assigned_storage_not_product_owner_for_staff_search(): void
+    {
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'user_id' => ((int) $staff->manager_id) + 100,
+            'name' => 'Phu kien',
+            'code' => 'PK-001',
+            'barcode' => 'PK-BAR-001',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'price_buy' => 1500000,
+        ]);
+        $otherStorageProduct = $this->createProduct([
+            'user_id' => ((int) $staff->manager_id) + 100,
+            'name' => 'Phu kien kho khac',
+            'code' => 'PK-OTHER',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+        ]);
+
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 3,
+        ]);
+        ProductStorage::create([
+            'product_id' => $otherStorageProduct->id,
+            'storage_id' => $otherStorage->id,
+            'quantity' => 8,
+        ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=Phu%20kien')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'quantity' => 3,
+                'available_quantity' => 3,
+                'storage_id' => $storage->id,
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+            ])
+            ->assertJsonMissing([
+                'product_id' => $otherStorageProduct->id,
+            ]);
+    }
+
+    public function test_product_endpoint_returns_imei_products_with_in_stock_device_count_for_staff_storage(): void
+    {
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'iPhone 15 IMEI',
+            'code' => 'IMEI-15',
+            'barcode' => 'PROD-IMEI-15',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'quantity' => 99,
+            'price_buy' => 12000000,
+        ]);
+
+        $this->createImeiInStorage($product, $storage, '123456789012340');
+        $this->createImeiInStorage($product, $storage, '123456789012341');
+        $this->createImeiInStorage($product, $storage, '123456789012342', [
+            'status' => ProductImei::STATUS_SOLD,
+        ]);
+        $this->createImeiInStorage($product, $otherStorage, '123456789012343');
+
+        $response = $this->actingAs($staff)->getJson('/ban-hang/product?search=IMEI-15');
+
+        $response->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'code' => 'IMEI-15',
+                'barcode' => 'PROD-IMEI-15',
+                'quantity' => 2,
+                'available_quantity' => 2,
+                'tracking_type' => 'imei_product',
+            ])
+            ->assertJsonMissing([
+                'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+            ]);
+    }
+
+    public function test_product_endpoint_accepts_search_aliases_and_matches_code_or_barcode(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'Cap sac nhanh',
+            'code' => 'SKU-CABLE-001',
+            'barcode' => 'BAR-CABLE-001',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'price_buy' => 250000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=Cap%20sac')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+            ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=SKU-CABLE')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'quantity' => 5,
+                'available_quantity' => 5,
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+            ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?searchText=BAR-CABLE')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'barcode' => 'BAR-CABLE-001',
+            ]);
+    }
+
+    public function test_product_endpoint_excludes_imei_products_without_in_stock_device_in_staff_storage(): void
+    {
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'name' => 'iPhone empty IMEI',
+            'code' => 'IMEI-EMPTY',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+        ]);
+
+        $this->createImeiInStorage($product, $storage, '123456789012344', [
+            'status' => ProductImei::STATUS_SOLD,
+        ]);
+        $this->createImeiInStorage($product, $otherStorage, '123456789012345');
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=IMEI-EMPTY')
+            ->assertOk()
+            ->assertJsonCount(0);
     }
 
     public function test_barcode_resolve_returns_valid_imei_device_from_staff_storage(): void
@@ -557,7 +827,7 @@ class StaffPosSaleTest extends TestCase
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
         $imei = $this->createImeiInStorage($product, $storage, '123456789012351');
 
-        $this->actingAs($staff)
+        $response = $this->actingAs($staff)
             ->postJson('/ban-hang/order', $this->orderPayload([
                 [
                     'product_id' => $product->id,
@@ -566,10 +836,11 @@ class StaffPosSaleTest extends TestCase
                     'qty' => 1,
                 ],
             ], 12000000))
-            ->assertInternalServerError()
-            ->assertJsonFragment([
-                'message' => 'Không tìm thấy tài khoản TMCH',
-            ]);
+            ->assertInternalServerError();
+        $this->assertStringContainsString(
+            'Không tìm thấy tài khoản tiền mặt (111).',
+            $response->json('message')
+        );
 
         $this->assertDatabaseCount('orders', 0);
         $this->assertDatabaseCount('order_details', 0);
@@ -764,6 +1035,14 @@ class StaffPosSaleTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('suppliers', function (Blueprint $table) {
+            $table->id();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+            $table->string('phone')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('accounts', function (Blueprint $table) {
             $table->id();
             $table->string('code')->nullable();
@@ -917,14 +1196,58 @@ class StaffPosSaleTest extends TestCase
         return $productImei->fresh();
     }
 
-    private function seedAccounts(): void
+    private function seedAccounts(): array
     {
-        foreach (['TMCH', 'tech', '131', '5111'] as $code) {
-            Account::create(['code' => $code, 'name' => $code]);
-        }
+        $cashParent = Account::create([
+            'code' => '111',
+            'name' => 'Tiền mặt',
+            'level' => 1,
+            'status' => true,
+            'is_default' => true,
+        ]);
+        $bankParent = Account::create([
+            'code' => '112',
+            'name' => 'Tiền gửi ngân hàng',
+            'level' => 1,
+            'status' => true,
+            'is_default' => true,
+        ]);
+
+        $cash = Account::create([
+            'code' => '111CH',
+            'name' => 'Tiền mặt cửa hàng',
+            'parent_id' => $cashParent->id,
+            'level' => 2,
+            'status' => true,
+            'is_default' => false,
+        ]);
+        $bank = Account::create([
+            'code' => '112BANK',
+            'name' => 'Tài khoản ngân hàng',
+            'parent_id' => $bankParent->id,
+            'level' => 2,
+            'status' => true,
+            'is_default' => false,
+        ]);
+        $receivable = Account::create([
+            'code' => '131',
+            'name' => 'Phải thu khách hàng',
+            'level' => 1,
+            'status' => true,
+            'is_default' => true,
+        ]);
+        $revenue = Account::create([
+            'code' => '5111',
+            'name' => 'Doanh thu bán hàng',
+            'level' => 1,
+            'status' => true,
+            'is_default' => true,
+        ]);
+
+        return compact('cashParent', 'bankParent', 'cash', 'bank', 'receivable', 'revenue');
     }
 
-    private function orderPayload(array $items, float $grand): array
+    private function orderPayload(array $items, float $grand, string $payment = 'cash', ?int $clientId = null): array
     {
         return [
             'items' => $items,
@@ -933,12 +1256,12 @@ class StaffPosSaleTest extends TestCase
             'discountInput' => 0,
             'grand' => $grand,
             'customer' => [
-                'id' => null,
+                'id' => $clientId,
                 'name' => 'Nguyen Van A',
                 'email' => 'customer@example.com',
                 'phone' => '0912345678',
                 'address' => 'Ha Noi',
-                'payment' => 'cash',
+                'payment' => $payment,
                 'note' => null,
             ],
         ];

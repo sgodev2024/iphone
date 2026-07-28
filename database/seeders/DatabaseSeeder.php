@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             CitySeeder::class,
             BankSeeder::class,
             ConfigSeeder::class,
+            AccountingAccountSeeder::class,
             UsersTableSeeder::class,
             ClientSeeder::class,
             OrderSeeder::class,

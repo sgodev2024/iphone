@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\ProductRequest;
 use App\Models\Brand;
 use App\Models\Categories;
+use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
@@ -23,6 +24,7 @@ class ProductController extends Controller
         $title = 'Sản phẩm';
         if ($request->ajax()) {
             $searchText = $request->input('s');
+            $userId = Auth::id();
 
             $products = Product::query()
                 ->select('products.*')
@@ -32,7 +34,18 @@ class ProductController extends Controller
                         ->whereColumn('product_storage.product_id', 'products.id'),
                     'storage_stock_quantity'
                 )
-                ->where('user_id', Auth::id())
+                ->selectSub(
+                    ImportDetail::query()
+                        ->select('import_detail.import_id')
+                        ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
+                        ->whereColumn('import_detail.product_id', 'products.id')
+                        ->where('import_coupon.user_id', $userId)
+                        ->orderByDesc('import_coupon.created_at')
+                        ->orderByDesc('import_coupon.id')
+                        ->limit(1),
+                    'latest_import_coupon_id'
+                )
+                ->where('user_id', $userId)
                 ->withCount([
                     'imeis as imei_stock_count' => function ($query) {
                         $query->where('status', ProductImei::STATUS_IN_STOCK);
@@ -152,6 +165,161 @@ class ProductController extends Controller
             ]);
         });
     }
+    public function searchForSale(Request $request)
+    {
+        /*
+     * Hỗ trợ cả hai tên tham số:
+     * - searchText: theo JavaScript hiện tại
+     * - search: nếu đã sửa theo hướng dẫn trước
+     */
+        $searchText = trim((string) (
+            $request->query('search')
+            ?? $request->query('searchText')
+            ?? ''
+        ));
+
+        $user = Auth::user();
+        $storageId = $user->storage_id ?? null;
+
+        $products = Product::query()
+            ->select([
+                'products.id',
+                'products.name',
+                'products.code',
+                'products.barcode',
+                'products.thumbnail',
+                'products.price_buy',
+                'products.inventory_tracking',
+                'products.user_id',
+            ])
+
+            /*
+         * Tính số lượng tồn trong kho.
+         * Nếu nhân viên có storage_id thì chỉ tính kho được gán.
+         * Nếu admin/manager không có storage_id thì tính tổng các kho.
+         */
+            ->selectSub(
+                ProductStorage::query()
+                    ->selectRaw('COALESCE(SUM(product_storage.quantity), 0)')
+                    ->whereColumn(
+                        'product_storage.product_id',
+                        'products.id'
+                    )
+                    ->when($storageId, function ($query) use ($storageId) {
+                        $query->where(
+                            'product_storage.storage_id',
+                            $storageId
+                        );
+                    }),
+                'available_quantity'
+            )
+
+            /*
+         * Phạm vi sản phẩm:
+         * - Nhân viên có kho: lấy sản phẩm thuộc kho đó.
+         * - Admin/manager: lấy sản phẩm do tài khoản đó quản lý.
+         */
+            ->where(function ($query) use ($user, $storageId) {
+                if ($storageId) {
+                    $query->whereExists(function ($subQuery) use ($storageId) {
+                        $subQuery
+                            ->selectRaw('1')
+                            ->from('product_storage')
+                            ->whereColumn(
+                                'product_storage.product_id',
+                                'products.id'
+                            )
+                            ->where(
+                                'product_storage.storage_id',
+                                $storageId
+                            )
+                            ->where(
+                                'product_storage.quantity',
+                                '>',
+                                0
+                            );
+                    });
+                } else {
+                    $query->where('products.user_id', $user->id);
+                }
+            })
+
+            /*
+         * Hiện tại ô tìm kiếm chỉ nên chọn sản phẩm quản lý
+         * theo số lượng. Sản phẩm IMEI cần quét barcode để xác
+         * định chính xác thiết bị được bán.
+         */
+            ->where(function ($query) {
+                $query
+                    ->whereNull('products.inventory_tracking')
+                    ->orWhere(
+                        'products.inventory_tracking',
+                        'quantity'
+                    );
+            })
+
+            /*
+         * Tìm theo tên, mã sản phẩm hoặc barcode sản phẩm thường.
+         */
+            ->when($searchText !== '', function ($query) use ($searchText) {
+                $query->where(function ($subQuery) use ($searchText) {
+                    $subQuery
+                        ->where(
+                            'products.name',
+                            'like',
+                            '%' . $searchText . '%'
+                        )
+                        ->orWhere(
+                            'products.code',
+                            'like',
+                            '%' . $searchText . '%'
+                        )
+                        ->orWhere(
+                            'products.barcode',
+                            'like',
+                            '%' . $searchText . '%'
+                        );
+                });
+            })
+
+            ->orderBy('products.name')
+            ->limit(30)
+            ->get()
+
+            /*
+         * Chuẩn hóa dữ liệu đúng với JavaScript màn bán hàng.
+         */
+            ->map(function (Product $product) {
+                $availableQuantity = (int) $product->available_quantity;
+
+                return [
+                    'id' => (int) $product->id,
+                    'product_id' => (int) $product->id,
+                    'name' => $product->name,
+                    'code' => $product->code,
+                    'barcode' => $product->barcode,
+                    'thumbnail' => $product->thumbnail,
+                    'price_buy' => (float) $product->price_buy,
+                    'quantity' => $availableQuantity,
+                    'available_quantity' => $availableQuantity,
+                    'tracking_type' => 'quantity',
+                ];
+            })
+
+            /*
+         * Không trả về sản phẩm đã hết hàng.
+         */
+            ->filter(function (array $product) {
+                return $product['available_quantity'] > 0;
+            })
+            ->values();
+
+        /*
+     * Trả trực tiếp mảng JSON vì JavaScript hiện tại gọi:
+     * renderProductResults(res)
+     */
+        return response()->json($products);
+    }
 
     public function import(Request $request) {}
 
@@ -175,14 +343,14 @@ class ProductController extends Controller
         // Điền dữ liệu vào sheet
         $row = 2;
         foreach ($products as $product) {
-            $sheet->setCellValue('A'.$row, $product->code);
-            $sheet->setCellValue('B'.$row, $product->name);
-            $sheet->setCellValue('C'.$row, $product->quantity);
-            $sheet->setCellValue('D'.$row, $product->price);
-            $sheet->setCellValue('E'.$row, $product->price_buy);
-            $sheet->setCellValue('F'.$row, $product->category->name);
-            $sheet->setCellValue('G'.$row, $product->brands->name);
-            $sheet->setCellValue('H'.$row, $product->product_unit);
+            $sheet->setCellValue('A' . $row, $product->code);
+            $sheet->setCellValue('B' . $row, $product->name);
+            $sheet->setCellValue('C' . $row, $product->quantity);
+            $sheet->setCellValue('D' . $row, $product->price);
+            $sheet->setCellValue('E' . $row, $product->price_buy);
+            $sheet->setCellValue('F' . $row, $product->category->name);
+            $sheet->setCellValue('G' . $row, $product->brands->name);
+            $sheet->setCellValue('H' . $row, $product->product_unit);
             $row++;
         }
 
@@ -209,7 +377,7 @@ class ProductController extends Controller
             200,
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
             ]
         );
 
