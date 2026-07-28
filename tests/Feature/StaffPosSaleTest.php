@@ -202,7 +202,7 @@ class StaffPosSaleTest extends TestCase
             'bank_id' => $bank->id,
             'bank_account' => '0000000000',
             'receiver' => 'Nguoi nhan mau',
-            'logo' => 'assets/img/default-image.jpg',
+            'logo' => 'logo/17841017266a573b5e296c9.webp',
             'qr' => 'https://img.vietqr.io/image/MB-0000000000-compact.jpg',
         ]);
 

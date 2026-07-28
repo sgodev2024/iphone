@@ -91,7 +91,7 @@
                         </div>
                         <div class="card-body">
                             <img class="img-fluid img-thumbnail w-100" id="preview-logo" style="cursor: pointer"
-                                src="{{ showImage(optional($config)->logo) }}" alt=""
+                                src="{{ showImage(optional($config)->logo, 'images/sgovn.png') }}" alt=""
                                 onclick="document.getElementById('logo').click();">
                             <input type="file" name="logo" id="logo" class="form-control d-none" accept="image/*"
                                 onchange="previewImage(event, 'preview-logo')">

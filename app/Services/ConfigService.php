@@ -7,10 +7,11 @@ use App\Models\Config;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class ConfigService
 {
+    private const DEFAULT_LOGO = 'logo/17841017266a573b5e296c9.webp';
+
     protected $config;
 
     public function __construct(Config $config)
@@ -36,7 +37,7 @@ class ConfigService
             $config = Config::firstOrCreate(
                 ['user_id' => $id],
                 [
-                    'logo' => 'assets/img/default-image.jpg',
+                    'logo' => self::DEFAULT_LOGO,
                     'receiver' => $data['receiver'] ?? 'Chưa cấu hình người nhận',
                 ]
             );
@@ -67,11 +68,11 @@ class ConfigService
             }
 
             if (isset($data['logo'])) {
-                $logo = $data['logo'];
-                $logoFileName = 'image_' . $logo->getClientOriginalName();
-                $logoFilePath = 'storage/config/' . $logoFileName;
-                Storage::putFileAs('public/config', $logo, $logoFileName);
-                $config->logo = $logoFilePath;
+                $logoPath = uploadImages('logo', 'logo');
+
+                if ($logoPath) {
+                    $config->logo = $logoPath;
+                }
             }
 
             $config->save();

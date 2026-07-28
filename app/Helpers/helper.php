@@ -7,23 +7,65 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+if (!function_exists('normalizePublicImagePath')) {
+    function normalizePublicImagePath($image): ?string
+    {
+        if (!is_string($image) || trim($image) === '') {
+            return null;
+        }
+
+        $path = trim(str_replace('\\', '/', $image));
+
+        if (preg_match('/^(https?:)?\/\//i', $path) || str_starts_with($path, 'data:')) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
+
+        foreach (['storage/app/public/', 'app/public/', 'public/storage/', 'storage/', 'public/'] as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                $path = substr($path, strlen($prefix));
+                break;
+            }
+        }
+
+        return $path !== '' ? $path : null;
+    }
+}
+
 if (!function_exists('showImage')) {
-    function showImage($image)
+    function showImage($image, string $default = 'assets/img/default-image.jpg')
     {
         /** @var FilesystemAdapter $storage */
         $storage = Storage::disk('public');
+        $path = normalizePublicImagePath($image);
 
-        if ($image && $storage->exists($image)) {
-            return $storage->url($image);
+        if ($path && (preg_match('/^(https?:)?\/\//i', $path) || str_starts_with($path, 'data:'))) {
+            return $path;
         }
 
-        return asset('assets/img/default-image.jpg');
+        if ($path && $storage->exists($path)) {
+            return $storage->url($path);
+        }
+
+        if ($path && file_exists(public_path($path))) {
+            return asset($path);
+        }
+
+        return asset($default);
     }
 }
 
 function deleteImage($path)
 {
-    if ($path && Storage::disk('public')->exists($path)) {
+    $path = normalizePublicImagePath($path);
+
+    if (
+        $path
+        && !preg_match('/^(https?:)?\/\//i', $path)
+        && !str_starts_with($path, 'data:')
+        && Storage::disk('public')->exists($path)
+    ) {
         Storage::disk('public')->delete($path);
     }
 }

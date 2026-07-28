@@ -1,6 +1,10 @@
 @extends('admin.layout.index')
 
 @section('content')
+    @php
+        $userAvatar = showImage(optional($user->user_info)->img_url);
+    @endphp
+
     <div class="page-inner">
         <x-breadcrumb :items="[['label' => $title]]" />
 
@@ -11,7 +15,7 @@
                     <div class="card text-center p-4">
                         <div class="position-relative d-inline-block mx-auto">
                             {{-- Avatar hình tròn --}}
-                            <img src="{{ showImage($user->img_url) }}" class="rounded-circle img-thumbnail"
+                            <img src="{{ $userAvatar }}" class="rounded-circle img-thumbnail"
                                 style="width: 150px; height: 150px; object-fit: cover;" id="preview-avatar">
 
                             {{-- Nút upload ảnh --}}

@@ -3,7 +3,7 @@
         <!-- Logo Header -->
         <div class="logo-header d-flex align-items-center justify-content-between" data-background-color="white">
             <a href="{{ route('admin.dashboard') }}" class="logo d-flex align-items-center">
-                <img src="{{ showImage(optional($config)->logo) ?? asset('images/sgovn.png') }}" alt="navbar brand"
+                <img src="{{ showImage(optional($config)->logo, 'images/sgovn.png') }}" alt="navbar brand"
                     class="navbar-brand" style="max-width: 140px; max-height: 60px; object-fit: contain;" />
             </a>
             <div class="nav-toggle d-flex">

@@ -11,6 +11,7 @@ use Illuminate\Validation\Rule;
 
 class ConfigController extends Controller
 {
+    private const DEFAULT_LOGO = 'logo/17841017266a573b5e296c9.webp';
 
 
     public function index()
@@ -54,12 +55,12 @@ class ConfigController extends Controller
                     'bank_id' => $bank->id,
                     'bank_account' => $bankAccount,
                     'receiver' => $credentials['receiver'],
-                    'logo' => $credentials['logo'] ?? $oldLogo ?? 'assets/img/default-image.jpg',
+                    'logo' => $credentials['logo'] ?? $oldLogo ?? self::DEFAULT_LOGO,
                     'qr' => "https://img.vietqr.io/image/{$bank->code}-{$bankAccount}-compact.jpg",
                 ]
             );
 
-            if ($config && $request->hasFile('logo')) {
+            if ($config && $request->hasFile('logo') && normalizePublicImagePath($oldLogo) !== self::DEFAULT_LOGO) {
                 deleteImage($oldLogo);
             }
 
@@ -94,7 +95,7 @@ class ConfigController extends Controller
             'receiver' => 'required|string|max:255',
             'bank_account' => 'required|string|max:20',
             'bank_id' => 'required|exists:banks,id',
-            'logo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ];
 
         $attributes = [

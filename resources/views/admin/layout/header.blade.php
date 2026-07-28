@@ -1,9 +1,14 @@
+@php
+    $adminLogo = showImage(optional($config)->logo, 'images/sgovn.png');
+    $adminAvatar = showImage(optional(auth()->user()->user_info)->img_url);
+@endphp
+
 <div class="main-header no-print">
     <div class="main-header-logo">
         <!-- Logo Header -->
         <div class="logo-header" data-background-color="white">
             <a href="../index.html" class="logo">
-                <img src="{{ asset('images/sgovn.png') }}" alt="navbar brand" class="navbar-brand" style="width: 120px;">
+                <img src="{{ $adminLogo }}" alt="navbar brand" class="navbar-brand" style="width: 120px;">
             </a>
             <div class="nav-toggle">
                 <button class="btn btn-toggle toggle-sidebar">
@@ -121,7 +126,7 @@
                     <a class="dropdown-toggle profile-pic" data-bs-toggle="dropdown" href="#"
                         aria-expanded="false">
                         <div class="avatar-sm">
-                            <img src="{{ showImage(auth()->user()->img_url) }}" alt="{{ auth()->user()->name }}"
+                            <img src="{{ $adminAvatar }}" alt="{{ auth()->user()->name }}"
                                 class="avatar-img rounded-circle">
                         </div>
                         <span class="profile-username">
@@ -136,7 +141,7 @@
                                 <li>
                                     <div class="user-box">
                                         <div class="avatar-lg">
-                                            <img src="{{ showImage(auth()->user()->img_url) }}" alt="image profile"
+                                            <img src="{{ $adminAvatar }}" alt="image profile"
                                                 class="avatar-img rounded-circle">
                                         </div>
                                         <div class="u-text">

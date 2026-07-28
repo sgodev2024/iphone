@@ -44,7 +44,21 @@ class User extends Authenticatable
     // Accessor for user info
     public function getUserInfoAttribute()
     {
-        return UserInfo::where('user_id', $this->attributes['id'])->first();
+        if ($this->relationLoaded('userInfo')) {
+            return $this->getRelation('userInfo');
+        }
+
+        return $this->userInfo()->first();
+    }
+
+    public function getImgUrlAttribute($value)
+    {
+        return $value ?: optional($this->user_info)->img_url;
+    }
+
+    public function userInfo()
+    {
+        return $this->hasOne(UserInfo::class, 'user_id');
     }
 
     // Relationship with City

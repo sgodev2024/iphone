@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class SignUpService
 {
+    private const DEFAULT_LOGO = 'logo/17841017266a573b5e296c9.webp';
+
     protected $user;
     protected $city;
     protected $field;
@@ -56,7 +58,7 @@ class SignUpService
 
             Config::create([
                 'user_id' => $user->id,
-                'logo' => 'assets/img/default-image.jpg',
+                'logo' => self::DEFAULT_LOGO,
                 'receiver' => 'Chưa cấu hình người nhận',
             ]);
 

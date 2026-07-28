@@ -5,17 +5,21 @@ namespace Database\Seeders;
 use App\Models\Bank;
 use App\Models\Config;
 use App\Models\User;
+use App\Models\UserInfo;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class ConfigSeeder extends Seeder
 {
+    private const DEFAULT_LOGO = 'logo/17841017266a573b5e296c9.webp';
+    private const DEFAULT_AVATAR = 'avatar/17841016176a573af1aa503.webp';
+
     public function run(): void
     {
         $owner = User::updateOrCreate(
             ['email' => 'config@example.test'],
             [
-                'name' => 'Tài khoản cấu hình mẫu',
+                'name' => 'Admin',
                 'phone' => '0900000001',
                 'password' => Hash::make('password'),
                 'status' => 'active',
@@ -25,6 +29,11 @@ class ConfigSeeder extends Seeder
                 'store_name' => 'Cửa hàng cấu hình mẫu',
                 'tax_code' => 'CHUA-CAU-HINH',
             ]
+        );
+
+        UserInfo::updateOrCreate(
+            ['user_id' => $owner->id],
+            ['img_url' => self::DEFAULT_AVATAR]
         );
 
         $bank = Bank::query()
@@ -51,7 +60,7 @@ class ConfigSeeder extends Seeder
                 'bank_id' => $bank->id,
                 'bank_account' => $bankAccount,
                 'receiver' => 'Chưa cấu hình người nhận',
-                'logo' => 'assets/img/default-image.jpg',
+                'logo' => self::DEFAULT_LOGO,
                 'qr' => "https://img.vietqr.io/image/{$bank->code}-{$bankAccount}-compact.jpg",
             ]
         );

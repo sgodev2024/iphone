@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\User;
+use App\Models\UserInfo;
 use App\Services\AdminService;
 use Exception;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
+    private const DEFAULT_AVATAR = 'avatar/17841016176a573af1aa503.webp';
+
     protected $adminService;
 
     public function __construct(AdminService $adminService)
@@ -63,23 +66,33 @@ class AdminController extends Controller
 
         return transaction(function () use ($credentials, $request, $userId) {
 
-            $user = User::query()->find($userId);
+            $user = User::query()->findOrFail($userId);
+            $oldImage = optional($user->user_info)->img_url;
+            $newImage = null;
 
-            $oldImgae = $user->img_url ?? null;
+            unset($credentials['img_url']);
 
             if ($request->hasFile('img_url')) {
-                $credentials['img_url'] = uploadImages('img_url', 'avatar');
+                $newImage = uploadImages('img_url', 'avatar');
             }
 
-            $updated =  $user->update($credentials);
+            $updated = $user->update($credentials);
 
-            if ($updated && $request->hasFile('img_url')) {
-                deleteImage($oldImgae);
+            if ($updated && $newImage) {
+                UserInfo::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['img_url' => $newImage]
+                );
+
+                if (normalizePublicImagePath($oldImage) !== self::DEFAULT_AVATAR) {
+                    deleteImage($oldImage);
+                }
             }
 
-            Auth::setUser($user->fresh());
+            $freshUser = $user->fresh('userInfo');
+            Auth::setUser($freshUser);
 
-            return successResponse('Cập nhật hồ sơ thành công.', Auth::user());
+            return successResponse('Cập nhật hồ sơ thành công.', $freshUser);
         });
     }
 
