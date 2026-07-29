@@ -25,7 +25,8 @@ class ImportProductService
 
     public function getImportCoupon($perPage = 10, $search = null)
     {
-        $query = ImportCoupon::query();
+        $query = ImportCoupon::query()
+            ->with(['user', 'companyRelation']);
 
         if (! empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -40,16 +41,16 @@ class ImportProductService
 
     public function getImportCouponByid($id)
     {
-        try {
-            Log::info('Fetching all ImportCoupon');
-
-            return $this->importCoupon
-                ->with(['details.product', 'details.imeis', 'storage', 'user', 'companyRelation'])
-                ->findOrFail($id);
-        } catch (Exception $e) {
-            Log::error('Failed to fetch ImportCoupon: '.$e->getMessage());
-            throw new Exception('Failed to fetch ImportCoupon');
-        }
+        return $this->importCoupon
+            ->newQuery()
+            ->with([
+                'user',
+                'companyRelation',
+                'storage',
+                'details.product',
+                'details.imeis',
+            ])
+            ->findOrFail($id);
     }
 
     public function addImportCoupon($data)

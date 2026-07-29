@@ -11,11 +11,15 @@ class ImportCoupon extends Model
     use HasFactory;
 
     public const PAYMENT_METHOD_CASH = 'cash';
+
     public const PAYMENT_METHOD_BANK_TRANSFER = 'bank_transfer';
+
     public const PAYMENT_METHOD_DEBT = 'debt';
 
     public const PAYMENT_STATUS_PAID = 'paid';
+
     public const PAYMENT_STATUS_PARTIAL = 'partial';
+
     public const PAYMENT_STATUS_UNPAID = 'unpaid';
 
     protected $table = 'import_coupon';
@@ -55,16 +59,34 @@ class ImportCoupon extends Model
 
     public function getResolvedPaidAmountAttribute(): int
     {
-        return (int) ($this->attributes['paid_amount'] ?? $this->attributes['payment_ncc'] ?? 0);
+        $total = max((int) ($this->attributes['total'] ?? 0), 0);
+
+        if (array_key_exists('paid_amount', $this->attributes) && $this->attributes['paid_amount'] !== null) {
+            $paidAmount = (int) $this->attributes['paid_amount'];
+        } elseif (array_key_exists('payment_ncc', $this->attributes) && $this->attributes['payment_ncc'] !== null) {
+            $paidAmount = (int) $this->attributes['payment_ncc'];
+        } elseif (array_key_exists('debt_amount', $this->attributes) && $this->attributes['debt_amount'] !== null) {
+            $paidAmount = $total - (int) $this->attributes['debt_amount'];
+        } else {
+            $paidAmount = 0;
+        }
+
+        $paidAmount = max($paidAmount, 0);
+
+        return $total > 0 ? min($paidAmount, $total) : $paidAmount;
     }
 
     public function getResolvedDebtAmountAttribute(): int
     {
+        $total = max((int) ($this->attributes['total'] ?? 0), 0);
+
         if (array_key_exists('debt_amount', $this->attributes) && $this->attributes['debt_amount'] !== null) {
-            return (int) $this->attributes['debt_amount'];
+            $debtAmount = max((int) $this->attributes['debt_amount'], 0);
+
+            return $total > 0 ? min($debtAmount, $total) : $debtAmount;
         }
 
-        return max((int) ($this->attributes['total'] ?? 0) - $this->resolved_paid_amount, 0);
+        return max($total - $this->resolved_paid_amount, 0);
     }
 
     public function getResolvedPaymentStatusAttribute(): string
@@ -75,14 +97,15 @@ class ImportCoupon extends Model
             return $status;
         }
 
-        $total = (int) ($this->attributes['total'] ?? 0);
+        $total = max((int) ($this->attributes['total'] ?? 0), 0);
         $paidAmount = $this->resolved_paid_amount;
+        $debtAmount = $this->resolved_debt_amount;
 
-        if ($total > 0 && $paidAmount >= $total) {
+        if ($total > 0 && $paidAmount >= $total && $debtAmount === 0) {
             return self::PAYMENT_STATUS_PAID;
         }
 
-        if ($paidAmount > 0) {
+        if ($paidAmount > 0 && ($debtAmount > 0 || $paidAmount < $total)) {
             return self::PAYMENT_STATUS_PARTIAL;
         }
 
@@ -98,6 +121,15 @@ class ImportCoupon extends Model
         };
     }
 
+    public function getPaymentStatusBadgeClassAttribute(): string
+    {
+        return match ($this->resolved_payment_status) {
+            self::PAYMENT_STATUS_PAID => 'badge-success',
+            self::PAYMENT_STATUS_PARTIAL => 'badge-warning',
+            default => 'badge-danger',
+        };
+    }
+
     public function getPaymentMethodLabelAttribute(): string
     {
         return match ($this->attributes['payment_method'] ?? null) {
@@ -110,12 +142,20 @@ class ImportCoupon extends Model
 
     public function getDetailAttribute()
     {
-        return ImportDetail::where('import_id', $this->attributes['id'])->get();
+        if ($this->relationLoaded('details')) {
+            return $this->getRelation('details');
+        }
+
+        return $this->details()->get();
     }
 
     public function getUserAttribute()
     {
-        return User::where('id', $this->attributes['user_id'])->first();
+        if ($this->relationLoaded('user')) {
+            return $this->getRelation('user');
+        }
+
+        return $this->user()->first();
     }
 
     public function getSupplierAttribute()
@@ -125,7 +165,11 @@ class ImportCoupon extends Model
 
     public function getCompanyAttribute()
     {
-        return Company::where('id', $this->attributes['companies_id'])->first();
+        if ($this->relationLoaded('companyRelation')) {
+            return $this->getRelation('companyRelation');
+        }
+
+        return $this->companyRelation()->first();
     }
 
     public function user()

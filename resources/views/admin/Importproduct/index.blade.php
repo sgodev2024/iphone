@@ -57,6 +57,8 @@
                                         <th>Nhà cung cấp</th>
                                         <th>Tổng tiền</th>
                                         <th>Đã trả</th>
+                                        <th>Trạng thái thanh toán</th>
+                                        <th class="text-center">Thao tác</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -73,16 +75,28 @@
                                                     {{ $item->coupon_code }}
                                                 </a>
                                             </td>
-                                            <td>{{ $item->user->name }}</td>
-                                            <td>{{ $item->created_at->format('d/m/Y H:i') }}</td>
-                                            <td>{{ $item->company->name ?? '' }}</td>
+                                            <td>{{ $item->getRelation('user')?->name ?? '—' }}</td>
+                                            <td>{{ $item->created_at?->format('d/m/Y H:i') ?? '—' }}</td>
+                                            <td>{{ $item->getRelation('companyRelation')?->name ?? '—' }}</td>
                                             <td>{{ number_format($item->total, 0, ',', '.') }} đ</td>
-                                            <td>{{ $item->payment_ncc ? number_format($item->payment_ncc, 0, ',', '.') : 0 }}
-                                                đ</td>
+                                            <td>{{ number_format($item->resolved_paid_amount, 0, ',', '.') }} đ</td>
+                                            <td>
+                                                <span class="badge {{ $item->payment_status_badge_class }}">
+                                                    {{ $item->payment_status_label }}
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <a class="btn btn-sm btn-outline-primary"
+                                                    href="{{ route('admin.importproduct.importCoupon.detail', ['id' => $item->id]) }}"
+                                                    title="Xem chi tiết phiếu nhập"
+                                                    aria-label="Xem chi tiết phiếu nhập {{ $item->coupon_code ?: '#' . $item->id }}">
+                                                    <i class="fa-solid fa-eye"></i>
+                                                </a>
+                                            </td>
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="8" class="text-center text-muted">Không có dữ liệu</td>
+                                            <td colspan="10" class="text-center text-muted">Không có dữ liệu</td>
                                         </tr>
                                     @endforelse
                                 </tbody>
