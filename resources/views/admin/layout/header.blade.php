@@ -93,8 +93,15 @@
                                                     <i class="fas fa-shopping-cart"></i>
                                                 </div>
                                                 <div class="notif-content">
-                                                    <span class="block"><b>{{ $item->client->name }} </b>vừa mua
-                                                        hàng</span>
+                                                    <span class="block">
+                                                        @if ($item->client)
+                                                            <b>{{ $item->client->name }}</b>
+                                                        @else
+                                                            <b>{{ $item->name ?? 'Khách lẻ' }}</b>
+                                                        @endif
+
+                                                        vừa mua hàng
+                                                    </span>
                                                     <span class="time">{{ $timeElapsed }}</span>
                                                 </div>
                                             </a>

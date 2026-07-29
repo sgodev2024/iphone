@@ -9,29 +9,60 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class ClientsExport implements FromCollection, WithHeadings, WithMapping
 {
-    private $rowNumber = 0;
+    private int $rowNumber = 0;
+
+    public function __construct(
+        private readonly string $searchText = ''
+    ) {}
 
     public function collection()
     {
-        return Client::query()->select('id', 'name', 'phone', 'email', 'address', 'created_at')->get();
+        return Client::query()
+            ->select([
+                'id',
+                'name',
+                'phone',
+                'email',
+                'address',
+                'created_at',
+            ])
+            ->when($this->searchText !== '', function ($query) {
+                $searchText = $this->searchText;
+
+                $query->where(function ($searchQuery) use ($searchText) {
+                    $searchQuery
+                        ->where('name', 'like', "%{$searchText}%")
+                        ->orWhere('phone', 'like', "%{$searchText}%")
+                        ->orWhere('email', 'like', "%{$searchText}%")
+                        ->orWhere('address', 'like', "%{$searchText}%")
+                        ->orWhere('code', 'like', "%{$searchText}%");
+                });
+            })
+            ->latest('created_at')
+            ->get();
     }
 
-    // Mapping lại dữ liệu xuất ra
     public function map($client): array
     {
         return [
             ++$this->rowNumber,
-            $client->name,
-            $client->phone,
-            $client->email,
-            $client->address,
-            $client->created_at ? $client->created_at->format('d/m/Y') : '',
+            $client->name ?? '',
+            $client->phone ?? '',
+            $client->email ?? '',
+            $client->address ?? '',
+            $client->created_at?->format('d/m/Y') ?? '',
         ];
     }
 
-    // Tiêu đề cột
     public function headings(): array
     {
-        return ['STT', 'Tên KH', 'Số điện thoại', 'Email', 'Địa chỉ', 'Ngày tạo'];
+        return [
+            'STT',
+            'Tên khách hàng',
+            'Số điện thoại',
+            'Email',
+            'Địa chỉ',
+            'Ngày tạo',
+        ];
     }
 }

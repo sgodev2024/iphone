@@ -29,32 +29,44 @@ class ClientController extends Controller
 
     public function index(Request $request)
     {
-        if ($request->ajax()) {
-            $searchText = trim((string) $request->query('s'));
-
-            $clients = Client::query()
-                ->where('user_id', Auth::id())
-                ->when(! empty($searchText), function ($query) use ($searchText) {
-                    if (is_numeric($searchText)) {
-                        $query->where('phone', 'like', "%{$searchText}%");
-                    } elseif (str_contains($searchText, '@')) {
-                        $query->where('email', 'like', "%{$searchText}%");
-                    } else {
-                        $query->where('name', 'like', "%{$searchText}%");
-                    }
-                })
-                ->latest()
-                ->paginate(10)
-                ->appends($request->query());
-
-            $html = view('admin.client.table', compact('clients'))->render();
-
-            return response()->json(['html' => $html]);
+        if (!$request->ajax()) {
+            return view('admin.client.index');
         }
 
-        return view('admin.client.index');
-    }
+        try {
+            $searchText = trim((string) $request->query('s', ''));
 
+            $clients = Client::query()
+                // Admin xem toàn bộ khách hàng nên không lọc theo Auth::id()
+                ->when($searchText !== '', function ($query) use ($searchText) {
+                    $query->where(function ($searchQuery) use ($searchText) {
+                        $searchQuery
+                            ->where('name', 'like', "%{$searchText}%")
+                            ->orWhere('phone', 'like', "%{$searchText}%")
+                            ->orWhere('email', 'like', "%{$searchText}%")
+                            ->orWhere('address', 'like', "%{$searchText}%")
+                            ->orWhere('code', 'like', "%{$searchText}%");
+                    });
+                })
+                ->latest('created_at')
+                ->paginate(10)
+                ->withQueryString();
+
+            return response()->json([
+                'html' => view('admin.client.table', compact('clients'))->render(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Không thể tải danh sách khách hàng', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể tải danh sách khách hàng.',
+            ], 500);
+        }
+    }
     public function findClient(Request $request)
     {
         $title = 'Khach hang';
@@ -79,51 +91,76 @@ class ClientController extends Controller
 
     public function edit($id)
     {
-        $title = 'Sua thong tin khach hang';
+        $title = 'Sửa thông tin khách hàng';
         $clientgroups = $this->clientGroupService->getAllClientGroup();
-        $client = Client::query()->where('user_id', Auth::id())->findOrFail($id);
 
-        return view('admin.client.edit', compact('client', 'title', 'clientgroups'));
+        $client = Client::query()->findOrFail($id);
+
+        return view(
+            'admin.client.edit',
+            compact('client', 'title', 'clientgroups')
+        );
     }
-
     public function update($id, Request $request)
     {
-        $client = Client::query()->where('user_id', Auth::id())->findOrFail($id);
+        $client = Client::query()->findOrFail($id);
         $credentials = $this->validateClient($request, $id);
 
         try {
             $client->update($credentials);
-        } catch (Exception $e) {
-            Log::error('Failed to update client profile: ' . $e->getMessage());
 
-            return redirect()->back()
+            return redirect()
+                ->route('admin.client.index')
+                ->with('success', 'Cập nhật thông tin khách hàng thành công!');
+        } catch (\Throwable $e) {
+            Log::error('Không thể cập nhật khách hàng', [
+                'client_id' => $id,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return redirect()
+                ->back()
                 ->withInput()
-                ->withErrors(['error' => 'Khong the cap nhat khach hang. Chi tiet loi da duoc ghi vao log.']);
+                ->withErrors([
+                    'error' => 'Không thể cập nhật khách hàng.',
+                ]);
         }
-
-        session()->flash('success', 'Cap nhat thong tin khach hang thanh cong!');
-
-        return redirect()->route('admin.client.index');
     }
 
     public function delete($id)
     {
         try {
-            $this->clientService->deleteClient($id);
+            $client = Client::query()->findOrFail($id);
+
+            // Giữ Service nếu trong đó có xử lý nghiệp vụ liên quan
+            $this->clientService->deleteClient($client->id);
+
             $clients = Client::query()
-                ->where('user_id', Auth::id())
-                ->orderByDesc('created_at')
+                ->latest('created_at')
                 ->paginate(10);
-            $view = view('admin.client.table', compact('clients'))->render();
 
-            return response()->json(['success' => true, 'message' => 'Xoa thanh cong!', 'table' => $view]);
-        } catch (Exception $e) {
-            Log::error('Failed to delete client: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'message' => 'Xóa khách hàng thành công!',
+                'table' => view(
+                    'admin.client.table',
+                    compact('clients')
+                )->render(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Không thể xóa khách hàng', [
+                'client_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
 
-            return response()->json(['success' => false, 'message' => 'Khach hang khong the xoa.']);
+            return response()->json([
+                'success' => false,
+                'message' => 'Khách hàng không thể xóa.',
+            ], 422);
         }
     }
-
     public function clientgroup()
     {
         try {
@@ -138,9 +175,14 @@ class ClientController extends Controller
         }
     }
 
-    public function export()
+    public function export(Request $request)
     {
-        return Excel::download(new ClientsExport, 'clients.xlsx');
+        $searchText = trim((string) $request->query('s', ''));
+
+        return Excel::download(
+            new ClientsExport($searchText),
+            'danh_sach_khach_hang.xlsx'
+        );
     }
 
     private function validateClient(Request $request, $id): array
@@ -152,20 +194,16 @@ class ClientController extends Controller
                     'required',
                     'string',
                     'max:20',
-                    Rule::unique('clients', 'phone')
-                        ->where(fn ($query) => $query->where('user_id', Auth::id()))
-                        ->ignore($id),
+                    Rule::unique('clients', 'phone')->ignore($id),
                 ],
                 'email' => [
                     'required',
                     'email',
                     'max:255',
-                    Rule::unique('clients', 'email')
-                        ->where(fn ($query) => $query->where('user_id', Auth::id()))
-                        ->ignore($id),
+                    Rule::unique('clients', 'email')->ignore($id),
                 ],
-                'gender' => ['required', 'in:Male,Female'],
-                'dob' => ['required', 'date'],
+                'gender' => ['nullable', 'in:Male,Female'],
+                'dob' => ['nullable', 'date'],
                 'address' => ['nullable', 'string', 'max:255'],
                 'zip_code' => ['nullable', 'string', 'max:20'],
                 'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],

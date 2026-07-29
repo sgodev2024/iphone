@@ -52,105 +52,149 @@
 @push('script')
     <script>
         $(function() {
-            let currentPage = 1;
+            const clientIndexUrl = @json(route('admin.client.index'));
+            const clientExportUrl = @json(route('admin.client.export'));
+
+            const $tableWrapper = $('#table-wrapper');
+            const $searchInput = $('input[name="search"]');
+
             let searchText = '';
-            let resetCooldown = false
+            let currentRequest = null;
 
-            $(document).on('click', 'a.page-link', function(e) {
-                e.preventDefault();
+            function debounce(callback, delay = 500) {
+                let timer;
 
-                let url = $(this).attr('href');
-                let page = new URL(url).searchParams.get("page");
+                return function(...args) {
+                    clearTimeout(timer);
 
-                fetchClients(page, searchText);
-            });
-
-            $('input[name="search"]').on('input', debounce(function() {
-                searchText = $(this).val();
-                fetchClients(1, searchText); // reset về page 1 khi search
-            }));
-
-            $('#btn-reset').click(function() {
-                if (resetCooldown) return // đang cooldown thì bỏ qua
-
-                resetCooldown = true
-                fetchClients()
-                $('input[name="search"]').val('')
-
-                setTimeout(() => resetCooldown = false, 1500) // 1.5s sau mới cho bấm lại
-            })
-
-            $(document).on('click', '.btn-delete', function() {
-                let id = $(this).data('id');
-                handleDestroy(function() {
-                    fetchClients(1, searchText)
-                }, 'Client', id)
-            });
-
-            $('#bulk-delete').click(function() {
-                handleDestroy(function() {
-                    fetchClients(1, searchText)
-                }, 'Client')
-            })
-
-            const fetchClients = (page = 1, search) => {
-
-                $.ajax({
-                    url: window.location.pathname,
-                    method: 'GET',
-                    data: {
-                        page,
-                        s: search
-                    },
-                    success: (res) => {
-                        $('#table-wrapper').html(res.html)
-                        currentPage = page
-                    },
-                    error: (xhr) => {
-
-                    },
-                })
+                    timer = setTimeout(() => {
+                        callback.apply(this, args);
+                    }, delay);
+                };
             }
 
-            $('#btn-export').on('click', function() {
-                $.ajax({
-                    url: "/admin/client/export",
-                    method: "GET",
-                    xhrFields: {
-                        responseType: 'blob' // quan trọng để nhận file binary
+            function fetchClients(page = 1) {
+                if (currentRequest) {
+                    currentRequest.abort();
+                }
+
+                $tableWrapper.css({
+                    opacity: 0.55,
+                    pointerEvents: 'none'
+                });
+
+                currentRequest = $.ajax({
+                    url: clientIndexUrl,
+                    method: 'GET',
+                    dataType: 'json',
+                    data: {
+                        page: page,
+                        s: searchText
                     },
-                    success: function(data) {
-                        var blob = new Blob([data], {
-                            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+                    success: function(response) {
+                        if (!response || typeof response.html === 'undefined') {
+                            $tableWrapper.html(
+                                '<div class="alert alert-warning mb-0">' +
+                                'Máy chủ không trả về dữ liệu bảng.' +
+                                '</div>'
+                            );
+
+                            return;
+                        }
+
+                        $tableWrapper.html(response.html);
+                    },
+
+                    error: function(xhr, textStatus) {
+                        if (textStatus === 'abort') {
+                            return;
+                        }
+
+                        const message =
+                            xhr.responseJSON?.message ??
+                            'Không thể tải danh sách khách hàng.';
+
+                        $tableWrapper.html(
+                            '<div class="alert alert-danger mb-0">' +
+                            message +
+                            '</div>'
+                        );
+
+                        console.error(xhr.responseText);
+                    },
+
+                    complete: function() {
+                        currentRequest = null;
+
+                        $tableWrapper.css({
+                            opacity: 1,
+                            pointerEvents: 'auto'
                         });
-                        var url = window.URL.createObjectURL(blob);
-
-                        // Lấy ngày hiện tại
-                        var today = new Date();
-                        var day = String(today.getDate()).padStart(2, '0');
-                        var month = String(today.getMonth() + 1).padStart(2,
-                        '0'); // tháng bắt đầu từ 0
-                        var year = today.getFullYear();
-
-                        var filename = "danh_sach_khach_hang_" + day + "_" + month + "_" +
-                            year + ".xlsx";
-
-                        var a = document.createElement('a');
-                        a.href = url;
-                        a.download = filename; // tên file tuỳ chỉnh
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-
-                        window.URL.revokeObjectURL(url);
-                    },
-                    error: function(xhr) {
-                        alert("Có lỗi khi export Excel!");
                     }
                 });
+            }
+
+            $searchInput.on('input', debounce(function() {
+                searchText = $(this).val().trim();
+                fetchClients(1);
+            }));
+
+            $(document).on(
+                'click',
+                '#table-wrapper .pagination a.page-link',
+                function(event) {
+                    event.preventDefault();
+
+                    const href = $(this).attr('href');
+
+                    if (!href) {
+                        return;
+                    }
+
+                    const url = new URL(href, window.location.origin);
+                    const page = Number(url.searchParams.get('page')) || 1;
+
+                    fetchClients(page);
+                }
+            );
+
+            $('#btn-reset').on('click', function() {
+                searchText = '';
+                $searchInput.val('');
+                fetchClients(1);
             });
 
-            fetchClients()
-        })
+            $(document).on('click', '.btn-delete', function() {
+                const id = $(this).data('id');
+
+                handleDestroy(function() {
+                    fetchClients(1);
+                }, 'Client', id);
+            });
+
+            $('#bulk-delete').on('click', function(event) {
+                event.preventDefault();
+
+                handleDestroy(function() {
+                    fetchClients(1);
+                }, 'Client');
+            });
+
+            $('#btn-export').on('click', function() {
+                const exportUrl = new URL(
+                    clientExportUrl,
+                    window.location.origin
+                );
+
+                if (searchText) {
+                    exportUrl.searchParams.set('s', searchText);
+                }
+
+                window.location.href = exportUrl.toString();
+            });
+
+            fetchClients(1);
+        });
     </script>
 @endpush
