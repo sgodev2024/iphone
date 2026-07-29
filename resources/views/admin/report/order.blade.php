@@ -148,7 +148,8 @@
                                                     @endif
                                                 @empty
                                                     <tr>
-                                                        <td class="text-center" colspan="3">KhÃ´ng cÃ³ sáº£n pháº©m nÃ o</td>
+                                                        <td class="text-center" colspan="3">KhÃ´ng cÃ³ sáº£n pháº©m nÃ o
+                                                        </td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>

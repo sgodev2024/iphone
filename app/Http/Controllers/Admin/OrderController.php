@@ -23,59 +23,117 @@ class OrderController extends Controller
     }
     public function index(Request $request)
     {
-        if ($request->ajax()) {
-            $searchText = $request->query('s');
-            $dateRange = $request->query('date_range'); // ví dụ: "12/05/2025 - 12/04/2026"
-            $start = $end = null;
-            $status         = $request->query('status'); // trạng thái thanh toán
-            $paymentMethod  = $request->query('payment_method'); // phương thức thanh toán
-            if (!empty($dateRange)) {
-                $dates = explode(' - ', $dateRange);
-                if (count($dates) === 2) {
-                    $start = \Carbon\Carbon::createFromFormat('d/m/Y', trim($dates[0]))->startOfDay();
-                    $end = \Carbon\Carbon::createFromFormat('d/m/Y', trim($dates[1]))->endOfDay();
-                }
-            }
-
-            $orders = Order::query()
-                ->where('user_id', Auth::id())
-                ->when(!empty($searchText), function ($query) use ($searchText) {
-                    $query->where('code', 'like', "%$searchText%")
-                        ->orWhereHas('client', function ($q) use ($searchText) {
-                            $q->where('name', 'like', "%$searchText%")
-                                ->orWhere('phone', 'like', "%$searchText%");
-                        });
-                })
-                ->when($start && $end, function ($query) use ($start, $end) {
-                    $query->whereBetween('created_at', [$start, $end]);
-                })
-                ->when(!is_null($status) && $status !== '', function ($query) use ($status) {
-                    $query->where('status', $status);
-                })
-                ->when(!empty($paymentMethod), function ($query) use ($paymentMethod) {
-                    $query->where('payment_method', $paymentMethod);
-                })
-                ->with(['user', 'client', 'creator'])
-                ->withCount('orderDetails')
-                ->orderBy('created_at', 'desc')
-                ->paginate(10);
-
-            return response()->json([
-                'html' => view('admin.order.table', compact('orders'))->render(),
-            ]);
+        if (!$request->ajax()) {
+            return view('admin.order.index');
         }
 
-        return view('admin.order.index');
+        $searchText = trim((string) $request->query('s', ''));
+        $dateRange = trim((string) $request->query('date_range', ''));
+        $status = $request->query('status');
+        $paymentMethod = $request->query('payment_method');
+
+        $startDate = null;
+        $endDate = null;
+
+        if ($dateRange !== '') {
+            // Hỗ trợ cả:
+            // 29/06/2026 - 29/07/2026
+            // 29/06/2026-29/07/2026
+            $dates = preg_split('/\s*-\s*/', $dateRange);
+
+            if (count($dates) === 2) {
+                try {
+                    $startDate = \Carbon\Carbon::createFromFormat(
+                        'd/m/Y',
+                        trim($dates[0])
+                    )->startOfDay();
+
+                    $endDate = \Carbon\Carbon::createFromFormat(
+                        'd/m/Y',
+                        trim($dates[1])
+                    )->endOfDay();
+                } catch (\Throwable $e) {
+                    Log::warning('Khoảng ngày lọc đơn hàng không hợp lệ', [
+                        'date_range' => $dateRange,
+                        'message' => $e->getMessage(),
+                    ]);
+
+                    return response()->json([
+                        'message' => 'Khoảng ngày không hợp lệ.',
+                    ], 422);
+                }
+            }
+        }
+
+        $orders = Order::query()
+            // Admin xem toàn bộ đơn nên không lọc user_id theo tài khoản đăng nhập
+            ->with([
+                'user',
+                'client',
+                'creator',
+            ])
+            ->withCount('orderDetails')
+
+            ->when($searchText !== '', function ($query) use ($searchText) {
+                $query->where(function ($searchQuery) use ($searchText) {
+                    $searchQuery
+                        ->where('code', 'like', "%{$searchText}%")
+                        ->orWhere('name', 'like', "%{$searchText}%")
+                        ->orWhere('phone', 'like', "%{$searchText}%")
+                        ->orWhereHas('client', function ($clientQuery) use ($searchText) {
+                            $clientQuery
+                                ->where('name', 'like', "%{$searchText}%")
+                                ->orWhere('phone', 'like', "%{$searchText}%");
+                        })
+                        ->orWhereHas('creator', function ($creatorQuery) use ($searchText) {
+                            $creatorQuery->where('name', 'like', "%{$searchText}%");
+                        })
+                        ->orWhereHas('user', function ($userQuery) use ($searchText) {
+                            $userQuery->where('name', 'like', "%{$searchText}%");
+                        });
+                });
+            })
+
+            ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('created_at', [$startDate, $endDate]);
+            })
+
+            ->when(
+                in_array((string) $status, ['0', '1'], true),
+                function ($query) use ($status) {
+                    $query->where('status', (int) $status);
+                }
+            )
+
+            ->when(
+                in_array($paymentMethod, ['cash', 'bank_transfer', 'debt'], true),
+                function ($query) use ($paymentMethod) {
+                    $query->where('payment_method', $paymentMethod);
+                }
+            )
+
+            ->latest('created_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        return response()->json([
+            'html' => view('admin.order.table', compact('orders'))->render(),
+        ]);
     }
 
     public function show(string $id)
     {
         $order = Order::query()
-            ->where('user_id', Auth::id())
-            ->with(['client', 'creator', 'orderDetails'])
+            ->with([
+                'user',
+                'client',
+                'creator',
+                'orderDetails.product',
+                'orderDetails.productImei',
+            ])
             ->findOrFail($id);
 
-        $title = "Chi tiết đơn hàng - {$order->code}";
+        $title = 'Chi tiết đơn hàng - ' . ($order->code ?? $order->id);
 
         return view('admin.order.detail', compact('title', 'order'));
     }
