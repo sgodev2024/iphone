@@ -25,165 +25,188 @@
             </ul> --}}
         </div>
 
-        <div class="row">
-            <!-- Today's Orders Section -->
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div class="search-container">
-                            <input type="text" id="dateFilter" style="width: 350px" class="form-control search-input"
-                                placeholder="Chọn khoảng ngày">
-                        </div>
-
-                        <div class="d-flex justify-content-end align-items-center">
-                            <input type="search" name="search" class="form-control me-2" style="width: 300px;"
-                                placeholder="Tìm kiếm...">
-
-                            <button type="button" class="btn" id="btn-reset"> <i
-                                    class="fa-solid fa-rotate"></i></button>
-                        </div>
-                    </div>
-                    <div class="card-header">
-                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm
-                            nay</h4>
+        <!-- Today's Orders Section -->
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="search-container">
+                        <input type="text" style="width: 350px" class="form-control search-input"
+                            placeholder="Chọn khoảng ngày">
                     </div>
 
-                    <div class="card-body">
-                        <div class="">
-                            <!-- Table for Orders -->
-                            <div id="basic-datatables_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
-                                <div class="row">
-                                    <div class="col-sm-12">
+                    <div class="d-flex justify-content-end align-items-center">
+                        <input type="search" name="search" class="form-control me-2" style="width: 300px;"
+                            placeholder="Tìm kiếm...">
 
-                                        <table id="basic-datatables"
-                                            class="display table table-striped table-hover dataTable" role="grid"
-                                            aria-describedby="basic-datatables_info">
-                                            <thead>
-                                                <tr role="row">
-                                                    <th>Mã đơn hàng</th>
-                                                    <th>Nhân viên</th>
-                                                    <th>Ngày tạo</th>
-                                                    <th>Nhà cung cấp</th>
-                                                    <th>Trạng thái</th>
-                                                    <th>Tổng tiền</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse ($imports as $import)
-                                                    <tr>
-                                                        <td>
-                                                            <a style="color: black; font-weight:bold"
-                                                                href="{{ route('admin.importproduct.importCoupon.detail', ['id' => $import->id]) }}">{{ $import->coupon_code }}</a>
-                                                        </td>
-                                                        <td>
-                                                            {{-- <a style="color:black"
-                                                                href="{{ route('admin.staff.edit', ['id' => $import->user->id]) }}">
-                                                                {{ $import->user->name ?? '' }}
-                                                            </a> --}}
-                                                        </td>
-                                                        <td>{{ $import->created_at->format('d/m/Y') }}</td>
-                                                        <td>
-                                                            @if ($import->company)
-                                                                <a style="color:black"
-                                                                    href="{{ route('admin.client.detail', ['id' => $import->company->id]) }}">
-                                                                    {{ $import->company->name }}
-                                                                </a>
-                                                            @else
-                                                                <span class="text-muted">Nhà cung cấp không tồn tại</span>
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if ($import->status == 1)
-                                                                <span class="badge badge-success">Đã thanh toán</span>
-                                                            @else
-                                                                <span class="badge badge-danger">Công nợ</span>
-                                                            @endif
-                                                        </td>
-                                                        <td>{{ number_format($import->total) }} VND</td>
-                                                    </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td class="text-center" colspan="6">Không có đơn hàng nào</td>
-                                                    </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
+                        <button type="button" class="btn" id="btn-reset"> <i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                </div>
+                <div class="card-header">
+                    <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm
+                        nay</h4>
+                </div>
 
-                                        <!-- Pagination for Orders -->
-                                        {{ $imports->appends(['orders_page' => $imports->currentPage()])->links('vendor.pagination.custom') }}
-                                    </div>
-                                </div>
+                <div class="card-body">
+                    <div class="">
+                        <!-- Table for Orders -->
+                        <div class="table-responsive px-3">
+                            <table class="table table-striped table-hover report-import-table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Mã đơn hàng</th>
+                                        <th>Nhân viên</th>
+                                        <th>Ngày tạo</th>
+                                        <th>Nhà cung cấp</th>
+                                        <th>Phương thức thanh toán</th>
+                                        <th>Trạng thái</th>
+                                        <th>Tổng tiền</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @forelse ($imports as $import)
+                                        <tr>
+                                            <td>
+                                                <a href="{{ route('admin.importproduct.importCoupon.detail', ['id' => $import->id]) }}"
+                                                    class="text-dark fw-bold">
+                                                    {{ $import->coupon_code ?? 'PN-' . $import->id }}
+                                                </a>
+                                            </td>
+
+                                            <td>
+                                                {{ $import->user?->name ?? 'Không xác định' }}
+                                            </td>
+
+                                            <td>
+                                                {{ $import->created_at?->format('d/m/Y') ?? '---' }}
+                                            </td>
+
+                                            <td>
+                                                {{ $import->company?->name ?? 'Nhà cung cấp không tồn tại' }}
+                                            </td>
+
+                                            <td>
+                                                {{ $import->payment_method_label }}
+                                            </td>
+
+                                            <td>
+                                                @if ($import->resolved_payment_status === \App\Models\ImportCoupon::PAYMENT_STATUS_PAID)
+                                                    <span class="badge bg-success">
+                                                        {{ $import->payment_status_label }}
+                                                    </span>
+                                                @elseif ($import->resolved_payment_status === \App\Models\ImportCoupon::PAYMENT_STATUS_PARTIAL)
+                                                    <span class="badge bg-warning text-dark">
+                                                        {{ $import->payment_status_label }}
+                                                    </span>
+                                                @else
+                                                    <span class="badge bg-danger">
+                                                        {{ $import->payment_status_label }}
+                                                    </span>
+                                                @endif
+                                            </td>
+
+                                            <td>
+                                                {{ number_format($import->total ?? 0) }} VND
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="7" class="text-center py-4">
+                                                Không có đơn nhập hàng nào
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if ($imports->hasPages())
+                            <div class="d-flex justify-content-center mt-3">
+                                {{ $imports->appends(request()->except('import_page'))->links('vendor.pagination.custom') }}
                             </div>
-                            <!-- End Table -->
-                        </div>
+                        @endif
+
+                        <!-- End Table -->
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Today's Products Section -->
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div class="search-container">
-                            <input type="text" id="dateFilter" style="width: 350px" class="form-control search-input"
-                                placeholder="Chọn khoảng ngày">
-                        </div>
-
-                        <div class="d-flex justify-content-end align-items-center">
-                            <input type="search" name="search" class="form-control me-2" style="width: 300px;"
-                                placeholder="Tìm kiếm...">
-
-                            <button type="button" class="btn" id="btn-reset"> <i
-                                    class="fa-solid fa-rotate"></i></button>
-                        </div>
-                    </div>
-                    <div class="card-header">
-                        <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách sản phẩm nhập hôm
-                            nay
-                        </h4>
+        <!-- Today's Products Section -->
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="search-container">
+                        <input type="text" style="width: 350px" class="form-control search-input"
+                            placeholder="Chọn khoảng ngày">
                     </div>
 
-                    <div class="card-body">
-                        <div class="">
-                            <!-- Table for Product Sales -->
-                            <div id="products-sales-table_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
-                                <div class="row">
-                                    <div class="col-sm-12">
-                                        <table id="products-sales-table"
-                                            class="display table table-striped table-hover dataTable" role="grid">
-                                            <thead>
-                                                <tr role="row">
-                                                    <th>Tên sản phẩm</th>
-                                                    <th>Số lượng</th>
-                                                    <th>Giá nhập cũ</th>
-                                                    <th>Giá nhập mới</th>
+                    <div class="d-flex justify-content-end align-items-center">
+                        <input type="search" name="search" class="form-control me-2" style="width: 300px;"
+                            placeholder="Tìm kiếm...">
+
+                        <button type="button" class="btn" id="btn-reset"> <i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                </div>
+                <div class="card-header">
+                    <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách sản phẩm nhập hôm
+                        nay
+                    </h4>
+                </div>
+
+                <div class="card-body">
+                    <div class="">
+                        <!-- Table for Product Sales -->
+                        <div id="products-sales-table_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
+                            <div class="table-responsive px-3">
+                                <table class="table table-striped table-hover align-middle report-product-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên sản phẩm</th>
+                                            <th>Số lượng</th>
+                                            <th>Giá nhập cũ</th>
+                                            <th>Giá nhập mới</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @forelse ($productImports as $productId => $importData)
+                                            @php
+                                                $product = $products->get($productId);
+                                            @endphp
+
+                                            @if ($product)
+                                                <tr>
+                                                    <td>{{ $product->name }}</td>
+                                                    <td>{{ $importData['quantity'] ?? 0 }}</td>
+
+                                                    <td>
+                                                        {{ number_format($importData['old_price'] ?? 0) }} VND
+                                                    </td>
+
+                                                    <td>
+                                                        {{ number_format($importData['price'] ?? 0) }} VND
+                                                    </td>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach ($imports as $import)
-                                                    @foreach ($import->details as $detail)
-                                                        <tr>
-                                                            <td>{{ $detail->product->name }}</td>
-                                                            <!-- Example product name access -->
-                                                            <td>{{ $detail->quantity }}</td>
-                                                            <!-- Example user name access -->
-                                                            <td>{{ number_format($detail->old_price) }} VND</td>
-                                                            <td>{{ number_format($detail->price) }} VND</td>
-
-                                                        </tr>
-                                                    @endforeach
-                                                @endforeach
-                                            </tbody>
-
-                                        </table>
-
-                                        <!-- Pagination for Products -->
-                                        {{ $productImports->appends(['products_page' => $productImports->currentPage()])->links('vendor.pagination.custom') }}
-                                    </div>
-                                </div>
+                                            @endif
+                                        @empty
+                                            <tr>
+                                                <td colspan="4" class="text-center py-4">
+                                                    Không có sản phẩm nhập nào
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
                             </div>
-                            <!-- End Table -->
+
+                            @if ($productImports->hasPages())
+                                <div class="d-flex justify-content-center mt-3">
+                                    {{ $productImports->appends(request()->except('products_page'))->links('vendor.pagination.custom') }}
+                                </div>
+                            @endif
                         </div>
+                        <!-- End Table -->
                     </div>
                 </div>
             </div>
@@ -198,7 +221,6 @@
     <!-- Include SheetJS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-notify/0.2.0/js/bootstrap-notify.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <script>
         $(document).ready(function() {
@@ -231,113 +253,12 @@
         });
     </script>
 @endsection
-@push('script')
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-
-    <script>
-        $(function() {
-            let currentPage = 1
-            let searchText = '';
-
-            let start = moment().subtract(1, 'month');
-            let end = moment();
-
-            $('#dateFilter').daterangepicker({
-                startDate: start,
-                endDate: end,
-                autoUpdateInput: true,
-                locale: {
-                    format: 'DD/MM/YYYY',
-                    cancelLabel: 'Hủy',
-                    applyLabel: 'Áp dụng',
-                    customRangeLabel: 'Tùy chọn',
-                    daysOfWeek: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-                    monthNames: [
-                        'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-                        'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
-                    ],
-                    firstDay: 1
-                },
-                ranges: {
-                    'Hôm nay': [moment(), moment()],
-                    'Ngày mai': [moment().add(1, 'days'), moment().add(1, 'days')],
-                    'Tuần này': [moment().startOf('week'), moment().endOf('week')],
-                    'Tuần sau': [moment().add(1, 'week').startOf('week'), moment().add(1, 'week').endOf(
-                        'week')],
-                    'Tháng này': [moment().startOf('month'), moment().endOf('month')],
-                    'Tháng sau': [moment().add(1, 'month').startOf('month'), moment().add(1, 'month').endOf(
-                        'month')]
-                }
-            });
-
-            // Hiển thị mặc định trên input khi load
-            $('#dateFilter').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
-
-            $('#dateFilter').on('apply.daterangepicker', function(ev, picker) {
-                $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format(
-                    'DD/MM/YYYY'));
-
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
-            });
-
-            $('#dateFilter').on('cancel.daterangepicker', function(ev, picker) {
-                $(this).val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
-
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
-            });
-
-            $(document).on('click', 'a.page-link', function(e) {
-                e.preventDefault();
-
-                let url = $(this).attr('href');
-                let page = new URL(url).searchParams.get("page");
-
-                fetchOrders(page, searchText);
-            });
-
-            function debounce(fn, delay = 500) {
-                let timer;
-                return function(...args) {
-                    clearTimeout(timer);
-                    timer = setTimeout(() => fn.apply(this, args), delay);
-                };
-            }
-
-            $('input[name="search"]').on('input', debounce(function() {
-                searchText = $(this).val();
-                fetchOrders(1, searchText); // reset về page 1 khi search
-            }));
-
-            $('#btn-reset').click(function() {
-                $('input[name="search"]').val('');
-                fetchOrders()
-            })
-
-            const fetchOrders = (page = 1, search, dateRange) => {
-                $.ajax({
-                    url: window.location.pathname,
-                    method: 'GET',
-                    data: {
-                        page,
-                        s: search,
-                        date_range: dateRange
-                    },
-                    success: (res) => {
-                        $('#table-wrapper').html(res.html);
-                    },
-                    error: (xhr) => {
-                        console.log(xhr);
-                    }
-                })
-            }
-
-            fetchOrders();
-        })
-    </script>
-@endpush
 @push('style')
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
+    <style>
+        .report-import-table th:first-child,
+        .report-import-table td:first-child {
+            padding-left: 20px !important;
+            white-space: nowrap;
+        }
+    </style>
 @endpush

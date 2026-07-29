@@ -348,7 +348,7 @@ class ImportImeiWorkflowTest extends TestCase
             ->get()
             ->each(function (ProductImei $productImei): void {
                 $this->assertSame(
-                    sprintf('TEL-%08d', $productImei->id),
+                    '29' . str_pad((string) $productImei->id, 11, '0', STR_PAD_LEFT),
                     $productImei->barcode
                 );
             });
@@ -709,6 +709,13 @@ class ImportImeiWorkflowTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('user_info', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('img_url')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('config', function (Blueprint $table) {
             $table->id();
             $table->string('logo')->nullable();
@@ -785,6 +792,10 @@ class ImportImeiWorkflowTest extends TestCase
             $table->unsignedBigInteger('supplier_id')->nullable();
             $table->integer('total')->nullable();
             $table->integer('payment_ncc')->nullable();
+            $table->string('payment_method', 30)->nullable();
+            $table->unsignedBigInteger('paid_amount')->default(0);
+            $table->unsignedBigInteger('debt_amount')->default(0);
+            $table->string('payment_status', 20)->nullable();
             $table->string('status')->nullable();
             $table->string('coupon_code')->nullable()->unique();
             $table->unsignedBigInteger('storage_id')->nullable();
@@ -828,6 +839,38 @@ class ImportImeiWorkflowTest extends TestCase
             $table->id();
             $table->string('code')->nullable();
             $table->string('name')->nullable();
+            $table->timestamps();
+        });
+
+        \Illuminate\Support\Facades\DB::table('accounts')->insert([
+            ['code' => '111', 'name' => 'Tiền mặt', 'created_at' => now(), 'updated_at' => now()],
+            ['code' => '112', 'name' => 'Tiền gửi ngân hàng', 'created_at' => now(), 'updated_at' => now()],
+            ['code' => '156', 'name' => 'Hàng hóa', 'created_at' => now(), 'updated_at' => now()],
+            ['code' => '331', 'name' => 'Phải trả nhà cung cấp', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->dateTime('transaction_date')->nullable();
+            $table->string('description')->nullable();
+            $table->string('reference_number')->nullable();
+            $table->string('type')->nullable();
+            $table->string('document_type')->nullable();
+            $table->string('attachment')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('transaction_entries', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('transaction_id');
+            $table->unsignedBigInteger('account_id');
+            $table->decimal('debit_amount', 15, 2)->nullable()->default(0);
+            $table->decimal('credit_amount', 15, 2)->nullable()->default(0);
+            $table->string('tableable_type')->nullable();
+            $table->unsignedBigInteger('tableable_id')->nullable();
+            $table->string('note')->nullable();
             $table->timestamps();
         });
     }

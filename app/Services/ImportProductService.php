@@ -126,18 +126,14 @@ class ImportProductService
     private function ensureImportCouponCanBeDeleted(ImportCoupon $coupon): void
     {
         $code = $coupon->coupon_code ?: "#{$coupon->id}";
-        $paidAmount = (int) ($coupon->payment_ncc ?? 0);
+        $paidAmount = (int) ($coupon->paid_amount ?? $coupon->payment_ncc ?? 0);
         $totalAmount = (int) ($coupon->total ?? 0);
-        $debtAmount = max($totalAmount - $paidAmount, 0);
+        $debtAmount = (int) ($coupon->debt_amount ?? max($totalAmount - $paidAmount, 0));
 
         if ($coupon->details->contains(fn (ImportDetail $detail) => $detail->imeis->isNotEmpty())) {
             throw new DomainException(
                 "Không thể xóa phiếu nhập {$code} vì dữ liệu IMEI đã được ghi nhận vào kho."
             );
-        }
-
-        if ((string) $coupon->status === '1') {
-            throw new DomainException("Phiếu nhập {$code} đã ở trạng thái đã thanh toán, không thể xóa.");
         }
 
         if ($paidAmount > 0) {

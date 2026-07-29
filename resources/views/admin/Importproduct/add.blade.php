@@ -3,6 +3,151 @@
 @section('content')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
     <style>
+        .import-confirm-modal .modal-content {
+            border: 0;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16);
+        }
+
+        .import-confirm-modal .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #eef1f4;
+            background: #fff;
+        }
+
+        .import-confirm-modal .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin: 0;
+        }
+
+        .import-confirm-modal .modal-body {
+            padding: 20px;
+            background: #fff;
+        }
+
+        .import-confirm-form {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .import-confirm-row {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .import-confirm-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4b5563;
+            margin: 0;
+        }
+
+        .import-confirm-value {
+            font-size: 14px;
+            color: #111827;
+        }
+
+        .import-confirm-form .form-control,
+        .import-confirm-form .form-select,
+        .import-confirm-form select {
+            height: 42px;
+            border-radius: 8px;
+            border: 1px solid #dbe2ea;
+            box-shadow: none;
+        }
+
+        .import-confirm-summary {
+            margin-top: 4px;
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 1px solid #e8edf3;
+        }
+
+        .import-confirm-summary .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .import-confirm-summary .summary-row+.summary-row {
+            border-top: 1px dashed #dde5ee;
+        }
+
+        .import-confirm-summary .summary-label {
+            color: #4b5563;
+            font-weight: 600;
+        }
+
+        .import-confirm-summary .summary-value {
+            color: #111827;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .import-confirm-payment {
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: #fff;
+            border: 1px solid #e8edf3;
+        }
+
+        .import-confirm-editable {
+            min-height: 42px;
+            padding: 9px 12px;
+            border: 1px solid #dbe2ea;
+            border-radius: 8px;
+            background: #fff;
+            color: #0d6efd;
+            font-weight: 600;
+            text-align: right;
+            outline: none;
+        }
+
+        .import-confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 18px;
+        }
+
+        .import-confirm-actions .btn {
+            min-width: 130px;
+            height: 42px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .import-confirm-note {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 6px;
+            text-align: right;
+        }
+
+        @media (max-width: 576px) {
+            .import-confirm-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .import-confirm-actions {
+                justify-content: stretch;
+            }
+
+            .import-confirm-actions .btn {
+                width: 100%;
+            }
+        }
+
         .numberInput {
             width: 100px;
         }
@@ -310,134 +455,133 @@
                                 </button>
                             </div>
                             <!-- Modal -->
-                            <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel"
-                                aria-hidden="true">
-                                <div class="modal-dialog modal-lg">
-                                    <div class="modal-content" style="max-width:440px; margin: 0px auto;">
+                            <div class="modal fade import-confirm-modal" id="exampleModal" tabindex="-1"
+                                aria-labelledby="exampleModalLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content" style="max-width: 520px; margin: 0 auto;">
                                         <div class="modal-header">
-                                            <h5 class="modal-title" id="exampleModalLabel">Thông tin chi tiết</h5>
+                                            <h5 class="modal-title" id="exampleModalLabel">Xác nhận phiếu nhập</h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                                aria-label="Close">
-                                            </button>
+                                                aria-label="Close"></button>
                                         </div>
+
                                         <form action="{{ route('admin.importproduct.importCoupon.add') }}" id="addimport"
                                             method="post">
                                             @csrf
+
                                             <div class="modal-body">
-                                                <div class="form-wrapper form-labels-220">
-                                                    <div class="form-group">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
-                                                            {{ $user->name }}
+                                                <div class="import-confirm-form">
+
+                                                    <div class="import-confirm-row">
+                                                        <div class="import-confirm-label">Nhân viên tạo</div>
+                                                        <div class="import-confirm-value">
+                                                            <input type="text" class="form-control"
+                                                                value="{{ $user->name }}" readonly>
                                                         </div>
-                                                        <div class="pull-right">
+                                                    </div>
+
+                                                    <div class="import-confirm-row">
+                                                        <div class="import-confirm-label">Thời gian nhập</div>
+                                                        <div class="import-confirm-value">
                                                             <input type="datetime-local" class="form-control"
                                                                 id="datetime" name="datetime"
                                                                 value="{{ now()->format('Y-m-d\TH:i') }}">
                                                         </div>
                                                     </div>
 
-                                                    <!-- Nhà cung cấp -->
-                                                    <div class="form-group mt-2">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
-                                                            Nhà cung cấp
-                                                        </div>
-                                                        <div class="pull-right">
-                                                            <select name="supplier" class="form-control" id="supplier"
-                                                                style="width: 195px;">
+                                                    <div class="import-confirm-row">
+                                                        <div class="import-confirm-label">Nhà cung cấp</div>
+                                                        <div class="import-confirm-value">
+                                                            <select name="supplier" class="form-control" id="supplier">
                                                                 <option value="">--- Chọn nhà cung cấp ---</option>
                                                                 @foreach ($supplier as $value)
                                                                     <option value="{{ $value->id }}"
                                                                         @selected((string) old('supplier') === (string) $value->id)>
-                                                                        {{ $value->name }}</option>
+                                                                        {{ $value->name }}
+                                                                    </option>
                                                                 @endforeach
                                                             </select>
                                                         </div>
                                                     </div>
 
-                                                    <!-- Kho hàng -->
-                                                    <div class="form-group mt-3">
-                                                        <div class="pull-left user-created control-label ng-binding">
-                                                            <span><i class="fa fa-user-circle-o"
-                                                                    title="Người tạo"></i></span>
-                                                            Kho hàng
-                                                        </div>
-                                                        <div class="pull-right">
-                                                            <select name="storage" class="form-control" id="storage"
-                                                                style="width: 195px;">
+                                                    <div class="import-confirm-row">
+                                                        <div class="import-confirm-label">Kho hàng</div>
+                                                        <div class="import-confirm-value">
+                                                            <select name="storage" class="form-control" id="storage">
                                                                 <option value="">--- Chọn nhà kho hàng ---</option>
                                                                 @foreach ($storage as $value)
                                                                     <option value="{{ $value->id }}"
                                                                         @selected((string) old('storage') === (string) $value->id)>
-                                                                        {{ $value->name }}</option>
+                                                                        {{ $value->name }}
+                                                                    </option>
                                                                 @endforeach
                                                             </select>
                                                         </div>
                                                     </div>
 
-                                                    <div class="form-group" style="margin: 0px; padding: 0;">
-                                                        <div class="col-lg-12">
-                                                            <span class="invalid-feedback d-block pull-right"
-                                                                style="font-weight: 500; text-align: end"
-                                                                id="supplier_error"></span>
+                                                    <div class="import-confirm-row" style="margin-top: -6px;">
+                                                        <div></div>
+                                                        <div>
+                                                            <span class="invalid-feedback d-block text-end"
+                                                                style="font-weight: 500;" id="supplier_error"></span>
                                                         </div>
                                                     </div>
 
-                                                    <!-- Tổng tiền hàng -->
-                                                    <div
-                                                        class="form-group mb-1 d-flex justify-content-between align-items-center w-100">
-                                                        <div class="user-created control-label ng-binding">
-                                                            Tổng tiền hàng
+                                                    <div class="import-confirm-summary">
+                                                        <div class="summary-row">
+                                                            <div class="summary-label">Tổng tiền hàng</div>
+                                                            <div class="summary-value cantra">100000</div>
                                                         </div>
 
-                                                        <div class="cantra text-end text-nowrap">
-                                                            100000
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Cần trả nhà cung cấp -->
-                                                    <div
-                                                        class="form-group mb-1 d-flex justify-content-between align-items-center w-100">
-                                                        <div class="user-created control-label ng-binding">
-                                                            Cần trả nhà cung cấp
-                                                        </div>
-
-                                                        <div class="cantra text-end text-nowrap">
-                                                            100000
+                                                        <div class="summary-row">
+                                                            <div class="summary-label">Cần trả nhà cung cấp</div>
+                                                            <div class="summary-value cantra">100000</div>
                                                         </div>
                                                     </div>
 
                                                     <input type="text" id="total_input" name="total"
                                                         style="display: none;">
 
-                                                    <!-- Tiền trả nhà cung cấp -->
-                                                    <div
-                                                        class="form-group mb-0 d-flex justify-content-between align-items-start w-100">
-                                                        <div class="user-created control-label ng-binding">
-                                                            Tiền trả nhà cung cấp
+                                                    <div class="import-confirm-payment">
+                                                        <div class="import-confirm-row">
+                                                            <div class="import-confirm-label">Phương thức thanh toán</div>
+                                                            <div class="import-confirm-value">
+                                                                <select name="payment_method" class="form-control"
+                                                                    id="payment_method">
+                                                                    <option value="cash" @selected(old('payment_method', 'cash') === 'cash')>
+                                                                        Tiền mặt
+                                                                    </option>
+                                                                    <option value="bank_transfer"
+                                                                        @selected(old('payment_method') === 'bank_transfer')>
+                                                                        Chuyển khoản
+                                                                    </option>
+                                                                    <option value="debt" @selected(old('payment_method') === 'debt')>
+                                                                        Công nợ
+                                                                    </option>
+                                                                </select>
+                                                            </div>
                                                         </div>
 
-                                                        <div class="d-flex flex-column align-items-end"
-                                                            style="min-width: 120px; white-space: nowrap;">
-
-                                                            <div id="tientra" class="editable text-end"
-                                                                contenteditable="true"
-                                                                style="width: 100%; border-bottom: 1px solid; color: #007bff; white-space: nowrap;">
+                                                        <div class="import-confirm-row mt-3">
+                                                            <div class="import-confirm-label">Tiền trả nhà cung cấp</div>
+                                                            <div class="import-confirm-value">
+                                                                <div id="tientra" class="import-confirm-editable"
+                                                                    contenteditable="true"></div>
+                                                                <div class="import-confirm-note">Nhập số tiền thanh toán
+                                                                    cho nhà cung cấp</div>
                                                             </div>
-
-                                                            <button type="button" class="btn btn-primary mt-3"
-                                                                style="white-space: nowrap; min-width: 100px;"
-                                                                onclick="submitadd(event)">
-                                                                Xác nhận
-                                                            </button>
                                                         </div>
                                                     </div>
 
                                                     <input type="text" id="payment" name="totalncc"
                                                         style="display: none;">
+
+                                                    <div class="import-confirm-actions">
+                                                        <button type="button" class="btn btn-primary"
+                                                            onclick="submitadd(event)">
+                                                            Xác nhận
+                                                        </button>
+                                                    </div>
 
                                                 </div>
                                             </div>
@@ -503,6 +647,10 @@
             if (firstMissingImei) {
                 firstMissingImei.focus();
                 alert('Vui lòng nhập đầy đủ IMEI trước khi lưu phiếu nhập.');
+                return;
+            }
+
+            if (!normalizePaymentBeforeSubmit()) {
                 return;
             }
 
@@ -936,12 +1084,15 @@
 
             });
 
+            $j(document).on('change', '#payment_method', function() {
+                syncPaymentAmount(true);
+            });
+
             function updateReceiptTotal(total) {
                 const rawTotal = Math.round(parseMoneyValue(total));
                 $j('#total_input').val(rawTotal);
-                $j('#payment').val(rawTotal);
                 $j('.cantra').text(formatMoneyValue(rawTotal));
-                $j('#tientra').text(formatMoneyValue(rawTotal));
+                syncPaymentAmount();
             }
 
             function updateimport(importproduct, total) {
@@ -1075,13 +1226,13 @@
                     </span>
 
                     ${productCode ? `
-                            <span>
-                                Mã sản phẩm:
-                                <strong class="text-dark">
-                                    ${escapeHtml(productCode)}
-                                </strong>
-                            </span>
-                        ` : ''}
+                                    <span>
+                                        Mã sản phẩm:
+                                        <strong class="text-dark">
+                                            ${escapeHtml(productCode)}
+                                        </strong>
+                                    </span>
+                                ` : ''}
 
                     <span>
                         Số lượng:
@@ -1146,18 +1297,94 @@
     </script>
 
     <script>
-        document.getElementById('tientra').addEventListener('focus', function() {
+        function getImportPaymentTotal() {
+            return Math.max(Math.round(parseMoneyValue(document.getElementById('total_input')?.value || 0)), 0);
+        }
+
+        function getSelectedImportPaymentMethod() {
+            return document.getElementById('payment_method')?.value || 'cash';
+        }
+
+        function setImportPaidAmount(amount) {
+            const total = getImportPaymentTotal();
+            const paidAmount = Math.min(Math.max(Math.round(parseMoneyValue(amount)), 0), total);
+            const paymentInput = document.getElementById('payment');
+            const paidElement = document.getElementById('tientra');
+
+            if (paymentInput) {
+                paymentInput.value = paidAmount;
+            }
+
+            if (paidElement) {
+                paidElement.innerText = formatMoneyValue(paidAmount);
+            }
+
+            return paidAmount;
+        }
+
+        function syncPaymentAmount(resetAmount = false) {
+            const method = getSelectedImportPaymentMethod();
+            const total = getImportPaymentTotal();
+            const paidElement = document.getElementById('tientra');
+            const currentPaidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
+            const shouldPayFull = method === 'cash' || method === 'bank_transfer';
+            const paidAmount = shouldPayFull ? total : (resetAmount ? 0 : Math.min(currentPaidAmount, total));
+
+            if (paidElement) {
+                paidElement.setAttribute('contenteditable', shouldPayFull ? 'false' : 'true');
+                paidElement.classList.toggle('text-muted', shouldPayFull);
+                paidElement.title = shouldPayFull ?
+                    'Tiền mặt/chuyển khoản mặc định thanh toán đủ phiếu nhập' :
+                    'Công nợ cho phép nhập 0 hoặc một phần';
+            }
+
+            setImportPaidAmount(paidAmount);
+        }
+
+        function normalizePaymentBeforeSubmit() {
+            const total = getImportPaymentTotal();
+            const method = getSelectedImportPaymentMethod();
+            let paidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
+
+            if (method === 'cash' || method === 'bank_transfer') {
+                paidAmount = total;
+            }
+
+            if (paidAmount < 0 || paidAmount > total) {
+                alert('Số tiền trả nhà cung cấp phải nằm trong khoảng từ 0 đến tổng tiền phiếu nhập.');
+                return false;
+            }
+
+            setImportPaidAmount(paidAmount);
+
+            return true;
+        }
+
+        const paidSupplierElement = document.getElementById('tientra');
+
+        paidSupplierElement?.addEventListener('focus', function() {
+            if (getSelectedImportPaymentMethod() !== 'debt') {
+                return;
+            }
+
             this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
         });
 
-        document.getElementById('tientra').addEventListener('input', function() {
+        paidSupplierElement?.addEventListener('input', function() {
+            if (getSelectedImportPaymentMethod() !== 'debt') {
+                syncPaymentAmount();
+                return;
+            }
+
             this.innerText = this.innerText.replace(/\D/g, '');
-            document.getElementById('payment').value = Math.round(parseMoneyValue(this.innerText));
+            document.getElementById('payment').value = Math.min(
+                Math.round(parseMoneyValue(this.innerText)),
+                getImportPaymentTotal()
+            );
         });
 
-        document.getElementById('tientra').addEventListener('blur', function() {
-            document.getElementById('payment').value = Math.round(parseMoneyValue(this.innerText));
-            this.innerText = formatMoneyValue(this.innerText);
+        paidSupplierElement?.addEventListener('blur', function() {
+            normalizePaymentBeforeSubmit();
         });
     </script>
     <script>

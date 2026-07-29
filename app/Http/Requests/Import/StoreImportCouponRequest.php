@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Import;
 
 use App\Models\Import;
+use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Models\ProductImei;
 use Illuminate\Foundation\Http\FormRequest;
@@ -19,6 +20,7 @@ class StoreImportCouponRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $normalized = [];
+        $paymentMethod = $this->input('payment_method', ImportCoupon::PAYMENT_METHOD_CASH);
 
         foreach ((array) $this->input('imeis', []) as $importId => $imeis) {
             if (! is_array($imeis)) {
@@ -33,7 +35,10 @@ class StoreImportCouponRequest extends FormRequest
             );
         }
 
-        $this->merge(['imeis' => $normalized]);
+        $this->merge([
+            'imeis' => $normalized,
+            'payment_method' => is_string($paymentMethod) ? trim($paymentMethod) : $paymentMethod,
+        ]);
     }
 
     public function rules(): array
@@ -43,6 +48,7 @@ class StoreImportCouponRequest extends FormRequest
             'storage' => ['required', 'integer', 'exists:storages,id'],
             'total' => ['nullable', 'numeric', 'min:0'],
             'totalncc' => ['nullable', 'numeric', 'min:0'],
+            'payment_method' => ['required', 'string', 'in:cash,bank_transfer,debt'],
             'imeis' => ['nullable', 'array'],
         ];
     }

@@ -91,8 +91,13 @@ class DailyReportService
     {
         try {
             // Paginate imports
-            $imports = $this->import->whereDate('created_at', now()->toDateString())
-                ->with('details.product') // Eager load details and product
+            $imports = $this->import
+                ->newQuery()
+                ->whereDate('created_at', now()->toDateString())
+                ->with('details.product')
+                ->reorder()
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
                 ->paginate(3, ['*'], 'import_page');
 
             // Retrieve all import details for today

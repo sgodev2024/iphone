@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\Company;
 use App\Models\ExpenseDetail;
 use App\Models\Import;
+use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\SupplierDebtsDetail;
@@ -248,19 +249,21 @@ class importCouponController extends Controller
         }
 
         $total = (int) $imports->sum('total');
-        $paidAmount = (int) $request->validated('totalncc', 0);
-
-        if ($paidAmount > $total) {
-            throw ValidationException::withMessages([
-                'totalncc' => 'Số tiền trả nhà cung cấp không được vượt quá tổng tiền phiếu nhập.',
-            ]);
-        }
+        $payment = $this->normalizePaymentData(
+            (string) $request->validated('payment_method', ImportCoupon::PAYMENT_METHOD_CASH),
+            (int) $request->validated('totalncc', 0),
+            $total
+        );
 
         $importCoupon = $this->importProductService->addImportCoupon([
             'user_id' => $user->id,
             'companies_id' => $supplierId,
             'total' => $total,
-            'payment_ncc' => $paidAmount,
+            'payment_ncc' => $payment['paid_amount'],
+            'payment_method' => $payment['payment_method'],
+            'paid_amount' => $payment['paid_amount'],
+            'debt_amount' => $payment['debt_amount'],
+            'payment_status' => $payment['payment_status'],
             'storage_id' => $storageId,
         ]);
 
@@ -350,13 +353,54 @@ class importCouponController extends Controller
             $this->companyProductService->updateCompanyProduct($product->id, $supplierId);
         }
 
-        $debtAmount = $total - $paidAmount;
-        $this->recordSupplierDebt($supplierId, $debtAmount);
-        $this->recordSupplierPayment($supplierId, $paidAmount);
-        $this->recordAccountingEntries($user->id, $supplierId, $total, $debtAmount);
+        $this->recordSupplierDebt($supplierId, $payment['debt_amount']);
+        $this->recordSupplierPayment($supplierId, $payment['paid_amount'], $payment['payment_method']);
+        $this->recordAccountingEntries($user->id, $importCoupon);
 
         Import::query()->whereKey($imports->modelKeys())->delete();
         return (int) $importCoupon->id;
+    }
+
+    private function normalizePaymentData(string $paymentMethod, int $paidAmount, int $total): array
+    {
+        if (! in_array($paymentMethod, ImportCoupon::paymentMethods(), true)) {
+            throw ValidationException::withMessages([
+                'payment_method' => 'Phương thức thanh toán không hợp lệ.',
+            ]);
+        }
+
+        if ($paidAmount < 0) {
+            throw ValidationException::withMessages([
+                'totalncc' => 'Số tiền trả nhà cung cấp không được âm.',
+            ]);
+        }
+
+        if (in_array($paymentMethod, [
+            ImportCoupon::PAYMENT_METHOD_CASH,
+            ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER,
+        ], true)) {
+            $paidAmount = $total;
+        }
+
+        if ($paidAmount > $total) {
+            throw ValidationException::withMessages([
+                'totalncc' => 'Số tiền trả nhà cung cấp không được vượt quá tổng tiền phiếu nhập.',
+            ]);
+        }
+
+        $debtAmount = max($total - $paidAmount, 0);
+        $paymentStatus = match (true) {
+            $paidAmount >= $total => ImportCoupon::PAYMENT_STATUS_PAID,
+            $paidAmount > 0 => ImportCoupon::PAYMENT_STATUS_PARTIAL,
+            default => ImportCoupon::PAYMENT_STATUS_UNPAID,
+        };
+
+        return [
+            'payment_method' => $paymentMethod,
+            'paid_amount' => $paidAmount,
+            'debt_amount' => $debtAmount,
+            'payment_status' => $paymentStatus,
+        ];
     }
 
     private function recordSupplierDebt(int $supplierId, int $debtAmount): void
@@ -388,7 +432,7 @@ class importCouponController extends Controller
         ]);
     }
 
-    private function recordSupplierPayment(int $supplierId, int $paidAmount): void
+    private function recordSupplierPayment(int $supplierId, int $paidAmount, string $paymentMethod): void
     {
         if ($paidAmount <= 0) {
             return;
@@ -396,6 +440,7 @@ class importCouponController extends Controller
 
         $company = Company::findOrFail($supplierId);
         $supplierIds = $this->expenseService->getAllExpense()->pluck('companies_id');
+        $paymentMethodLabel = $this->paymentDisbursementMethodLabel($paymentMethod);
 
         if ($supplierIds->contains($supplierId)) {
             $expense = $this->expenseService->findExpenseByCompany($supplierId);
@@ -405,7 +450,7 @@ class importCouponController extends Controller
         } else {
             $expense = $this->expenseService->addExpense([
                 'companies_id' => $supplierId,
-                'content' => "Thanh toán cho nhà cung cấp {$company->name}",
+                'content' => "Thanh toán cho nhà cung cấp {$company->name} ({$paymentMethodLabel})",
                 'amount_spent' => $paidAmount,
                 'date_spent' => Carbon::now()->toDateString(),
             ]);
@@ -413,20 +458,20 @@ class importCouponController extends Controller
 
         ExpenseDetail::create([
             'expense_id' => $expense->id,
-            'content' => "Thanh toán cho nhà cung cấp {$company->name}",
+            'content' => "Thanh toán cho nhà cung cấp {$company->name} ({$paymentMethodLabel})",
             'amount' => $paidAmount,
             'date' => Carbon::now()->toDateString(),
         ]);
     }
 
-    private function recordAccountingEntries(int $userId, int $supplierId, int $total, int $debtAmount): void
+    private function recordAccountingEntries(int $userId, ImportCoupon $importCoupon): void
     {
-        $accountGoodsId = Account::where('code', '156')->value('id');
-        $accountSupplierId = Account::where('code', '331')->value('id');
-
-        if (! $accountGoodsId || ! $accountSupplierId) {
-            return;
-        }
+        $total = (int) $importCoupon->total;
+        $paidAmount = (int) ($importCoupon->paid_amount ?? $importCoupon->payment_ncc ?? 0);
+        $debtAmount = (int) ($importCoupon->debt_amount ?? max($total - $paidAmount, 0));
+        $paymentMethod = (string) ($importCoupon->payment_method ?? ImportCoupon::PAYMENT_METHOD_CASH);
+        $supplierId = (int) $importCoupon->companies_id;
+        $accountGoodsId = $this->resolveRequiredAccountId('156');
 
         $transaction = Transaction::create([
             'user_id' => $userId,
@@ -434,7 +479,7 @@ class importCouponController extends Controller
             'description' => 'Nhập hàng NCC',
             'type' => 'expense',
             'document_type' => 'import',
-            'reference_number' => 'IMP-' . now()->format('YmdHis'),
+            'reference_number' => $importCoupon->coupon_code ?: 'IMP-' . now()->format('YmdHis'),
             'created_by' => $userId,
         ]);
 
@@ -445,13 +490,53 @@ class importCouponController extends Controller
             'credit_amount' => 0,
             'tableable_type' => Company::class,
             'tableable_id' => $supplierId,
+            'note' => 'Ghi nhận hàng nhập kho',
         ]);
 
-        TransactionEntry::create([
-            'transaction_id' => $transaction->id,
-            'account_id' => $accountSupplierId,
-            'debit_amount' => $debtAmount > 0 ? $debtAmount : 0,
-            'credit_amount' => $debtAmount > 0 ? 0 : $total,
-        ]);
+        if ($paidAmount > 0) {
+            $paymentAccountCode = $paymentMethod === ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER ? '112' : '111';
+
+            TransactionEntry::create([
+                'transaction_id' => $transaction->id,
+                'account_id' => $this->resolveRequiredAccountId($paymentAccountCode),
+                'debit_amount' => 0,
+                'credit_amount' => $paidAmount,
+                'tableable_type' => Company::class,
+                'tableable_id' => $supplierId,
+                'note' => 'Thanh toán nhà cung cấp bằng ' . $this->paymentDisbursementMethodLabel($paymentMethod),
+            ]);
+        }
+
+        if ($debtAmount > 0) {
+            TransactionEntry::create([
+                'transaction_id' => $transaction->id,
+                'account_id' => $this->resolveRequiredAccountId('331'),
+                'debit_amount' => 0,
+                'credit_amount' => $debtAmount,
+                'tableable_type' => Company::class,
+                'tableable_id' => $supplierId,
+                'note' => 'Ghi nhận công nợ nhà cung cấp',
+            ]);
+        }
+    }
+
+    private function resolveRequiredAccountId(string $code): int
+    {
+        $accountId = Account::where('code', $code)->value('id');
+
+        if (! $accountId) {
+            throw ValidationException::withMessages([
+                'accounting' => "Không tìm thấy tài khoản kế toán {$code}. Vui lòng cấu hình tài khoản trước khi xác nhận phiếu nhập.",
+            ]);
+        }
+
+        return (int) $accountId;
+    }
+
+    private function paymentDisbursementMethodLabel(string $paymentMethod): string
+    {
+        return $paymentMethod === ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER
+            ? 'Chuyển khoản'
+            : 'Tiền mặt';
     }
 }

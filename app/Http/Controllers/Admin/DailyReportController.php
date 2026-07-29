@@ -112,8 +112,9 @@ class DailyReportController extends Controller
             $sheet->setCellValue('B1', 'Nhân viên');
             $sheet->setCellValue('C1', 'Ngày tạo');
             $sheet->setCellValue('D1', 'Nhà cung cấp');
-            $sheet->setCellValue('E1', 'Trạng thái');
-            $sheet->setCellValue('F1', 'Tổng tiền');
+            $sheet->setCellValue('E1', 'Phương thức thanh toán');
+            $sheet->setCellValue('F1', 'Trạng thái');
+            $sheet->setCellValue('G1', 'Tổng tiền');
 
             // Điền dữ liệu đơn nhập hàng
             $row = 2;
@@ -122,8 +123,9 @@ class DailyReportController extends Controller
                 $sheet->setCellValue('B' . $row, $import->user->name ?? '');
                 $sheet->setCellValue('C' . $row, $import->created_at->format('d/m/y'));
                 $sheet->setCellValue('D' . $row, $import->company->name ?? '');
-                $sheet->setCellValue('E' . $row, $import->status == 1 ? 'Đã thanh toán' : 'Công nợ');
-                $sheet->setCellValue('F' . $row, number_format($import->total));
+                $sheet->setCellValue('E' . $row, $import->payment_method_label);
+                $sheet->setCellValue('F' . $row, $import->payment_status_label);
+                $sheet->setCellValue('G' . $row, number_format($import->total));
                 $row++;
             }
 

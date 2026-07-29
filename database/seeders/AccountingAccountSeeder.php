@@ -13,6 +13,8 @@ class AccountingAccountSeeder extends Seeder
         $this->upsertAccount('111', 'Tiền mặt', null, 1, true);
         $bankParentAccount = $this->upsertAccount('112', 'Tiền gửi ngân hàng', null, 1, true);
         $this->upsertAccount('131', 'Phải thu khách hàng', null, 1, true);
+        $this->upsertAccount('156', 'Hàng hóa', null, 1, true);
+        $this->upsertAccount('331', 'Phải trả nhà cung cấp', null, 1, true);
 
         $this->upsertConfiguredBankAccount($bankParentAccount);
     }
