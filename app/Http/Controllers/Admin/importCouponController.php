@@ -305,7 +305,7 @@ class importCouponController extends Controller
         | Bước 2: Sinh barcode từ ID vừa tạo
         |--------------------------------------------------------------------------
         |
-        | Ví dụ ID 125 -> TEL-00000125
+        | Ví dụ ID 125 -> 2900000000125
         */
                     $barcode = $this->internalBarcodeService->generate($productImei);
 
