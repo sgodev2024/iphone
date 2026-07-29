@@ -25,7 +25,11 @@ class DailyReportService
     {
         try {
             // Paginate orders
-            $orders = $this->order->whereDate('created_at', now()->toDateString())->paginate(3, ['*'], 'orders_page');
+            $orders = $this->order
+                ->whereDate('created_at', now()->toDateString())
+                ->with(['user', 'client'])
+                ->latest('created_at')
+                ->paginate(9, ['*'], 'orders_page');
 
             // Retrieve all order details for today
             $orderDetails = OrderDetail::whereHas('order', function ($query) {
@@ -35,6 +39,10 @@ class DailyReportService
             // Calculate product sales
             $productSales = [];
             foreach ($orderDetails as $orderDetail) {
+                if (!$orderDetail->product) {
+                    continue;
+                }
+
                 $productId = $orderDetail->product_id;
                 $quantity = $orderDetail->quantity;
                 $price = $orderDetail->product->price_buy;
@@ -55,7 +63,7 @@ class DailyReportService
             $products = Product::whereIn('id', array_keys($productSales))->get()->keyBy('id');
 
             // Paginate the product sales
-            $perPage = 5; // Number of items per page
+            $perPage = 9; // Number of items per page
             $currentPage = LengthAwarePaginator::resolveCurrentPage('products_page');
             $currentResults = array_slice($productSales, ($currentPage - 1) * $perPage, $perPage, true);
 

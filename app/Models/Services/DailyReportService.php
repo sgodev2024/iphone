@@ -25,7 +25,11 @@ class DailyReportService
     {
         try {
             // Paginate orders
-            $orders = $this->order->whereDate('created_at', now()->toDateString())->paginate(3, ['*'], 'orders_page');
+            $orders = $this->order
+                ->whereDate('created_at', now()->toDateString())
+                ->with(['user', 'client'])
+                ->latest('created_at')
+                ->paginate(9, ['*'], 'orders_page');
 
             // Retrieve all order details for today
             $orderDetails = OrderDetail::whereHas('order', function ($query) {

@@ -51,12 +51,10 @@
                     <div class="card-body">
                         <div class="">
                             <!-- Table for Orders -->
-                            <div id="basic-datatables_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
+                            <div>
                                 <div class="row">
                                     <div class="col-sm-12">
-                                        <table id="basic-datatables"
-                                            class="display table table-striped table-hover dataTable" role="grid"
-                                            aria-describedby="basic-datatables_info">
+                                        <table class="table table-striped table-hover">
                                             <thead>
                                                 <tr role="row">
                                                     <th>Mã đơn hàng</th>
@@ -75,16 +73,16 @@
                                                                 href="{{ route('admin.order.show', $order->id) }}">{{ $order->id }}</a>
                                                         </td>
                                                         <td>
-                                                            <a style="color:black" href="">
-                                                                {{ $order->user->name ?? '' }}
-                                                            </a>
+                                                            {{ optional($order->user)->name ?? '' }}
                                                         </td>
                                                         <td>{{ $order->created_at->format('d/m/Y') }}</td>
                                                         <td>
-                                                            <a style="color:black"
-                                                                href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
-                                                                {{ $order->client->name ?? '' }}
-                                                            </a>
+                                                            @if ($order->client)
+                                                                <a style="color:black"
+                                                                    href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
+                                                                    {{ $order->client->name }}
+                                                                </a>
+                                                            @endif
                                                         </td>
                                                         <td>
                                                             @if ($order->status == 1)
@@ -104,7 +102,7 @@
                                         </table>
 
                                         <!-- Pagination for Orders -->
-                                        {{ $orders->appends(['orders_page' => $orders->currentPage()])->links('vendor.pagination.custom') }}
+                                        {{ $orders->appends(request()->except('orders_page'))->links('vendor.pagination.custom') }}
                                     </div>
                                 </div>
                             </div>
@@ -115,7 +113,7 @@
             </div>
 
             <!-- Today's Products Section -->
-            {{-- <div class="col-md-12">
+            <div class="col-md-12">
                 <div class="card">
                     <div class="card-header">
                         <h4 class="card-title" style="text-align: center; color:white">Danh sách sản phẩm bán được hôm nay
@@ -125,11 +123,10 @@
                     <div class="card-body">
                         <div class="">
                             <!-- Table for Product Sales -->
-                            <div id="products-sales-table_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
+                            <div>
                                 <div class="row">
                                     <div class="col-sm-12">
-                                        <table id="products-sales-table"
-                                            class="display table table-striped table-hover dataTable" role="grid">
+                                        <table class="table table-striped table-hover">
                                             <thead>
                                                 <tr role="row">
                                                     <th>Tên sản phẩm</th>
@@ -138,7 +135,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach ($productSales as $productId => $sales)
+                                                @forelse ($productSales as $productId => $sales)
                                                     @php
                                                         $product = $products->get($productId);
                                                     @endphp
@@ -149,12 +146,16 @@
                                                             <td>{{ number_format($sales['total']) }} VND</td>
                                                         </tr>
                                                     @endif
-                                                @endforeach
+                                                @empty
+                                                    <tr>
+                                                        <td class="text-center" colspan="3">KhÃ´ng cÃ³ sáº£n pháº©m nÃ o</td>
+                                                    </tr>
+                                                @endforelse
                                             </tbody>
                                         </table>
 
                                         <!-- Pagination for Products -->
-                                        {{ $productSales->appends(['products_page' => $productSales->currentPage()])->links('vendor.pagination.custom') }}
+                                        {{ $productSales->appends(request()->except('products_page'))->links('vendor.pagination.custom') }}
                                     </div>
                                 </div>
                             </div>
@@ -162,7 +163,7 @@
                         </div>
                     </div>
                 </div>
-            </div> --}}
+            </div>
         </div>
 
         <!-- Export Button -->
@@ -170,11 +171,6 @@
             <button type="button" id="exportorders" class="btn btn-primary">Xuất báo cáo hàng ngày</button>
         </div>
     </div>
-
-    <!-- Include SheetJS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-notify/0.2.0/js/bootstrap-notify.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     <script>
         $(document).ready(function() {
@@ -213,9 +209,6 @@
 
     <script>
         $(function() {
-            let currentPage = 1
-            let searchText = '';
-
             let start = moment().subtract(1, 'month');
             let end = moment();
 
@@ -254,63 +247,17 @@
                 $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format(
                     'DD/MM/YYYY'));
 
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
             });
 
             $('#dateFilter').on('cancel.daterangepicker', function(ev, picker) {
                 $(this).val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
 
-                let dateRange = $(this).val();
-                fetchOrders(1, searchText, dateRange);
             });
-
-            $(document).on('click', 'a.page-link', function(e) {
-                e.preventDefault();
-
-                let url = $(this).attr('href');
-                let page = new URL(url).searchParams.get("page");
-
-                fetchOrders(page, searchText);
-            });
-
-            function debounce(fn, delay = 500) {
-                let timer;
-                return function(...args) {
-                    clearTimeout(timer);
-                    timer = setTimeout(() => fn.apply(this, args), delay);
-                };
-            }
-
-            $('input[name="search"]').on('input', debounce(function() {
-                searchText = $(this).val();
-                fetchOrders(1, searchText); // reset về page 1 khi search
-            }));
 
             $('#btn-reset').click(function() {
                 $('input[name="search"]').val('');
-                fetchOrders()
             })
 
-            const fetchOrders = (page = 1, search, dateRange) => {
-                $.ajax({
-                    url: window.location.pathname,
-                    method: 'GET',
-                    data: {
-                        page,
-                        s: search,
-                        date_range: dateRange
-                    },
-                    success: (res) => {
-                        $('#table-wrapper').html(res.html);
-                    },
-                    error: (xhr) => {
-                        console.log(xhr);
-                    }
-                })
-            }
-
-            fetchOrders();
         })
     </script>
 @endpush

@@ -181,8 +181,7 @@
                                                                 href="{{ route('admin.order.show', $order->id) }}">{{ $order->id }}</a>
                                                         </td>
                                                         <td>
-                                                            <a style="color:black"
-                                                                href="">
+                                                            <a style="color:black" href="">
                                                                 {{ $order->user->name ?? '' }}
                                                             </a>
                                                         </td>
@@ -211,7 +210,9 @@
                                         </table>
 
                                         <!-- Pagination for Orders -->
-                                        {{ $orders->appends(['orders_page' => $orders->currentPage()])->links('vendor.pagination.custom') }}
+                                        {{ $orders->appends([
+                                                'products_page' => $productSales->currentPage(),
+                                            ])->links('vendor.pagination.custom') }}
                                     </div>
                                 </div>
                             </div>
@@ -232,10 +233,10 @@
                     <div class="card-body">
                         <div class="">
                             <!-- Table for Product Sales -->
-                            <div id="products-sales-table_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
+                            <div class="table-responsive"> class="dataTables_wrapper container-fluid dt-bootstrap4">
                                 <div class="row">
                                     <div class="col-sm-12">
-                                        <table id="products-sales-table"
+                                        <table class="table table-striped table-hover">
                                             class="display table table-striped table-hover dataTable" role="grid">
                                             <thead>
                                                 <tr role="row">
@@ -261,7 +262,9 @@
                                         </table>
 
                                         <!-- Pagination for Products -->
-                                        {{ $productSales->appends(['products_page' => $productSales->currentPage()])->links('vendor.pagination.custom') }}
+                                        {{ $productSales->appends([
+                                                'orders_page' => $orders->currentPage(),
+                                            ])->links('vendor.pagination.custom') }}
                                     </div>
                                 </div>
                             </div>
