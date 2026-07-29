@@ -61,22 +61,22 @@
                                     @endif
                                 </div>
 
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <label for="price" class="form-label mb-1 fw-bold">Giá nhập</label>
-                                    <input type="text" class="form-control format-price" name="price"
+                                    <input type="text" id="price" class="form-control format-price" name="price"
                                         value="{{ formatPrice(optional($product)->price) }}">
                                 </div>
 
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <label for="price_buy" class="form-label mb-1 fw-bold">Giá bán</label>
-                                    <input type="text" class="form-control format-price" name="price_buy"
+                                    <input type="text" id="price_buy" class="form-control format-price" name="price_buy"
                                         value="{{ formatPrice(optional($product)->price_buy) }}">
                                 </div>
 
-                                <div class="col-md-12">
+                                <div class="col-md-4">
                                     <label for="product_unit" class="form-label mb-1 fw-bold">Đơn vị</label>
-                                    <input type="text" class="form-control" name="product_unit"
-                                        value="{{ optional($product)->product_unit }}">
+                                    <input type="text" id="product_unit" class="form-control" name="product_unit"
+                                        value="{{ optional($product)->product_unit }}" placeholder="Ví dụ: Chiếc, Bộ, Hộp">
                                 </div>
 
                                 <div class="col-md-6">
