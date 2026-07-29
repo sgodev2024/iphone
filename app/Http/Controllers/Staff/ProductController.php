@@ -184,7 +184,84 @@ class ProductController extends Controller
             })
             ->values();
 
-        return response()->json($products);
+        $imeiDevices = collect();
+
+        if ($searchText !== '') {
+            $imeiDevices = ProductImei::query()
+                ->with(['product', 'importDetail.import'])
+                ->where('product_imeis.status', ProductImei::STATUS_IN_STOCK)
+                ->whereHas('product', function ($query) {
+                    $query
+                        ->where('products.inventory_tracking', Product::INVENTORY_TRACKING_IMEI)
+                        ->where(function ($query) {
+                            $query->where('products.status', true)
+                                ->orWhere('products.status', 1)
+                                ->orWhere('products.status', '1')
+                                ->orWhere('products.status', 'published');
+                        });
+                })
+                ->whereHas('importDetail.import', function ($query) use ($storageId) {
+                    $query->where('import_coupon.storage_id', $storageId);
+                })
+                ->whereDoesntHave('orderDetails')
+                ->whereExists(function ($query) use ($storageId) {
+                    $query
+                        ->selectRaw('1')
+                        ->from('product_storage')
+                        ->whereColumn('product_storage.product_id', 'product_imeis.product_id')
+                        ->where('product_storage.storage_id', $storageId)
+                        ->where('product_storage.quantity', '>', 0);
+                })
+                ->where(function ($query) use ($searchText) {
+                    $query
+                        ->where('product_imeis.imei', $searchText)
+                        ->orWhere('product_imeis.barcode', $searchText);
+
+                    if (strlen($searchText) >= 4) {
+                        $query->orWhere('product_imeis.imei', 'like', "%{$searchText}%");
+                    }
+                })
+                ->orderByRaw(
+                    'CASE WHEN product_imeis.imei = ? THEN 0 WHEN product_imeis.barcode = ? THEN 0 ELSE 1 END',
+                    [$searchText, $searchText]
+                )
+                ->orderBy('product_imeis.imei')
+                ->limit(30)
+                ->get()
+                ->map(function (ProductImei $imei) use ($storageId) {
+                    $product = $imei->product;
+
+                    if (! $product) {
+                        return null;
+                    }
+
+                    return [
+                        'id' => (int) $product->id,
+                        'product_imei_id' => (int) $imei->id,
+                        'product_id' => (int) $product->id,
+                        'name' => $product->name,
+                        'code' => $product->code,
+                        'thumbnail' => $product->thumbnail,
+                        'price_buy' => (float) $product->price_buy,
+                        'imei' => $imei->imei,
+                        'barcode' => $imei->barcode,
+                        'quantity' => 1,
+                        'available_quantity' => 1,
+                        'storage_id' => $storageId,
+                        'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                        'result_type' => 'imei_device',
+                    ];
+                })
+                ->filter()
+                ->values();
+        }
+
+        return response()->json(
+            $imeiDevices
+                ->concat($products)
+                ->take(30)
+                ->values()
+        );
     }
 
     public function getClients(Request $request)

@@ -447,7 +447,7 @@ class StaffPosSaleTest extends TestCase
             ]);
     }
 
-    public function test_product_endpoint_returns_imei_products_with_in_stock_device_count_for_staff_storage(): void
+    public function test_product_endpoint_returns_imei_devices_for_imei_or_device_barcode_search(): void
     {
         [$storage, $otherStorage, $staff] = $this->createStaffContext();
         $product = $this->createProduct([
@@ -458,29 +458,69 @@ class StaffPosSaleTest extends TestCase
             'quantity' => 99,
             'price_buy' => 12000000,
         ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $otherStorage->id,
+            'quantity' => 1,
+        ]);
 
-        $this->createImeiInStorage($product, $storage, '123456789012340');
-        $this->createImeiInStorage($product, $storage, '123456789012341');
+        $firstImei = $this->createImeiInStorage($product, $storage, '123456789012340', [
+            'barcode' => 'TEL-FIRST-IMEI',
+        ]);
+        $secondImei = $this->createImeiInStorage($product, $storage, '123456789012341', [
+            'barcode' => 'TEL-SECOND-IMEI',
+        ]);
         $this->createImeiInStorage($product, $storage, '123456789012342', [
             'status' => ProductImei::STATUS_SOLD,
         ]);
         $this->createImeiInStorage($product, $otherStorage, '123456789012343');
 
-        $response = $this->actingAs($staff)->getJson('/ban-hang/product?search=IMEI-15');
+        $response = $this->actingAs($staff)->getJson('/ban-hang/product?search=12345678901234');
 
         $response->assertOk()
-            ->assertJsonCount(1)
+            ->assertJsonCount(2)
             ->assertJsonFragment([
+                'product_imei_id' => $firstImei->id,
                 'product_id' => $product->id,
                 'code' => 'IMEI-15',
-                'barcode' => 'PROD-IMEI-15',
-                'quantity' => 2,
-                'available_quantity' => 2,
-                'tracking_type' => 'imei_product',
-            ])
-            ->assertJsonMissing([
+                'barcode' => 'TEL-FIRST-IMEI',
+                'imei' => '123456789012340',
+                'quantity' => 1,
+                'available_quantity' => 1,
                 'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                'result_type' => 'imei_device',
+            ])
+            ->assertJsonFragment([
+                'product_imei_id' => $secondImei->id,
+                'barcode' => 'TEL-SECOND-IMEI',
+                'imei' => '123456789012341',
+            ])
+            ->assertJsonMissing(['imei' => '123456789012342'])
+            ->assertJsonMissing(['imei' => '123456789012343']);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=123456789012341')
+            ->assertOk()
+            ->assertJsonPath('0.product_imei_id', $secondImei->id);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=TEL-FIRST-IMEI')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'product_imei_id' => $firstImei->id,
+                'barcode' => 'TEL-FIRST-IMEI',
             ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product?search=123')
+            ->assertOk()
+            ->assertJsonCount(0);
     }
 
     public function test_product_endpoint_accepts_search_aliases_and_matches_code_or_barcode(): void
@@ -573,6 +613,22 @@ class StaffPosSaleTest extends TestCase
                 'imei' => '123456789012345',
                 'barcode' => $imei->barcode,
                 'quantity' => 1,
+                'result_type' => 'imei_device',
+            ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imei->imei,
+            ])
+            ->assertOk()
+            ->assertJsonFragment([
+                'type' => Product::INVENTORY_TRACKING_IMEI,
+                'product_id' => $product->id,
+                'product_imei_id' => $imei->id,
+                'imei' => '123456789012345',
+                'barcode' => $imei->barcode,
+                'quantity' => 1,
+                'result_type' => 'imei_device',
             ]);
     }
 

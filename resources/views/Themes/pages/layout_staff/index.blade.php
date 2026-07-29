@@ -765,11 +765,13 @@
                 products.forEach(product => {
                     const p = product || {};
                     const trackingType = p.tracking_type || p.inventory_tracking || 'quantity';
+                    const isImeiDevice = trackingType === 'imei' || p.result_type === 'imei_device';
                     const isImeiProduct = trackingType === 'imei_product';
                     const availableQuantity = Number(p.available_quantity ?? p.quantity ?? 0);
                     const productName = safeText(p.name, 'Sản phẩm chưa có tên');
                     const productCode = safeText(p.code);
                     const productBarcode = safeText(p.barcode);
+                    const productImei = safeText(p.imei);
                     const badgeText = isImeiProduct ? 'Quản lý theo IMEI' : 'Sản phẩm thường';
                     const stockText = isImeiProduct ?
                         `Thiết bị còn tồn: ${availableQuantity}` :
@@ -785,6 +787,7 @@
                         <div class="flex-grow-1">
                         <div class="fw-semibold">${escapeHtml(productName)}</div>
                         <div class="small text-muted">${money(p.price_buy)}</div>
+                        ${isImeiDevice ? `<div class="small text-muted">IMEI: ${escapeHtml(productImei)}</div>` : ''}
                         <div class="small text-muted">
                             ${productCode ? `Mã: ${escapeHtml(productCode)}` : ''}
                             ${productCode && productBarcode ? ' · ' : ''}
@@ -792,12 +795,19 @@
                         </div>
                         </div>
                         <div class="text-end d-flex flex-column align-items-end gap-1">
-                        <span class="badge ${badgeClass}">${badgeText}</span>
-                        <span class="badge border badge-stock text-dark">${stockText}</span>
+                        <span class="badge ${isImeiDevice ? 'bg-info text-dark' : badgeClass}">${isImeiDevice ? 'Thiết bị IMEI' : badgeText}</span>
+                        <span class="badge border badge-stock text-dark">${isImeiDevice ? 'Số lượng: 1' : stockText}</span>
                         </div>
                     </div>`;
 
                     row.addEventListener('click', () => {
+
+                        if (isImeiDevice) {
+                            verifyAndAddImeiDevice(p);
+                            productPopup.style.display = 'none';
+                            productSearch.value = '';
+                            return;
+                        }
 
                         if (isImeiProduct) {
                             Toast.fire({
@@ -833,10 +843,86 @@
             const cartBody = qs('#cartBody');
             const cartEmptyRow = qs('#cartEmptyRow');
 
+            function verifyAndAddImeiDevice(product) {
+                const productImeiId = Number(product.product_imei_id || 0);
+
+                if (!productImeiId) {
+                    Toast.fire({
+                        icon: "error",
+                        title: "Thiết bị IMEI không hợp lệ."
+                    });
+                    return;
+                }
+
+                if (cart.has(`imei:${productImeiId}`)) {
+                    Toast.fire({
+                        icon: "error",
+                        title: "Thiết bị đã có trong giỏ."
+                    });
+                    return;
+                }
+
+                const identifier = String(product.barcode || product.imei || '').trim();
+
+                if (!identifier || barcodeResolving) return;
+
+                barcodeResolving = true;
+                barcodeFeedback.textContent = 'Đang xác thực thiết bị IMEI...';
+
+                $.ajax({
+                    url: '/ban-hang/barcode/resolve',
+                    method: 'POST',
+                    data: {
+                        barcode: identifier,
+                        cart_imei_ids: currentCartImeiIds(),
+                        cart_product_quantities: currentCartProductQuantities(),
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    success: (resolvedProduct) => {
+                        if (Number(resolvedProduct.product_imei_id || 0) !== productImeiId) {
+                            Toast.fire({
+                                icon: "error",
+                                title: "Dữ liệu thiết bị IMEI đã thay đổi, vui lòng tìm lại."
+                            });
+                            return;
+                        }
+
+                        addToCart(resolvedProduct);
+                        barcodeFeedback.textContent =
+                            `${resolvedProduct.product_name || resolvedProduct.name} đã được thêm vào giỏ.`;
+                        Toast.fire({
+                            icon: "success",
+                            title: "Đã thêm thiết bị IMEI vào giỏ."
+                        });
+                    },
+                    error: (xhr) => {
+                        const message = xhr.responseJSON?.message || 'Không thể xác thực thiết bị IMEI.';
+                        barcodeFeedback.textContent = message;
+                        Toast.fire({
+                            icon: "error",
+                            title: message
+                        });
+                    },
+                    complete: () => {
+                        barcodeResolving = false;
+                    }
+                });
+            }
+
             function addToCart(product) {
                 const trackingType = product.tracking_type || product.type || 'quantity';
 
                 if (trackingType === 'imei') {
+                    if (!product.product_imei_id) {
+                        Toast.fire({
+                            icon: "error",
+                            title: "Thiết bị IMEI không hợp lệ."
+                        });
+                        return;
+                    }
+
                     const key = `imei:${product.product_imei_id}`;
 
                     if (cart.has(key)) {
@@ -887,6 +973,7 @@
                     quantity: Number(product.available_quantity || product.quantity || 1),
                     available_quantity: Number(product.available_quantity || product.quantity || 1),
                     price_buy: Number(product.price_buy || product.price || 0),
+                    price: Number(product.price || product.price_buy || 0),
                 };
             }
 

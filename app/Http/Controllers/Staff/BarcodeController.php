@@ -35,7 +35,15 @@ class BarcodeController extends Controller
 
         $imei = ProductImei::query()
             ->with(['product', 'importDetail.import'])
-            ->where('barcode', $barcode)
+            ->where(function ($query) use ($barcode) {
+                $query
+                    ->where('barcode', $barcode)
+                    ->orWhere('imei', $barcode);
+            })
+            ->orderByRaw(
+                'CASE WHEN barcode = ? THEN 0 WHEN imei = ? THEN 1 ELSE 2 END',
+                [$barcode, $barcode]
+            )
             ->first();
 
         if ($imei) {
@@ -123,6 +131,7 @@ class BarcodeController extends Controller
             'id' => (int) $product->id,
             'product_id' => (int) $product->id,
             'product_imei_id' => (int) $imei->id,
+            'code' => $product->code,
             'product_name' => $product->name,
             'name' => $product->name,
             'thumbnail' => $product->thumbnail,
@@ -133,6 +142,7 @@ class BarcodeController extends Controller
             'available_quantity' => 1,
             'quantity' => 1,
             'storage_id' => $storageId,
+            'result_type' => 'imei_device',
         ]);
     }
 
