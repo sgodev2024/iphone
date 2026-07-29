@@ -40,7 +40,7 @@ class DailyReportController extends Controller
                 $sheet->setCellValue('A' . $row, $order->id);
                 $sheet->setCellValue('B' . $row, $order->user->name ?? '');
                 $sheet->setCellValue('C' . $row, $order->created_at->format('d/m/y'));
-                $sheet->setCellValue('D' . $row, $order->client->name ?? '');
+                $sheet->setCellValue('D' . $row, $order->customer_display_name);
                 $sheet->setCellValue('E' . $row, $order->status == 1 ? 'Đã thanh toán' : 'Công nợ');
                 $sheet->setCellValue('F' . $row, number_format($order->total_money));
                 $row++;

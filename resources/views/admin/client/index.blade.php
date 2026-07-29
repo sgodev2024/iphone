@@ -17,7 +17,7 @@
                                 <ul class="dropdown-menu">
                                     <li>
                                         <a class="dropdown-item" href="#" id="bulk-delete">
-                                            <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
+                                            <i class="fa-solid fa-ban me-2"></i> Ngừng hoạt động đã chọn
                                         </a>
                                     </li>
                                 </ul>

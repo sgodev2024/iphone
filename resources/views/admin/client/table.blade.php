@@ -54,8 +54,8 @@
                             </a>
 
                             <button type="button" class="btn btn-danger btn-sm btn-delete"
-                                data-id="{{ $client->id }}" title="Xóa khách hàng">
-                                <i class="fa-solid fa-trash-can"></i>
+                                data-id="{{ $client->id }}" title="Ngừng hoạt động khách hàng">
+                                <i class="fa-solid fa-ban"></i>
                             </button>
                         </div>
                     </td>

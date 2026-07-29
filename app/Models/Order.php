@@ -58,11 +58,62 @@ class Order extends Model
 
     public function client()
     {
-        return $this->belongsTo(Client::class);
+        return $this->belongsTo(Client::class)->withTrashed();
     }
 
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function getCustomerDisplayNameAttribute(): string
+    {
+        $snapshotName = trim((string) ($this->attributes['name'] ?? ''));
+
+        if ($snapshotName !== '') {
+            return $snapshotName;
+        }
+
+        $clientName = trim((string) ($this->client?->name ?? ''));
+
+        return $clientName !== '' ? $clientName : 'Khách lẻ';
+    }
+
+    public function getCustomerDisplayPhoneAttribute(): ?string
+    {
+        return $this->snapshotValueOrClientValue('phone');
+    }
+
+    public function getCustomerDisplayEmailAttribute(): ?string
+    {
+        return $this->snapshotValueOrClientValue('email');
+    }
+
+    public function getCustomerDisplayAddressAttribute(): ?string
+    {
+        foreach (['receive_address', 'address'] as $attribute) {
+            $value = trim((string) ($this->attributes[$attribute] ?? ''));
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $clientAddress = trim((string) ($this->client?->address ?? ''));
+
+        return $clientAddress !== '' ? $clientAddress : null;
+    }
+
+    private function snapshotValueOrClientValue(string $attribute): ?string
+    {
+        $snapshotValue = trim((string) ($this->attributes[$attribute] ?? ''));
+
+        if ($snapshotValue !== '') {
+            return $snapshotValue;
+        }
+
+        $clientValue = trim((string) ($this->client?->{$attribute} ?? ''));
+
+        return $clientValue !== '' ? $clientValue : null;
     }
 }

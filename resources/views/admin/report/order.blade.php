@@ -77,11 +77,13 @@
                                                         </td>
                                                         <td>{{ $order->created_at->format('d/m/Y') }}</td>
                                                         <td>
-                                                            @if ($order->client)
+                                                            @if ($order->client && ! $order->client->trashed())
                                                                 <a style="color:black"
                                                                     href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
-                                                                    {{ $order->client->name }}
+                                                                    {{ $order->customer_display_name }}
                                                                 </a>
+                                                            @else
+                                                                {{ $order->customer_display_name }}
                                                             @endif
                                                         </td>
                                                         <td>

@@ -274,8 +274,10 @@ class ProductController extends Controller
         $clients = Client::query()
             ->where('user_id', $userId)
             ->when(!empty($searchText), function ($query) use ($searchText) {
-                $query->where('name', 'like', "%{$searchText}%")
-                    ->orWhere('phone', 'like', "%$searchText%");
+                $query->where(function ($query) use ($searchText) {
+                    $query->where('name', 'like', "%{$searchText}%")
+                        ->orWhere('phone', 'like', "%{$searchText}%");
+                });
             })
             ->get();
         return response()->json($clients);

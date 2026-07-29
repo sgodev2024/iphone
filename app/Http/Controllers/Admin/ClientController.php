@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Services\ClientGroupService;
 use App\Services\ClientService;
+use DomainException;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -143,12 +144,17 @@ class ClientController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Xóa khách hàng thành công!',
+                'message' => 'Ngừng hoạt động khách hàng thành công!',
                 'table' => view(
                     'admin.client.table',
                     compact('clients')
                 )->render(),
             ]);
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Throwable $e) {
             Log::error('Không thể xóa khách hàng', [
                 'client_id' => $id,

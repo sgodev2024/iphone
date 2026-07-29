@@ -22,7 +22,7 @@ class Receipts extends Model
     protected $appends  = ['client', 'detail'];
 
     public function getClientAttribute(){
-        return Client::where('id',$this->attributes['client_id'])->first();
+        return Client::withTrashed()->where('id',$this->attributes['client_id'])->first();
     }
     public function getDetailAttribute(){
         return ReceiptDetail::where('receipt_id',$this->attributes['id'])->orderBy('created_at', 'desc')->get();

@@ -2,13 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\Product;
+use App\Services\ClientService;
+use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class BulkController extends Controller
 {
+    public function __construct(private ClientService $clientService)
+    {
+    }
+
     public function bulk(string $type, Request $request)
     {
         $request->validate([
@@ -26,6 +33,18 @@ class BulkController extends Controller
         }
 
         $ids = array_values(array_unique($ids));
+
+        if ($type === 'delete' && is_a($modelClass, Client::class, true)) {
+            try {
+                $this->clientService->deleteClients($ids);
+
+                return response()->json([
+                    'message' => 'Ngừng hoạt động khách hàng thành công!',
+                ]);
+            } catch (DomainException $e) {
+                return errorResponse($e->getMessage(), 422);
+            }
+        }
 
         if ($type === 'delete' && is_a($modelClass, Product::class, true)) {
             $products = Product::query()

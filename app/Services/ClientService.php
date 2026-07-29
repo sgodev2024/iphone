@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\ClientDebt;
+use App\Models\Order;
+use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ClientService
 {
@@ -90,16 +94,70 @@ class ClientService
 
     public function deleteClient($id): void
     {
-        DB::beginTransaction();
-        try {
-            Log::info("Deleting client $id profile");
-            $client = $this->client->find($id);
-            $client->delete();
-            DB::commit();
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('Failed to delete client profile: ' . $e->getMessage());
-            throw new Exception('Failed to delete client profile');
+        $this->deleteClients([$id]);
+    }
+
+    public function deleteClients(array $ids): int
+    {
+        $ids = collect($ids)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw new DomainException('Không có khách hàng hợp lệ để ngừng hoạt động.');
         }
+
+        return DB::transaction(function () use ($ids): int {
+            $clients = Client::query()
+                ->whereIn('id', $ids->all())
+                ->lockForUpdate()
+                ->get();
+
+            if ($clients->count() !== $ids->count()) {
+                throw new DomainException('Khách hàng không tồn tại hoặc đã ngừng hoạt động.');
+            }
+
+            $legacyDebtClientIds = Schema::hasTable('customer_debts')
+                ? ClientDebt::query()
+                    ->whereIn('client_id', $ids->all())
+                    ->where('amount', '>', 0)
+                    ->pluck('client_id')
+                : collect();
+
+            $orderDebtClientIds = Schema::hasColumn('orders', 'debt_amount')
+                ? Order::query()
+                    ->whereIn('client_id', $ids->all())
+                    ->where('debt_amount', '>', 0)
+                    ->pluck('client_id')
+                : collect();
+
+            $debtClientIds = $legacyDebtClientIds
+                ->merge($orderDebtClientIds)
+                ->map(fn ($id) => (int) $id)
+                ->unique();
+
+            if ($debtClientIds->isNotEmpty()) {
+                $clientNames = $clients
+                    ->whereIn('id', $debtClientIds)
+                    ->pluck('name')
+                    ->filter()
+                    ->implode(', ');
+
+                $suffix = $clientNames !== '' ? ": {$clientNames}" : '.';
+
+                throw new DomainException(
+                    'Không thể ngừng hoạt động khách hàng đang có công nợ' . $suffix
+                );
+            }
+
+            foreach ($clients as $client) {
+                Log::info("Deactivating client {$client->id} profile");
+                $client->delete();
+            }
+
+            return $clients->count();
+        });
     }
 }

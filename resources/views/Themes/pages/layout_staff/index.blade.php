@@ -1199,37 +1199,9 @@
                 $('#invoice-note').html($('#orderNote').val());
                 $('#invoice-body').html(_html);
 
-                // Validate: thông tin khách hàng
                 const name = qs('#custName').value.trim();
                 const phone = qs('#custPhone').value.trim();
                 const email = qs('#custEmail').value.trim();
-
-                if (!name) {
-                    Toast.fire({
-                        icon: "error",
-                        title: "Vui lòng nhập họ tên khách hàng!"
-                    });
-                    qs('#custName').focus();
-                    return;
-                }
-
-                if (!email) {
-                    Toast.fire({
-                        icon: "error",
-                        title: "Vui lòng nhập email khách hàng!"
-                    });
-                    qs('#custEmail').focus();
-                    return;
-                }
-
-                if (!phone) {
-                    Toast.fire({
-                        icon: "error",
-                        title: "Vui lòng nhập số điện thoại khách hàng!"
-                    });
-                    qs('#custPhone').focus();
-                    return;
-                }
 
                 // Tạo dữ liệu order
                 const order = {

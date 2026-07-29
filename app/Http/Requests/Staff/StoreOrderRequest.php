@@ -5,6 +5,7 @@ namespace App\Http\Requests\Staff;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class StoreOrderRequest extends FormRequest
@@ -55,10 +56,14 @@ class StoreOrderRequest extends FormRequest
             'grand' => ['required', 'numeric', 'min:0'],
 
             'customer' => ['required', 'array'],
-            'customer.id' => ['nullable', 'integer', 'exists:clients,id'],
-            'customer.name' => ['required', 'string', 'max:255'],
+            'customer.id' => [
+                'nullable',
+                'integer',
+                Rule::exists('clients', 'id')->whereNull('deleted_at'),
+            ],
+            'customer.name' => ['nullable', 'string', 'max:255'],
             'customer.email' => ['nullable', 'email', 'max:255'],
-            'customer.phone' => ['required', 'string', 'max:20'],
+            'customer.phone' => ['nullable', 'string', 'max:20'],
             'customer.address' => ['nullable', 'string', 'max:500'],
             'customer.payment' => ['required', 'in:cash,bank_transfer,debt'],
             'customer.note' => ['nullable', 'string', 'max:1000'],

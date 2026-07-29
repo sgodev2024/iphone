@@ -25,7 +25,7 @@
 
                     $employeeName = $order->creator?->name ?? ($order->user?->name ?? '---');
 
-                    $customerName = $order->client?->name ?? ($order->name ?? 'Khách lẻ');
+                    $customerName = $order->customer_display_name;
                 @endphp
 
                 <tr>

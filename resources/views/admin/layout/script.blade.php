@@ -58,6 +58,7 @@
 
         function handleDestroy(callback, model, id) {
             let ids = $('.checked-item:checked').map((i, el) => $(el).val()).get()
+            const isClient = model === 'Client';
 
             if (ids.length === 0 && id) {
                 ids = [id];
@@ -66,13 +67,15 @@
             if (ids.length <= 0) return datgin.warning('Vui lòng chọn ít nhất 1 bản ghi!')
 
             Swal.fire({
-                title: "Xác nhận xóa?",
-                text: "Dữ liệu sẽ bị xóa vĩnh viễn và không thể khôi phục.",
+                title: isClient ? "Xác nhận ngừng hoạt động?" : "Xác nhận xóa?",
+                text: isClient
+                    ? "Khách hàng sẽ không còn xuất hiện khi tạo đơn mới; lịch sử cũ vẫn được giữ nguyên."
+                    : "Dữ liệu sẽ bị xóa vĩnh viễn và không thể khôi phục.",
                 icon: "warning",
                 showCancelButton: true,
                 confirmButtonColor: "#3085d6",
                 cancelButtonColor: "#d33",
-                confirmButtonText: "Vâng, xóa ngay!",
+                confirmButtonText: isClient ? "Vâng, ngừng hoạt động!" : "Vâng, xóa ngay!",
                 cancelButtonText: "Hủy"
             }).then((result) => {
                 if (result.isConfirmed) {

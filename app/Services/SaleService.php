@@ -24,6 +24,18 @@ class SaleService
             $storageId = $this->resolveStorageId($user);
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = $data['customer']['payment'];
+            $client = null;
+
+            if (! empty($data['customer']['id'])) {
+                $client = Client::query()->find($data['customer']['id']);
+
+                if (! $client) {
+                    throw ValidationException::withMessages([
+                        'customer.id' => 'Khách hàng không tồn tại hoặc đã ngừng hoạt động.',
+                    ]);
+                }
+            }
+
             $items = $this->normalizeItems($data['items']);
 
             if ($items->isEmpty()) {
@@ -116,14 +128,14 @@ class SaleService
             }
 
             $orderData = [
-                'client_id' => $data['customer']['id'] ?? null,
+                'client_id' => $client?->id,
                 'user_id' => $ownerId,
                 'code' => generateCode('orders', 'ODR'),
-                'name' => $data['customer']['name'],
-                'phone' => $data['customer']['phone'],
-                'email' => $data['customer']['email'] ?? null,
-                'address' => $data['customer']['address'] ?? null,
-                'receive_address' => $data['customer']['address'] ?? null,
+                'name' => $client?->name ?? ($data['customer']['name'] ?? null),
+                'phone' => $client?->phone ?? ($data['customer']['phone'] ?? null),
+                'email' => $client?->email ?? ($data['customer']['email'] ?? null),
+                'address' => $client?->address ?? ($data['customer']['address'] ?? null),
+                'receive_address' => $client?->address ?? ($data['customer']['address'] ?? null),
                 'note' => $data['customer']['note'] ?? null,
                 'total_money' => $grand,
                 'discount_value' => $discount,

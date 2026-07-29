@@ -171,6 +171,10 @@ class ClientController extends Controller
             $order = Order::create([
                 'user_id' => $user->id,
                 'client_id' => $client->id,
+                'name' => $client->name,
+                'phone' => $client->phone,
+                'email' => $client->email,
+                'receive_address' => $client->address,
                 'total_money' => $sum,
                 'status' => $request->status,
                 'notification' => 1
@@ -198,6 +202,10 @@ class ClientController extends Controller
             $order = Order::create([
                 'user_id' => $user->id,
                 'client_id' => $client->id,
+                'name' => $client->name,
+                'phone' => $client->phone,
+                'email' => $client->email,
+                'receive_address' => $client->address,
                 'total_money' => $sum,
                 'status' => $trangthai,
                 'notification' => 1

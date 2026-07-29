@@ -15,19 +15,19 @@
                             <tbody>
                                 <tr>
                                     <th><i class="fas fa-user"></i> Tên khách hàng</th>
-                                    <td>{{ $order->client->name }}</td>
+                                    <td>{{ $order->customer_display_name }}</td>
                                 </tr>
                                 <tr>
                                     <th><i class="fas fa-phone"></i> Số điện thoại</th>
-                                    <td>{{ $order->client->phone }}</td>
+                                    <td>{{ $order->customer_display_phone ?? '---' }}</td>
                                 </tr>
                                 <tr>
                                     <th><i class="fas fa-envelope"></i> Email</th>
-                                    <td>{{ $order->client->email }}</td>
+                                    <td>{{ $order->customer_display_email ?? '---' }}</td>
                                 </tr>
                                 <tr>
                                     <th><i class="fas fa-map-marker-alt"></i> Địa chỉ</th>
-                                    <td>{{ $order->client->address }}</td>
+                                    <td>{{ $order->customer_display_address ?? '---' }}</td>
                                 </tr>
                             </tbody>
                         </table>

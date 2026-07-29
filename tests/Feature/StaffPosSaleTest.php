@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Bank;
 use App\Models\Client;
+use App\Models\ClientDebt;
 use App\Models\Config;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
@@ -13,12 +14,14 @@ use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Receipts;
 use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
 use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -946,6 +949,214 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
     }
 
+    public function test_customer_snapshot_survives_rename_and_deactivation_without_touching_sale_data(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Tên tại thời điểm bán',
+            'phone' => '0911222333',
+            'email' => 'snapshot@example.com',
+            'address' => 'Địa chỉ lúc bán',
+        ]);
+        $product = $this->createProduct(['quantity' => 5, 'price_buy' => 100000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $payload = $this->orderPayload([
+            ['id' => $product->id, 'qty' => 1],
+        ], 100000, 'cash', $client->id);
+        $payload['customer']['name'] = 'Tên bị sửa từ trình duyệt';
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertCreated();
+
+        $order = Order::firstOrFail();
+        $this->assertSame('Tên tại thời điểm bán', $order->name);
+        $this->assertSame('0911222333', $order->phone);
+        $this->assertSame('snapshot@example.com', $order->email);
+        $this->assertSame('Địa chỉ lúc bán', $order->receive_address);
+
+        $client->update(['name' => 'Tên mới']);
+        $this->assertSame('Tên tại thời điểm bán', $order->fresh()->customer_display_name);
+
+        $clientDebt = ClientDebt::create([
+            'client_id' => $client->id,
+            'amount' => 0,
+            'description' => 'Đã thanh toán hết',
+        ]);
+        DB::table('customer_debts_detail')->insert([
+            'customer_debts_id' => $clientDebt->id,
+            'content' => 'Lịch sử công nợ',
+            'amount' => 0,
+        ]);
+        DB::table('receipts')->insert([
+            'client_id' => $client->id,
+            'content' => 'Lịch sử thu',
+            'amount_spent' => 100000,
+            'date_spent' => now()->toDateString(),
+            'receipt_code' => 'PT000001',
+        ]);
+
+        $countsBeforeDeactivate = [
+            'orders' => DB::table('orders')->count(),
+            'order_details' => DB::table('order_details')->count(),
+            'transactions' => DB::table('transactions')->count(),
+            'transaction_entries' => DB::table('transaction_entries')->count(),
+            'customer_debts' => DB::table('customer_debts')->count(),
+            'customer_debts_detail' => DB::table('customer_debts_detail')->count(),
+            'receipts' => DB::table('receipts')->count(),
+            'product_storage' => DB::table('product_storage')->count(),
+            'product_imeis' => DB::table('product_imeis')->count(),
+        ];
+
+        $this->actingAs($staff)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$client->id],
+                'model' => 'Client',
+            ])
+            ->assertOk()
+            ->assertJson([
+                'message' => 'Ngừng hoạt động khách hàng thành công!',
+            ]);
+
+        $this->assertSoftDeleted('clients', ['id' => $client->id]);
+        $this->assertSame('Tên tại thời điểm bán', $order->fresh()->customer_display_name);
+        $this->assertSame('Tên mới', $order->fresh()->client->name);
+        $this->assertSame(
+            $countsBeforeDeactivate,
+            [
+                'orders' => DB::table('orders')->count(),
+                'order_details' => DB::table('order_details')->count(),
+                'transactions' => DB::table('transactions')->count(),
+                'transaction_entries' => DB::table('transaction_entries')->count(),
+                'customer_debts' => DB::table('customer_debts')->count(),
+                'customer_debts_detail' => DB::table('customer_debts_detail')->count(),
+                'receipts' => DB::table('receipts')->count(),
+                'product_storage' => DB::table('product_storage')->count(),
+                'product_imeis' => DB::table('product_imeis')->count(),
+            ]
+        );
+        $this->assertSame('Tên mới', ClientDebt::firstOrFail()->client->name);
+        $this->assertSame('Tên mới', Receipts::firstOrFail()->client->name);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/get-clients?searchText=Tên')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $client->id]);
+    }
+
+    public function test_walk_in_customer_can_have_nullable_link_and_snapshots(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['quantity' => 2, 'price_buy' => 100000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+
+        $payload = $this->orderPayload([
+            ['id' => $product->id, 'qty' => 1],
+        ], 100000);
+        $payload['customer'] = [
+            'id' => null,
+            'name' => null,
+            'email' => null,
+            'phone' => null,
+            'address' => null,
+            'payment' => 'cash',
+            'note' => null,
+        ];
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertCreated();
+
+        $order = Order::firstOrFail();
+        $this->assertNull($order->client_id);
+        $this->assertNull($order->name);
+        $this->assertNull($order->phone);
+        $this->assertSame('Khách lẻ', $order->customer_display_name);
+    }
+
+    public function test_customer_with_outstanding_debt_cannot_be_deactivated(): void
+    {
+        [, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Khách còn nợ',
+            'phone' => '0999888777',
+        ]);
+        ClientDebt::create([
+            'client_id' => $client->id,
+            'amount' => 500000,
+            'description' => 'Còn nợ',
+        ]);
+
+        $this->actingAs($staff)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$client->id],
+                'model' => 'Client',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Không thể ngừng hoạt động khách hàng đang có công nợ: Khách còn nợ',
+            ]);
+
+        $this->assertNotNull(Client::find($client->id));
+        $this->assertDatabaseHas('customer_debts', [
+            'client_id' => $client->id,
+            'amount' => 500000,
+        ]);
+    }
+
+    public function test_snapshot_backfill_is_idempotent_and_never_overwrites_existing_values(): void
+    {
+        [, , , $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Tên để backfill',
+            'phone' => '0901234567',
+            'email' => 'backfill@example.com',
+            'address' => 'Địa chỉ backfill',
+        ]);
+        $order = Order::create([
+            'user_id' => $manager->id,
+            'client_id' => $client->id,
+            'name' => null,
+            'phone' => 'Số đã chụp',
+            'email' => null,
+            'receive_address' => null,
+            'total_money' => 0,
+        ]);
+
+        $this->artisan('orders:backfill-customer-snapshots')->assertSuccessful();
+
+        $order->refresh();
+        $this->assertSame('Tên để backfill', $order->name);
+        $this->assertSame('Số đã chụp', $order->phone);
+        $this->assertSame('backfill@example.com', $order->email);
+        $this->assertSame('Địa chỉ backfill', $order->receive_address);
+
+        $client->update([
+            'name' => 'Tên thay đổi sau backfill',
+            'phone' => '0000000000',
+        ]);
+
+        $this->artisan('orders:backfill-customer-snapshots')->assertSuccessful();
+
+        $order->refresh();
+        $this->assertSame('Tên để backfill', $order->name);
+        $this->assertSame('Số đã chụp', $order->phone);
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -1088,6 +1299,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
+            $table->softDeletes();
             $table->timestamps();
         });
 
@@ -1120,13 +1332,44 @@ class StaffPosSaleTest extends TestCase
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
             $table->string('address')->nullable();
+            $table->string('receive_address')->nullable();
             $table->decimal('total_money', 15, 2)->default(0);
             $table->decimal('discount_value', 15, 2)->default(0);
             $table->string('discount_type')->nullable();
             $table->string('payment_method')->nullable();
+            $table->decimal('paid_amount', 15, 2)->default(0);
+            $table->decimal('debt_amount', 15, 2)->default(0);
+            $table->string('payment_status')->nullable();
             $table->boolean('status')->default(true);
             $table->string('note')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('customer_debts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('client_id');
+            $table->decimal('amount', 15, 2)->default(0);
+            $table->string('description')->nullable();
+            $table->string('code')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('customer_debts_detail', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('customer_debts_id');
+            $table->string('content');
+            $table->decimal('amount', 15, 2)->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('receipts', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('client_id');
+            $table->string('content')->nullable();
+            $table->decimal('amount_spent', 15, 2)->default(0);
+            $table->date('date_spent')->nullable();
+            $table->string('receipt_code')->nullable();
             $table->timestamps();
         });
 

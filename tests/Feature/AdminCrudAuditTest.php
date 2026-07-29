@@ -563,6 +563,7 @@ class AdminCrudAuditTest extends TestCase
             $table->string('gender')->nullable();
             $table->date('dob')->nullable();
             $table->unsignedBigInteger('clientgroup_id')->nullable();
+            $table->softDeletes();
             $table->timestamps();
         });
     }

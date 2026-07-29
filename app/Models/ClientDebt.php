@@ -19,7 +19,7 @@ class ClientDebt extends Model
 
     protected $appends = ['client', 'detail'];
     public function getClientAttribute(){
-        return Client::where('id',$this->attributes['client_id'])->first();
+        return Client::withTrashed()->where('id',$this->attributes['client_id'])->first();
     }
 
     public function getDetailAttribute(){

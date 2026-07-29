@@ -65,7 +65,7 @@ class OrderController extends Controller
                 return [
                     'id' => $order->id,
                     'user_name' => $order->user->name,
-                    'client_name' => $order->client->name,
+                    'client_name' => $order->customer_display_name,
                     'total_money' => $order->total_money,
                     'created_at' => $order->created_at,
                     'status' => $order->status,
