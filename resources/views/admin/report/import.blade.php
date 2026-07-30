@@ -42,8 +42,8 @@
                     </div>
                 </div>
                 <div class="card-header">
-                    <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm
-                        nay</h4>
+                    <h4 class="card-title" style="text-align: center; color:rgb(15, 0, 0)">Danh sách đơn nhập hàng hôm nay
+                    </h4>
                 </div>
 
                 <div class="card-body">
@@ -132,7 +132,7 @@
             </div>
         </div>
 
-        <!-- Today's Products Section -->
+        {{-- <!-- Today's Products Section -->
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -210,11 +210,13 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div> --}}
 
         <!-- Export Button -->
         <div class="text-center mt-4">
-            <button type="button" id="exportimports" class="btn btn-primary">Xuất báo cáo hàng ngày</button>
+            <button type="button" id="exportimports" class="btn btn-primary">
+                Xuất báo cáo hàng ngày
+            </button>
         </div>
     </div>
 

@@ -49,129 +49,78 @@
                     </div>
 
                     <div class="card-body">
-                        <div class="">
-                            <!-- Table for Orders -->
-                            <div>
-                                <div class="row">
-                                    <div class="col-sm-12">
-                                        <table class="table table-striped table-hover">
-                                            <thead>
-                                                <tr role="row">
-                                                    <th>Mã đơn hàng</th>
-                                                    <th>Nhân viên</th>
-                                                    <th>Ngày tạo</th>
-                                                    <th>Khách hàng</th>
-                                                    <th>Trạng thái</th>
-                                                    <th>Tổng tiền</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse ($orders as $order)
-                                                    <tr>
-                                                        <td>
-                                                            <a style="color: black; font-weight:bold"
-                                                                href="{{ route('admin.order.show', $order->id) }}">{{ $order->id }}</a>
-                                                        </td>
-                                                        <td>
-                                                            {{ optional($order->user)->name ?? '' }}
-                                                        </td>
-                                                        <td>{{ $order->created_at->format('d/m/Y') }}</td>
-                                                        <td>
-                                                            @if ($order->client && ! $order->client->trashed())
-                                                                <a style="color:black"
-                                                                    href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
-                                                                    {{ $order->customer_display_name }}
-                                                                </a>
-                                                            @else
+
+                        <!-- Table for Orders -->
+                        <div>
+                            <div class="row">
+                                <div class="col-sm-12">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr role="row">
+                                                <th>Mã đơn hàng</th>
+                                                <th>Nhân viên</th>
+                                                <th>Ngày tạo</th>
+                                                <th>Khách hàng</th>
+                                                <th>Trạng thái</th>
+                                                <th>Tổng tiền</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @forelse ($orders as $order)
+                                                <tr>
+                                                    <td>
+                                                        <a style="color: black; font-weight:bold"
+                                                            href="{{ route('admin.order.show', $order->id) }}">{{ $order->id }}</a>
+                                                    </td>
+                                                    <td>
+                                                        {{ optional($order->user)->name ?? '' }}
+                                                    </td>
+                                                    <td>{{ $order->created_at->format('d/m/Y') }}</td>
+                                                    <td>
+                                                        @if ($order->client && !$order->client->trashed())
+                                                            <a style="color:black"
+                                                                href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
                                                                 {{ $order->customer_display_name }}
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if ($order->status == 1)
-                                                                <span class="badge badge-success">Đã thanh toán</span>
-                                                            @else
-                                                                <span class="badge badge-danger">Công nợ</span>
-                                                            @endif
-                                                        </td>
-                                                        <td>{{ number_format($order->total_money) }} VND</td>
-                                                    </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td class="text-center" colspan="6">Không có đơn hàng nào</td>
-                                                    </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
-
-                                        <!-- Pagination for Orders -->
-                                        {{ $orders->appends(request()->except('orders_page'))->links('vendor.pagination.custom') }}
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- End Table -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Today's Products Section -->
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h4 class="card-title" style="text-align: center; color:white">Danh sách sản phẩm bán được hôm nay
-                        </h4>
-                    </div>
-
-                    <div class="card-body">
-                        <div class="">
-                            <!-- Table for Product Sales -->
-                            <div>
-                                <div class="row">
-                                    <div class="col-sm-12">
-                                        <table class="table table-striped table-hover">
-                                            <thead>
-                                                <tr role="row">
-                                                    <th>Tên sản phẩm</th>
-                                                    <th>Số lượng</th>
-                                                    <th>Tổng tiền</th>
+                                                            </a>
+                                                        @else
+                                                            {{ $order->customer_display_name }}
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if ($order->status == 1)
+                                                            <span class="badge badge-success">Đã thanh toán</span>
+                                                        @else
+                                                            <span class="badge badge-danger">Công nợ</span>
+                                                        @endif
+                                                    </td>
+                                                    <td>{{ number_format($order->total_money) }} VND</td>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse ($productSales as $productId => $sales)
-                                                    @php
-                                                        $product = $products->get($productId);
-                                                    @endphp
-                                                    @if ($product)
-                                                        <tr>
-                                                            <td>{{ $product->name }}</td>
-                                                            <td>{{ $sales['quantity'] }}</td>
-                                                            <td>{{ number_format($sales['total']) }} VND</td>
-                                                        </tr>
-                                                    @endif
-                                                @empty
-                                                    <tr>
-                                                        <td class="text-center" colspan="3">KhÃ´ng cÃ³ sáº£n pháº©m nÃ o
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
+                                            @empty
+                                                <tr>
+                                                    <td class="text-center" colspan="6">Không có đơn hàng nào</td>
+                                                </tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
 
-                                        <!-- Pagination for Products -->
-                                        {{ $productSales->appends(request()->except('products_page'))->links('vendor.pagination.custom') }}
-                                    </div>
+                                    <!-- Pagination for Orders -->
+                                    {{ $orders->appends(request()->except('orders_page'))->links('vendor.pagination.custom') }}
                                 </div>
                             </div>
-                            <!-- End Table -->
                         </div>
+                        <!-- End Table -->
+
                     </div>
                 </div>
             </div>
+
         </div>
 
         <!-- Export Button -->
         <div class="text-center mt-4">
-            <button type="button" id="exportorders" class="btn btn-primary">Xuất báo cáo hàng ngày</button>
+            <button type="button" id="exportorders" class="btn btn-primary">
+                Xuất báo cáo hàng ngày
+            </button>
         </div>
     </div>
 
