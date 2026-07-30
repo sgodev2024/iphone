@@ -49,12 +49,12 @@ function checkURL(value) {
     return false;
 
 }
-function validateAllFields(data){
+function validateAllFields(data) {
     var isValid = true;
     for (var fieldName in data) {
-       if (!validateField(fieldName, data)) {
-           isValid = false;
-       }
+        if (!validateField(fieldName, data)) {
+            isValid = false;
+        }
     }
     return isValid;
 }
@@ -105,7 +105,7 @@ function generateErrorMessage(code, values = []) {
         E015: 'Danh mục không dược để trống',
         E016: 'Mô tả không được để trống',
         E017: 'Trạng thái không được để trống',
-        E018: ' Không được để trống ',
+        E018: 'Không được để trống ',
         E019: 'Vui lòng nhập họ tên',
         E020: 'Địa chỉ không được để trống',
         E021: 'Vui lòng chọn thành phố',
@@ -122,25 +122,25 @@ function generateErrorMessage(code, values = []) {
         E030: ' Số điện thoại không để trống',
         E031: ' Địa chỉ không để trống',
         // order
-        E032 : ' Nhập tên khách hàng ',
-        E033 : ' Nhập email thoại khách hàng ',
-        E034 : ' Nhập số điện thoại khách hàng ',
-        E035 : ' Nhập địa chỉ khách hàng ',
-        E036 : ' Chọn phương thức thanh toán ',
-        E042 : ' Nhập ngày sinh ',
-        E043 : ' Nhập mã bưu diện ',
-        E044 : ' Chọn giới tính ',
-           // chi nhánh cửa hàng
-        ER01 : ' Nhập tên chi nhánh ',
-        ER02 : ' Trạng thái không bỏ trống ',
+        E032: ' Nhập tên khách hàng ',
+        E033: ' Nhập email thoại khách hàng ',
+        E034: ' Nhập số điện thoại khách hàng ',
+        E035: ' Nhập địa chỉ khách hàng ',
+        E036: ' Chọn phương thức thanh toán ',
+        E042: ' Nhập ngày sinh ',
+        E043: ' Nhập mã bưu diện ',
+        E044: ' Chọn giới tính ',
+        // chi nhánh cửa hàng
+        ER01: ' Nhập tên chi nhánh ',
+        ER02: ' Trạng thái không bỏ trống ',
         // nhanvien
-        E037 : ' Nhập tên nhân viên ',
-        E038 : ' Nhập email nhân viên ',
-        E039 : ' Nhập số điện thoại nhân viên ',
-        E040 : ' Nhập địa chỉ nhân viên ',
-        E041 : ' Xác nhận mật khẩu mới ',
-        E046 : 'Chọn nơi làm việc',
-        E047 : 'Chọn vai trò',
+        E037: ' Nhập tên nhân viên ',
+        E038: ' Nhập email nhân viên ',
+        E039: ' Nhập số điện thoại nhân viên ',
+        E040: ' Nhập địa chỉ nhân viên ',
+        E041: ' Xác nhận mật khẩu mới ',
+        E046: 'Chọn nơi làm việc',
+        E047: 'Chọn vai trò',
         // dang ky
         R042: ' Họ tên không được để trống',
         R043: ' Số điện thoại không được để trống',
@@ -161,7 +161,7 @@ function generateErrorMessage(code, values = []) {
         TC003: 'Không để trống khách hàng',
         TC004: 'Nội dung không được để trống',
         // khách hàng
-        KH001 : 'Nhóm khách hàng không được để trống',
+        KH001: 'Nhóm khách hàng không được để trống',
 
         //Kho hàng
         S001: 'Tên kho hàng không được để trống',

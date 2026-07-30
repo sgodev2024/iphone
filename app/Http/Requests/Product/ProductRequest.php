@@ -80,17 +80,17 @@ class ProductRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'name'         => 'tên sản phẩm',
-            'price'        => 'giá bán',
-            'price_buy'    => 'giá nhập',
-            'product_unit' => 'đơn vị',
-            'category_id'  => 'danh mục',
-            'brands_id'    => 'thương hiệu',
-            'inventory_tracking' => 'phương thức quản lý tồn kho',
-            'description'  => 'mô tả',
-            'is_featured'  => 'sản phẩm nổi bật',
-            'status'       => 'trạng thái',
-            'thumbnail'    => 'hình ảnh',
+            'name'               => 'Tên sản phẩm',
+            'price'              => 'Giá bán',
+            'price_buy'          => 'Giá nhập',
+            'product_unit'       => 'Đơn vị',
+            'category_id'        => 'Danh mục',
+            'brands_id'          => 'Thương hiệu',
+            'inventory_tracking' => 'Phương thức quản lý tồn kho',
+            'description'        => 'Mô tả',
+            'is_featured'        => 'Sản phẩm nổi bật',
+            'status'             => 'Trạng thái',
+            'thumbnail'          => 'Hình ảnh',
         ];
     }
 }
