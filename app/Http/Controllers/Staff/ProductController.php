@@ -13,6 +13,7 @@ use App\Models\ProductStorage;
 use App\Services\ClientGroupService;
 use App\Services\ClientService;
 use App\Services\ProductService;
+use App\Services\SaleStorageResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,25 +21,41 @@ class ProductController extends Controller
 {
     //
     protected $productService;
+
     protected $clientService;
+
     protected $clientGroupService;
-    public function __construct(ProductService $productService, ClientService $clientService, ClientGroupService $clientGroupService)
-    {
+
+    protected $saleStorageResolver;
+
+    public function __construct(
+        ProductService $productService,
+        ClientService $clientService,
+        ClientGroupService $clientGroupService,
+        SaleStorageResolver $saleStorageResolver
+    ) {
         $this->productService = $productService;
         $this->clientService = $clientService;
         $this->clientGroupService = $clientGroupService;
+        $this->saleStorageResolver = $saleStorageResolver;
     }
+
     public function index()
     {
         $user = Auth::user();
+        $storageContext = $this->saleStorageResolver->saleStorageContext($user);
+        $saleStorages = $storageContext['storages'];
+        $saleStorage = $storageContext['selectedStorage'];
+        $canSelectSaleStorage = $storageContext['canSelectStorage'];
+        $saleStorageMessage = $storageContext['message'];
 
-        $title = "Quản lý bán hàng";
+        $title = 'Quản lý bán hàng';
         $config = Config::with(['bank', 'user'])->first();
-        $missingConfigMessage = !$config
+        $missingConfigMessage = ! $config
             ? 'Chưa cấu hình thông tin chuyển khoản.'
-            : (!$config->bank ? 'Chưa cấu hình ngân hàng cho thông tin chuyển khoản.' : null);
+            : (! $config->bank ? 'Chưa cấu hình ngân hàng cho thông tin chuyển khoản.' : null);
         $clientgroup = $this->clientGroupService->getAllClientGroup();
-        $cart =  Cart::where('user_id', $user->id)->get();
+        $cart = Cart::where('user_id', $user->id)->get();
         foreach ($cart as $key => $item) {
             $item->delete();
         }
@@ -48,7 +65,42 @@ class ProductController extends Controller
             $sum += $value->price * $value->amount;
         }
 
-        return view('Themes.pages.layout_staff.index', compact('cart', 'sum', 'config', 'title', 'clientgroup', 'missingConfigMessage'));
+        return view('Themes.pages.layout_staff.index', compact(
+            'cart',
+            'sum',
+            'config',
+            'title',
+            'clientgroup',
+            'missingConfigMessage',
+            'saleStorages',
+            'saleStorage',
+            'canSelectSaleStorage',
+            'saleStorageMessage'
+        ));
+    }
+
+    public function selectSaleStorage(Request $request)
+    {
+        $request->validate([
+            'storage_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $storageId = $this->saleStorageResolver->selectSaleStorageId(
+            $request->user(),
+            $request->input('storage_id')
+        );
+
+        $storage = $this->saleStorageResolver
+            ->managedStorages($request->user())
+            ->firstWhere('id', $storageId);
+
+        return response()->json([
+            'message' => 'Đã chọn kho bán hàng.',
+            'storage' => [
+                'id' => $storageId,
+                'name' => $storage?->name,
+            ],
+        ]);
     }
 
     public function getBranchs()
@@ -60,16 +112,7 @@ class ProductController extends Controller
 
     public function product(Request $request)
     {
-        $user = Auth::user();
-        $storageId = $user->storage_id;
-
-        if (!$storageId) {
-            return response()->json([
-                'message' => 'Nhân viên chưa được gán kho bán hàng.',
-            ], 422);
-        }
-
-        $storageId = (int) $storageId;
+        $storageId = $this->resolveSaleStorageId($request);
         $searchText = trim((string) $request->input('searchText', ''));
         if ($searchText === '') {
             $searchText = trim((string) $request->input('search', ''));
@@ -273,24 +316,25 @@ class ProductController extends Controller
         $searchText = $request->input('searchText');
         $clients = Client::query()
             ->where('user_id', $userId)
-            ->when(!empty($searchText), function ($query) use ($searchText) {
+            ->when(! empty($searchText), function ($query) use ($searchText) {
                 $query->where(function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%")
                         ->orWhere('phone', 'like', "%{$searchText}%");
                 });
             })
             ->get();
+
         return response()->json($clients);
     }
 
     public function addToCart(Request $request)
     {
         $user = Auth::user();
-        $storage_id = $user->storage_id;
+        $storage_id = $this->resolveSaleStorageId($request);
         $productId = $request->input('product_id');
         $product = $this->productService->getProductById($productId);
 
-        if (!$product) {
+        if (! $product) {
             return response()->json(['error' => 'Product not found.'], 404);
         }
 
@@ -301,7 +345,7 @@ class ProductController extends Controller
         $amount = $request->input('amount');
         $ProductStorage = ProductStorage::where([
             ['product_id', '=', $productId],
-            ['storage_id', '=', $storage_id]
+            ['storage_id', '=', $storage_id],
         ])->with('product')->first();
         if ($existingCartItem) {
             if ($existingCartItem->amount < $ProductStorage->quantity) {
@@ -313,7 +357,7 @@ class ProductController extends Controller
                 'product_id' => $productId,
                 'price' => $product->price_buy,
                 'user_id' => $user->id,
-                'amount' => $amount
+                'amount' => $amount,
             ]);
         }
 
@@ -326,7 +370,7 @@ class ProductController extends Controller
             $sum += $item->amount * $item->price;
             $product = ProductStorage::where([
                 ['product_id', '=', $item->product_id],
-                ['storage_id', '=', $storage_id]
+                ['storage_id', '=', $storage_id],
             ])->with('product')->first();
 
             if ($product) {
@@ -340,18 +384,18 @@ class ProductController extends Controller
                 ];
             }
         }
+
         return response()->json(['success' => 'Product added to cart!', 'cart' => $products, 'sum' => number_format($sum)]);
     }
-
 
     public function updateCart(Request $request)
     {
         $user = Auth::user();
-        $storage_id = $user->storage_id;
+        $storage_id = $this->resolveSaleStorageId($request);
         $productId = $request->input('product_id');
         $product = $this->productService->getProductById($productId);
 
-        if (!$product) {
+        if (! $product) {
             return response()->json(['error' => 'Product not found.'], 404);
         }
 
@@ -373,7 +417,7 @@ class ProductController extends Controller
             $sum += $item->amount * $item->price;
             $product = ProductStorage::where([
                 ['product_id', '=', $item->product_id],
-                ['storage_id', '=', $storage_id]
+                ['storage_id', '=', $storage_id],
             ])->with('product')->first();
             if ($product) {
                 $products[] = [
@@ -386,13 +430,14 @@ class ProductController extends Controller
                 ];
             }
         }
+
         return response()->json(['success' => 'Product added to cart!', 'cart' => $products, 'sum' => number_format($sum)]);
     }
 
     public function removeFromCart(Request $request)
     {
         $user = Auth::user();
-        $storage_id = $user->storage_id;
+        $storage_id = $this->resolveSaleStorageId($request);
         $cart = $request->input('cart');
         Cart::find($cart)->delete();
         $cartItems = Cart::where('user_id', $user->id)
@@ -404,7 +449,7 @@ class ProductController extends Controller
             $sum += $item->amount * $item->price;
             $product = ProductStorage::where([
                 ['product_id', '=', $item->product_id],
-                ['storage_id', '=', $storage_id]
+                ['storage_id', '=', $storage_id],
             ])->with('product')->first();
             if ($product) {
                 $products[] = [
@@ -417,6 +462,7 @@ class ProductController extends Controller
                 ];
             }
         }
+
         return response()->json(['success' => 'Product added to cart!', 'cart' => $products, 'sum' => number_format($sum)]);
     }
 
@@ -425,13 +471,7 @@ class ProductController extends Controller
         $name = $request->input('name');
 
         $user = Auth::user();
-        $storage_id = $user->storage_id;
-
-        if (!$storage_id) {
-            return response()->json([
-                'message' => 'Nhân viên chưa được gán kho bán hàng.',
-            ], 422);
-        }
+        $storage_id = $this->resolveSaleStorageId($request);
 
         $userId = $user->role_id === 3 ? ($user->manager_id ?? $user->id) : $user->id;
 
@@ -468,7 +508,7 @@ class ProductController extends Controller
                 'product_unit' => $product->product_unit,
                 'tracking_type' => $product->inventory_tracking,
                 'barcode' => $product->barcode,
-                'images' => $product->images
+                'images' => $product->images,
             ];
         }
 
@@ -479,7 +519,7 @@ class ProductController extends Controller
     {
 
         $user = Auth::user();
-        $storage_id = $user->storage_id;
+        $storage_id = $this->resolveSaleStorageId($request);
         $existingCartItem = Cart::find($request->cart);
         $price = $request->price;
 
@@ -495,7 +535,7 @@ class ProductController extends Controller
             $sum += $item->amount * $item->price;
             $product = ProductStorage::where([
                 ['product_id', '=', $item->product_id],
-                ['storage_id', '=', $storage_id]
+                ['storage_id', '=', $storage_id],
             ])->with('product')->first();
             if ($product) {
                 $products[] = [
@@ -508,6 +548,15 @@ class ProductController extends Controller
                 ];
             }
         }
+
         return response()->json(['success' => 'Product added to cart!', 'cart' => $products, 'sum' => number_format($sum)]);
+    }
+
+    private function resolveSaleStorageId(Request $request): int
+    {
+        return $this->saleStorageResolver->resolveSaleStorageId(
+            $request->user(),
+            $request->input('storage_id')
+        );
     }
 }

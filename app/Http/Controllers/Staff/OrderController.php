@@ -7,6 +7,7 @@ use App\Http\Requests\Staff\StoreOrderRequest;
 use App\Models\Config;
 use App\Models\Order;
 use App\Services\SaleService;
+use App\Services\SaleStorageResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,7 +26,7 @@ class OrderController extends Controller
             $dateRange = $request->query('date_range');
             $start = $end = null;
 
-            if (!empty($dateRange)) {
+            if (! empty($dateRange)) {
                 $dates = explode(' - ', $dateRange);
                 if (count($dates) === 2) {
                     $start = Carbon::createFromFormat('d/m/Y', trim($dates[0]))->startOfDay();
@@ -35,7 +36,7 @@ class OrderController extends Controller
 
             $orders = Order::query()
                 ->where('user_id', Auth::id())
-                ->when(!empty($searchText), function ($query) use ($searchText) {
+                ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('code', 'like', "%$searchText%")
                         ->orWhereHas('client', function ($q) use ($searchText) {
                             $q->where('name', 'like', "%$searchText%")
@@ -81,10 +82,17 @@ class OrderController extends Controller
         }
     }
 
-    public function store(StoreOrderRequest $request, SaleService $saleService)
-    {
+    public function store(
+        StoreOrderRequest $request,
+        SaleService $saleService,
+        SaleStorageResolver $saleStorageResolver
+    ) {
         try {
-            $saleService->createPosOrder($request->user(), $request->validated());
+            $storageId = $saleStorageResolver->resolveSaleStorageId(
+                $request->user(),
+                $request->input('storage_id')
+            );
+            $saleService->createPosOrder($request->user(), $request->validated(), $storageId);
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công!',

@@ -123,6 +123,53 @@
                 height: 40px;
             }
         }
+
+        /* Khu vực kho bán hàng */
+        .sale-storage-card {
+            background: #fff;
+        }
+
+        .sale-storage-card .card-body {
+            padding: 10px 14px;
+        }
+
+        .sale-storage-current .small {
+            line-height: 1.1;
+            margin-bottom: 3px;
+        }
+
+        .sale-storage-current .fw-semibold {
+            line-height: 1.2;
+        }
+
+        .sale-storage-select-wrapper {
+            width: 240px;
+        }
+
+        .sale-storage-select-wrapper .form-label {
+            margin-bottom: 3px;
+            line-height: 1;
+        }
+
+        .sale-storage-select-wrapper .form-select {
+            height: 34px;
+            min-height: 34px;
+            padding-top: 3px;
+            padding-bottom: 3px;
+            font-size: 14px;
+            background-color: #fff;
+        }
+
+        .product-search-hint {
+            margin-top: 4px;
+            line-height: 1.25;
+        }
+
+        @media (max-width: 576px) {
+            .sale-storage-select-wrapper {
+                width: 100%;
+            }
+        }
     </style>
 
     @php
@@ -135,6 +182,45 @@
     @endphp
 
     <div class="container-fluid py-4">
+        <div class="card mb-3 sale-storage-card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div class="sale-storage-current">
+                        <div class="small text-muted">Kho đang bán hàng</div>
+
+                        <div class="fw-semibold">
+                            <i class="fa-solid fa-warehouse me-1"></i>
+                            {{ $saleStorage?->name ?? 'Chưa chọn kho' }}
+                        </div>
+                    </div>
+
+                    @if ($canSelectSaleStorage)
+                        <div class="sale-storage-select-wrapper">
+                            <label for="saleStorageSelect" class="form-label small fw-semibold">
+                                Chọn kho bán hàng
+                            </label>
+
+                            <select id="saleStorageSelect" class="form-select">
+                                <option value="">-- Chọn kho --</option>
+
+                                @foreach ($saleStorages as $storage)
+                                    <option value="{{ $storage->id }}" @selected($saleStorage?->id === $storage->id)>
+                                        {{ $storage->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                </div>
+
+                @if ($saleStorageMessage)
+                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0">
+                        {{ $saleStorageMessage }}
+                    </div>
+                @endif
+            </div>
+        </div>
+
         <div class="row g-4">
             <!-- LEFT 9 cols -->
             <div class="col-lg-9">
@@ -158,12 +244,16 @@
                                         </span>
 
                                         <input id="productSearch" type="text" class="form-control"
-                                            placeholder="Tìm kiếm sản phẩm..." autocomplete="off" />
+                                            @disabled(!$saleStorage) placeholder="Tìm kiếm sản phẩm..."
+                                            autocomplete="off" />
                                     </div>
 
                                     <div id="productPopup" class="search-popup">
                                         <div id="productList" class="list-group list-group-flush"></div>
                                     </div>
+                                </div>
+                                <div class="form-text product-search-hint">
+                                    Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm vào giỏ.
                                 </div>
                             </div>
 
@@ -185,15 +275,12 @@
                                     </span>
 
                                     <input id="barcodeInput" type="text" class="form-control"
-                                        placeholder="Quét hoặc nhập barcode..." autocomplete="off" />
+                                        @disabled(!$saleStorage) placeholder="Quét hoặc nhập barcode..."
+                                        autocomplete="off" />
                                 </div>
 
                                 <div id="barcodeFeedback" class="barcode-feedback small text-muted mt-1"></div>
                             </div>
-                        </div>
-
-                        <div class="mt-3 small text-muted">
-                            Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm vào giỏ.
                         </div>
                     </div>
                 </div>
@@ -465,7 +552,7 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button class="btn btn-dark" id="pay-button">Thanh toán</button>
+                    <button class="btn btn-dark" id="pay-button" @disabled(!$saleStorage)>Thanh toán</button>
                 </div>
             </div>
         </div>
@@ -490,6 +577,37 @@
             const bankCode = @json($bankCode);
             const bankAccount = @json($bankAccountForQr);
             let currentInvoiceGrand = 0;
+            const saleStorageSelect = qs('#saleStorageSelect');
+
+            saleStorageSelect?.addEventListener('change', function() {
+                const storageId = Number(this.value || 0);
+
+                if (!storageId) {
+                    return;
+                }
+
+                this.disabled = true;
+
+                $.ajax({
+                    url: "{{ route('staff.storage.select') }}",
+                    method: 'POST',
+                    data: {
+                        storage_id: storageId
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    success: () => window.location.reload(),
+                    error: (xhr) => {
+                        this.disabled = false;
+                        Toast.fire({
+                            icon: 'error',
+                            title: xhr.responseJSON?.message ||
+                                'Không thể chọn kho bán hàng.'
+                        });
+                    }
+                });
+            });
 
             function escapeHtml(value) {
                 return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -898,7 +1016,8 @@
                         });
                     },
                     error: (xhr) => {
-                        const message = xhr.responseJSON?.message || 'Không thể xác thực thiết bị IMEI.';
+                        const message = xhr.responseJSON?.message ||
+                            'Không thể xác thực thiết bị IMEI.';
                         barcodeFeedback.textContent = message;
                         Toast.fire({
                             icon: "error",

@@ -18,6 +18,7 @@ use App\Services\DebtKHService;
 use App\Services\ProductService;
 use App\Services\ProductStorageService;
 use App\Services\ReceiptsService;
+use App\Services\SaleStorageResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Exception;
@@ -47,13 +48,15 @@ class ClientController extends Controller
     protected $receiptsService;
     protected $debtKHService;
     protected $productStorageService;
-    public function __construct(ClientService $clientService, ProductService $productService, ReceiptsService $receiptsService, DebtKHService $debtKHService, ProductStorageService $productStorageService)
+    protected $saleStorageResolver;
+    public function __construct(ClientService $clientService, ProductService $productService, ReceiptsService $receiptsService, DebtKHService $debtKHService, ProductStorageService $productStorageService, SaleStorageResolver $saleStorageResolver)
     {
         $this->clientService = $clientService;
         $this->productService = $productService;
         $this->receiptsService = $receiptsService;
         $this->debtKHService = $debtKHService;
         $this->productStorageService = $productStorageService;
+        $this->saleStorageResolver = $saleStorageResolver;
     }
 
     public function addClient(Request $request)
@@ -135,7 +138,10 @@ class ClientController extends Controller
 
         // try {
         $user = Auth::user();
-        $storageId = $user->storage_id;
+        $storageId = $this->saleStorageResolver->resolveSaleStorageId(
+            $user,
+            $request->input('storage_id')
+        );
         $listphone = $this->clientService->getAllClientStaff()->pluck('phone');
         $cartItems = Cart::where('user_id', $user->id)->get();
         $sum = 0;
@@ -184,7 +190,7 @@ class ClientController extends Controller
                     'order_id' => $order->id,
                     'quantity' => $item->amount,
                     'product_id' => $item->product_id,
-                    'storage_id' => $user->storage_id,
+                    'storage_id' => $storageId,
                     'price' => $item->price
                 ]);
 
@@ -214,7 +220,7 @@ class ClientController extends Controller
                 OrderDetail::create([
                     'order_id' => $order->id,
                     'quantity' => $item->amount,
-                    'storage_id' => $user->storage_id,
+                    'storage_id' => $storageId,
                     'product_id' => $item->product_id,
                     'price' => $item->price
                 ]);

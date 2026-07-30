@@ -10,14 +10,12 @@ use App\Models\Config;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
 use App\Models\Order;
-use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
 use App\Models\Receipts;
 use App\Models\Storage;
 use App\Models\Transaction;
-use App\Models\TransactionEntry;
 use App\Models\User;
 use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
@@ -70,6 +68,242 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame('9', (string) $product->fresh()->quantity);
         $this->assertDatabaseCount('transactions', 1);
         $this->assertDatabaseCount('transaction_entries', 2);
+    }
+
+    public function test_owner_with_one_managed_branch_storage_can_sell_immediately(): void
+    {
+        $this->seedAccounts();
+        $owner = $this->createManager(1);
+        $branch = $this->createManager(2, $owner->id);
+        $storage = Storage::create([
+            'user_id' => $branch->id,
+            'name' => 'Kho chi nhánh',
+        ]);
+        $product = $this->createProduct([
+            'user_id' => $owner->id,
+            'price_buy' => 100000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 4,
+        ]);
+
+        $this->actingAs($owner)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Kho chi nhánh', false)
+            ->assertDontSee('id="saleStorageSelect"', false);
+
+        $this->actingAs($owner)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'available_quantity' => 4,
+                'storage_id' => $storage->id,
+            ]);
+
+        $this->actingAs($owner)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 2],
+            ], 200000))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+    }
+
+    public function test_manager_without_managed_storage_gets_manager_specific_message(): void
+    {
+        $manager = $this->createManager();
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Chưa có kho bán hàng. Vui lòng tạo hoặc phân quyền kho.', false)
+            ->assertDontSee('Nhân viên chưa được gán kho bán hàng.', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Chưa có kho bán hàng. Vui lòng tạo hoặc phân quyền kho.',
+            ]);
+    }
+
+    public function test_manager_with_multiple_storages_must_select_and_session_storage_is_used_everywhere(): void
+    {
+        $this->seedAccounts();
+        $manager = $this->createManager();
+        $firstStorage = Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho Quận 1',
+        ]);
+        $secondStorage = Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho Quận 2',
+        ]);
+        $product = $this->createProduct([
+            'user_id' => $manager->id,
+            'price_buy' => 100000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $firstStorage->id,
+            'quantity' => 5,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $secondStorage->id,
+            'quantity' => 9,
+        ]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('id="saleStorageSelect"', false)
+            ->assertSee('Vui lòng chọn kho bán hàng.', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Vui lòng chọn kho bán hàng.']);
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/storage/select', [
+                'storage_id' => $secondStorage->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('storage.id', $secondStorage->id);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'available_quantity' => 9,
+                'storage_id' => $secondStorage->id,
+            ]);
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 3],
+            ], 300000))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $product->id,
+            'storage_id' => $secondStorage->id,
+            'quantity' => 3,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $firstStorage->id,
+            'quantity' => 5,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $secondStorage->id,
+            'quantity' => 6,
+        ]);
+    }
+
+    public function test_manager_cannot_select_storage_outside_management_scope(): void
+    {
+        $manager = $this->createManager();
+        $otherManager = $this->createManager();
+        $managedStorage = Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho hợp lệ',
+        ]);
+        Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho hợp lệ thứ hai',
+        ]);
+        $outsideStorage = Storage::create([
+            'user_id' => $otherManager->id,
+            'name' => 'Kho ngoài phạm vi',
+        ]);
+        $manager->update(['storage_id' => $outsideStorage->id]);
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/storage/select', [
+                'storage_id' => $managedStorage->id,
+            ])
+            ->assertOk();
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/storage/select', [
+                'storage_id' => $outsideStorage->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Kho bán hàng đã chọn không thuộc quyền quản lý của tài khoản.',
+            ]);
+
+        $product = $this->createProduct(['user_id' => $manager->id]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $managedStorage->id,
+            'quantity' => 2,
+        ]);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'storage_id' => $managedStorage->id,
+                'available_quantity' => 2,
+            ]);
+    }
+
+    public function test_staff_cannot_change_assigned_sale_storage(): void
+    {
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct();
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $otherStorage->id,
+            'quantity' => 8,
+        ]);
+
+        $this->actingAs($staff)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertDontSee('id="saleStorageSelect"', false);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/storage/select', [
+                'storage_id' => $otherStorage->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Nhân viên không được tự thay đổi kho bán hàng.',
+            ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'storage_id' => $storage->id,
+                'available_quantity' => 2,
+            ]);
     }
 
     public function test_bank_transfer_order_appears_in_bank_transactions_for_manager(): void
@@ -1206,6 +1440,7 @@ class StaffPosSaleTest extends TestCase
 
         Schema::create('storages', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
             $table->timestamps();
@@ -1432,12 +1667,26 @@ class StaffPosSaleTest extends TestCase
     {
         return User::create([
             'name' => 'Staff',
-            'email' => uniqid('staff', true) . '@example.com',
+            'email' => uniqid('staff', true).'@example.com',
             'phone' => uniqid('09'),
             'password' => 'password',
             'role_id' => 3,
             'manager_id' => $managerId,
             'storage_id' => $storageId,
+            'status' => 'active',
+        ]);
+    }
+
+    private function createManager(int $roleId = 2, ?int $managerId = null): User
+    {
+        return User::create([
+            'name' => 'Manager',
+            'email' => uniqid('manager', true).'@example.com',
+            'phone' => uniqid('08'),
+            'password' => 'password',
+            'role_id' => $roleId,
+            'manager_id' => $managerId,
+            'storage_id' => null,
             'status' => 'active',
         ]);
     }

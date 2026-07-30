@@ -18,10 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 class SaleService
 {
-    public function createPosOrder(User $user, array $data): Order
+    public function createPosOrder(User $user, array $data, int $storageId): Order
     {
-        return DB::transaction(function () use ($user, $data) {
-            $storageId = $this->resolveStorageId($user);
+        return DB::transaction(function () use ($user, $data, $storageId) {
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = $data['customer']['payment'];
             $client = null;
@@ -83,7 +82,7 @@ class SaleService
                 : OrderDetail::query()
                     ->whereIn('product_imei_id', $imeiIds->all())
                     ->pluck('product_imei_id')
-                    ->map(fn($id) => (int) $id)
+                    ->map(fn ($id) => (int) $id)
                     ->flip();
 
             $orderItems = collect();
@@ -196,17 +195,6 @@ class SaleService
 
             return $order;
         }, 3);
-    }
-
-    private function resolveStorageId(User $user): int
-    {
-        if (! $user->storage_id) {
-            throw ValidationException::withMessages([
-                'storage_id' => 'Nhân viên chưa được gán kho bán hàng.',
-            ]);
-        }
-
-        return (int) $user->storage_id;
     }
 
     private function resolveOrderOwnerId(User $user): int
@@ -463,8 +451,7 @@ class SaleService
         float $grand,
         User $creator,
         int $ownerId
-    ): void
-    {
+    ): void {
         if (! in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
             return;
         }
@@ -541,8 +528,8 @@ class SaleService
         if (! $account) {
             throw new \Exception(
                 'Không tìm thấy tài khoản ngân hàng đang hoạt động dưới 112. '
-                . 'Vui lòng vào Tài khoản kế toán (/admin/accounts) tạo tài khoản con của 112 '
-                . 'theo ngân hàng thật đang cấu hình, ví dụ 112MB - Tiền gửi ngân hàng MBBank.'
+                .'Vui lòng vào Tài khoản kế toán (/admin/accounts) tạo tài khoản con của 112 '
+                .'theo ngân hàng thật đang cấu hình, ví dụ 112MB - Tiền gửi ngân hàng MBBank.'
             );
         }
 
@@ -558,7 +545,7 @@ class SaleService
         if (! $account) {
             throw new \Exception(
                 "Không tìm thấy {$label} ({$code}). "
-                . 'Vui lòng cấu hình tại Tài khoản kế toán (/admin/accounts) hoặc chạy AccountingAccountSeeder.'
+                .'Vui lòng cấu hình tại Tài khoản kế toán (/admin/accounts) hoặc chạy AccountingAccountSeeder.'
             );
         }
 

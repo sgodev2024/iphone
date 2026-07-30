@@ -7,13 +7,17 @@ use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
-use App\Models\User;
+use App\Services\SaleStorageResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class BarcodeController extends Controller
 {
+    public function __construct(
+        private readonly SaleStorageResolver $saleStorageResolver
+    ) {}
+
     public function resolve(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -25,13 +29,10 @@ class BarcodeController extends Controller
         ]);
 
         $barcode = trim($validated['barcode']);
-        $storageId = $this->resolveStorageId($request->user());
-
-        if (! $storageId) {
-            return $this->error(
-                'Nhân viên chưa được gán kho bán hàng.'
-            );
-        }
+        $storageId = $this->saleStorageResolver->resolveSaleStorageId(
+            $request->user(),
+            $request->input('storage_id')
+        );
 
         $imei = ProductImei::query()
             ->with(['product', 'importDetail.import'])
@@ -50,7 +51,7 @@ class BarcodeController extends Controller
             return $this->resolveImei(
                 $imei,
                 $storageId,
-                collect($validated['cart_imei_ids'] ?? [])->map(fn($id) => (int) $id)
+                collect($validated['cart_imei_ids'] ?? [])->map(fn ($id) => (int) $id)
             );
         }
 
@@ -191,11 +192,6 @@ class BarcodeController extends Controller
             'quantity' => 1,
             'storage_id' => $storageId,
         ]);
-    }
-
-    private function resolveStorageId(User $user): ?int
-    {
-        return $user->storage_id ? (int) $user->storage_id : null;
     }
 
     private function resolveImeiStorageId(ProductImei $imei): ?int

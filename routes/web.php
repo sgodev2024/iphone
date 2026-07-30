@@ -407,6 +407,7 @@ Route::middleware(['auth'])
 
 // bán hàng
 Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staff.')->group(function () {
+    Route::post('storage/select', [StaffProductController::class, 'selectSaleStorage'])->name('storage.select');
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
     Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');
     Route::get('get-clients', [StaffProductController::class, 'getClients']);
