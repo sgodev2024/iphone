@@ -34,19 +34,27 @@
                                     <tbody>
                                         <tr>
                                             <th scope="row"><i class="fas fa-building"></i> Nhà cung cấp</th>
-                                            <td><div class="nowrap">{{ $supplier?->name ?? '—' }}</div></td>
+                                            <td>
+                                                <div class="nowrap">{{ $supplier?->name ?? '—' }}</div>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-phone"></i> Số điện thoại</th>
-                                            <td><div class="nowrap">{{ $supplier?->phone ?? '—' }}</div></td>
+                                            <td>
+                                                <div class="nowrap">{{ $supplier?->phone ?? '—' }}</div>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-envelope"></i> Email</th>
-                                            <td><div class="nowrap">{{ $supplier?->email ?? '—' }}</div></td>
+                                            <td>
+                                                <div class="nowrap">{{ $supplier?->email ?? '—' }}</div>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-map-marker-alt"></i> Địa chỉ</th>
-                                            <td><div class="nowrap">{{ $supplier?->address ?? '—' }}</div></td>
+                                            <td>
+                                                <div class="nowrap">{{ $supplier?->address ?? '—' }}</div>
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -77,7 +85,8 @@
                                             <td>{{ $importdetail->payment_method_label }}</td>
                                         </tr>
                                         <tr>
-                                            <th scope="row"><i class="fas fa-check-circle"></i> Trạng thái thanh toán</th>
+                                            <th scope="row"><i class="fas fa-check-circle"></i> Trạng thái thanh toán
+                                            </th>
                                             <td>
                                                 <span class="badge {{ $importdetail->payment_status_badge_class }}">
                                                     {{ $importdetail->payment_status_label }}
@@ -90,11 +99,13 @@
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-money-bill-wave"></i> Đã trả</th>
-                                            <td>{{ number_format($importdetail->resolved_paid_amount, 0, ',', '.') }} đ</td>
+                                            <td>{{ number_format($importdetail->resolved_paid_amount, 0, ',', '.') }} đ
+                                            </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-file-invoice-dollar"></i> Còn nợ</th>
-                                            <td>{{ number_format($importdetail->resolved_debt_amount, 0, ',', '.') }} đ</td>
+                                            <td>{{ number_format($importdetail->resolved_debt_amount, 0, ',', '.') }} đ
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -106,13 +117,13 @@
                                 <h5 class="text-primary"><b>Danh sách sản phẩm</b></h5>
                                 <div class="table-responsive">
                                     <table id="basic-datatables"
-                                        class="display table table-striped table-hover dataTable"
+                                        class="display table table-striped table-hover dataTable w-100" style="width: 100%"
                                         role="grid" aria-describedby="basic-datatables_info">
                                         <thead>
                                             <tr role="row">
                                                 <th>Mã hàng hóa</th>
                                                 <th>Tên hàng hóa</th>
-                                                <th>Quản lý kho</th>
+                                                {{-- <th>Quản lý kho</th> --}}
                                                 <th>Số lượng</th>
                                                 <th>Giá cũ</th>
                                                 <th>Giá nhập</th>
@@ -130,7 +141,7 @@
                                                 <tr>
                                                     <td>{{ $product?->code ?? '—' }}</td>
                                                     <td>{{ $product?->name ?? 'Sản phẩm không còn tồn tại' }}</td>
-                                                    <td>{{ $product?->inventory_tracking_label ?? 'Không xác định' }}</td>
+                                                    {{-- <td>{{ $product?->inventory_tracking_label ?? 'Không xác định' }}</td> --}}
                                                     <td>{{ number_format($detail->quantity, 0, ',', '.') }}</td>
                                                     <td>{{ number_format($detail->old_price, 0, ',', '.') }} đ</td>
                                                     <td>{{ number_format($detail->price, 0, ',', '.') }} đ</td>
@@ -142,7 +153,8 @@
                                                                         <strong>IMEI:</strong> {{ $imei->imei ?: '—' }}
                                                                     </div>
                                                                     <div class="font-monospace text-muted">
-                                                                        <strong>Barcode:</strong> {{ $imei->barcode ?: '—' }}
+                                                                        <strong>Barcode:</strong>
+                                                                        {{ $imei->barcode ?: '—' }}
                                                                     </div>
                                                                 </div>
                                                             @empty
@@ -153,12 +165,13 @@
                                                         @endif
                                                     </td>
                                                     <td>
-                                                        {{ number_format($detail->price * $detail->quantity, 0, ',', '.') }} đ
+                                                        {{ number_format($detail->price * $detail->quantity, 0, ',', '.') }}
+                                                        đ
                                                     </td>
                                                 </tr>
                                             @empty
                                                 <tr>
-                                                    <td colspan="8" class="text-center text-muted">
+                                                    <td colspan="7" class="text-center text-muted">
                                                         Phiếu nhập chưa có sản phẩm
                                                     </td>
                                                 </tr>
@@ -166,7 +179,7 @@
                                         </tbody>
                                         <tfoot>
                                             <tr>
-                                                <th colspan="7" class="text-end">Tổng cộng</th>
+                                                <th colspan="6" class="text-end">Tổng cộng</th>
                                                 <th>{{ number_format($importdetail->total, 0, ',', '.') }} đ</th>
                                             </tr>
                                         </tfoot>
