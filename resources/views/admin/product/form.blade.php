@@ -128,8 +128,10 @@
                         </div>
                         <div class="card-body">
                             <button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
-                            <a href="/admin/brand" class="btn btn-outline-secondary"><i
-                                    class="fa-solid fa-arrow-rotate-left"></i> Quay lại</a>
+                            <a href="{{ route('admin.products.index') }}" class="btn btn-outline-secondary">
+                                <i class="fa-solid fa-arrow-rotate-left"></i>
+                                Quay lại
+                            </a>
                         </div>
                     </div>
 
