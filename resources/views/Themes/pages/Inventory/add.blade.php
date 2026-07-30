@@ -238,7 +238,7 @@
                                                     <div class="mr-4">
 
                                                         <img style="width: 80px ; height: 70px;"
-                                                            src="{{ !empty($item->images) && isset($item->images[0]->image_path) ? showImage($item->images[0]->image_path) : asset('assets/img/default-image.jpg') }}"
+                                                            src="{{ !empty($item->images) && isset($item->images[0]->image_path) ? productImage($item->images[0]->image_path) : productImage(null) }}"
                                                             alt="Sản phẩm">
 
                                                     </div>

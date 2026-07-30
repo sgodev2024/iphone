@@ -82,7 +82,11 @@ class ProductService
 
     public function createProduct($data): Product
     {
-        $images = saveImages($data, 'images', 'product', 300, 300, true);
+        $images = [];
+
+        if (method_exists($data, 'hasFile') && $data->hasFile('images')) {
+            $images = saveImages($data, 'images', 'product', 300, 300, true);
+        }
 
         DB::beginTransaction();
         try {
@@ -135,7 +139,11 @@ class ProductService
 
     public function updateProduct(int $id, $data): Product
     {
-        $images = saveImages($data, 'images', 'product', 300, 300, true);
+        $images = [];
+
+        if (method_exists($data, 'hasFile') && $data->hasFile('images')) {
+            $images = saveImages($data, 'images', 'product', 300, 300, true);
+        }
 
         DB::beginTransaction();
         try {

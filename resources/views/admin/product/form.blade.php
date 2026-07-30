@@ -151,7 +151,7 @@
                         </div>
                         <div class="card-body">
                             <img class="img-fluid img-thumbnail w-100" id="preview-thumbnail" style="cursor: pointer"
-                                src="{{ showImage(optional($product)->thumbnail) }}" alt=""
+                                src="{{ productImage(optional($product)->thumbnail) }}" alt=""
                                 onclick="document.getElementById('thumbnail').click();">
                             <input type="file" name="thumbnail" id="thumbnail" class="form-control d-none"
                                 accept="image/*" onchange="previewImage(event, 'preview-thumbnail')">

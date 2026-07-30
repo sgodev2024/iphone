@@ -214,6 +214,7 @@ class ProductController extends Controller
                     'code' => $product->code,
                     'barcode' => $product->barcode,
                     'thumbnail' => $product->thumbnail,
+                    'thumbnail_url' => $product->thumbnail_url,
                     'price_buy' => (float) $product->price_buy,
                     'quantity' => $availableQuantity,
                     'available_quantity' => $availableQuantity,
@@ -285,6 +286,7 @@ class ProductController extends Controller
                         'name' => $product->name,
                         'code' => $product->code,
                         'thumbnail' => $product->thumbnail,
+                        'thumbnail_url' => $product->thumbnail_url,
                         'price_buy' => (float) $product->price_buy,
                         'imei' => $imei->imei,
                         'barcode' => $imei->barcode,
@@ -508,6 +510,8 @@ class ProductController extends Controller
                 'product_unit' => $product->product_unit,
                 'tracking_type' => $product->inventory_tracking,
                 'barcode' => $product->barcode,
+                'thumbnail' => $product->thumbnail,
+                'thumbnail_url' => $product->thumbnail_url,
                 'images' => $product->images,
             ];
         }

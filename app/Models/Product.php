@@ -19,6 +19,8 @@ class Product extends Model
         self::INVENTORY_TRACKING_QUANTITY,
     ];
 
+    public const DEFAULT_THUMBNAIL = 'images/default-product.png';
+
     protected $fillable = [
         'user_id',
         'category_id',
@@ -45,6 +47,11 @@ class Product extends Model
     public function getImagesAttribute()
     {
         return ProductImages::where('product_id', $this->attributes['id'])->get();
+    }
+
+    public function getThumbnailUrlAttribute(): string
+    {
+        return productImage($this->thumbnail ?? null);
     }
 
     public function getCategoryAttribute()

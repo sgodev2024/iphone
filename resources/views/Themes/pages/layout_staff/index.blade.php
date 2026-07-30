@@ -569,6 +569,7 @@
             const qsa = (s, el = document) => [...el.querySelectorAll(s)];
             const appBaseUrl = @json(rtrim(config('app.url'), '/'));
             const storageBaseUrl = `${appBaseUrl}/storage`;
+            const defaultProductImageUrl = @json(productImage(null));
             const paymentMethodLabels = {
                 cash: 'Tiền mặt',
                 bank_transfer: 'Chuyển khoản',
@@ -657,15 +658,11 @@
 
             function productThumbHtml(product, className = 'product-thumb') {
                 const name = escapeHtml(safeText(product?.name, 'Sản phẩm'));
+                const thumbnailUrl = safeText(product?.thumbnail_url);
                 const thumbnail = safeText(product?.thumbnail);
+                const imageUrl = thumbnailUrl || (thumbnail ? `${storageBaseUrl}/${encodeURI(thumbnail)}` : defaultProductImageUrl);
 
-                if (!thumbnail) {
-                    return `<div class="${className} product-thumb-placeholder d-flex align-items-center justify-content-center" aria-label="${name}">
-                        <i class="fa-solid fa-box-open"></i>
-                    </div>`;
-                }
-
-                return `<img class="${className}" src="${storageBaseUrl}/${encodeURI(thumbnail)}" alt="${name}" />`;
+                return `<img class="${className}" src="${imageUrl}" alt="${name}" onerror="this.onerror=null;this.src='${defaultProductImageUrl}'" />`;
             }
 
             function focusBarcodeInput() {

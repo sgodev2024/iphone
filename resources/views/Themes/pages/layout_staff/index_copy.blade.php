@@ -245,9 +245,7 @@
                     data.forEach(function(item) {
                         console.log(item);
                         var product = item.product; // Thông tin sản phẩm từ quan hệ Eloquent
-                        var images = product.images && product.images.length > 0 ? product
-                            .images[0].image_path : 'public/images/1.jpg';
-                        var imageUrl = "{{ asset('/storage/') }}" + images.replace('public/', '');
+                        var imageUrl = product.thumbnail_url || "{{ productImage(null) }}";
 
                         var productHtml = `
                         <div class="col-md-2 mb-3" style="cursor: pointer;">
@@ -295,10 +293,7 @@
 
                         if (data.length > 0) {
                             data.forEach(function(item) {
-                                var images = item.images && item.images.length > 0 ?
-                                    item.images[0].image_path : 'public/images/1.jpg';
-                                var imageUrl = "{{ asset('/storage/') }}" + images.replace(
-                                    'public/', '');
+                                var imageUrl = item.thumbnail_url || "{{ productImage(null) }}";
                                 var productHtml = `
                                         <div class="col-md-2 mb-3" style="cursor: pointer;">
                                             <div class="product-item1" title="${item.name}">

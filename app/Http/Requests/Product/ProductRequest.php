@@ -24,7 +24,6 @@ class ProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        $id = $this->route('id') ?? null;
         return [
             'name'         => 'required|string|max:255',
             'price'        => 'required|numeric|min:0',
@@ -36,7 +35,7 @@ class ProductRequest extends FormRequest
             'description'  => ['nullable', 'string'],
             'is_featured'  => 'nullable|in:1',
             'status'       => ['required', Rule::in(['published', 'inactive', 'scheduled'])],
-            'thumbnail'    => ($id ? 'nullable' : 'required') . '|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'thumbnail'    => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ];
     }
 

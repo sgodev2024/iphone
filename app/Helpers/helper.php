@@ -56,12 +56,27 @@ if (!function_exists('showImage')) {
     }
 }
 
+if (!function_exists('defaultProductImagePath')) {
+    function defaultProductImagePath(): string
+    {
+        return 'images/default-product.png';
+    }
+}
+
+if (!function_exists('productImage')) {
+    function productImage($image): string
+    {
+        return showImage($image, defaultProductImagePath());
+    }
+}
+
 function deleteImage($path)
 {
     $path = normalizePublicImagePath($path);
 
     if (
         $path
+        && $path !== defaultProductImagePath()
         && !preg_match('/^(https?:)?\/\//i', $path)
         && !str_starts_with($path, 'data:')
         && Storage::disk('public')->exists($path)
@@ -173,11 +188,8 @@ if (!function_exists('uploadImages')) {
         }
 
         $manager = new ImageManager(['driver' => 'gd']);
-        $storagePath = storage_path('app/public/' . trim($directory, '/'));
-
-        if (!file_exists($storagePath)) {
-            mkdir($storagePath, 0777, true);
-        }
+        $directory = trim($directory, '/');
+        Storage::disk('public')->makeDirectory($directory);
 
         foreach ($images as $key => $image) {
             if ($image instanceof \Illuminate\Http\UploadedFile) {

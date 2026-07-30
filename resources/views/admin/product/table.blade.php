@@ -27,10 +27,16 @@
                     | {{ $product->created_at->format('d/m/Y') }}
                 </td>
                 <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <img src="{{ productImage($product->thumbnail) }}" alt="{{ $product->name }}"
+                            class="img-thumbnail" style="width: 48px; height: 48px; object-fit: cover;">
+                        <div>
                     {{ $product->name }}
                     <span class="badge {{ $isImeiTracked ? 'bg-info' : 'bg-secondary' }} ms-1">
                         {{ $isImeiTracked ? 'IMEI' : 'Sản phẩm thường' }}
                     </span>
+                        </div>
+                    </div>
                 </td>
                 <td>{{ number_format($product->price, 0, ',', '.') }}</td>
                 {{-- <td>{{ $product->code }}</td> mã sp

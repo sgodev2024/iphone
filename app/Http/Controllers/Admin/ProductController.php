@@ -93,6 +93,8 @@ class ProductController extends Controller
 
             if ($request->hasFile('thumbnail')) {
                 $data['thumbnail'] = uploadImages('thumbnail', 'products');
+            } else {
+                unset($data['thumbnail']);
             }
 
             $data['user_id'] = Auth::id();
@@ -144,6 +146,8 @@ class ProductController extends Controller
 
             if ($request->hasFile('thumbnail')) {
                 $data['thumbnail'] = uploadImages('thumbnail', 'products');
+            } else {
+                unset($data['thumbnail']);
             }
 
             $data['is_featured'] ??= 0;
@@ -299,6 +303,7 @@ class ProductController extends Controller
                     'code' => $product->code,
                     'barcode' => $product->barcode,
                     'thumbnail' => $product->thumbnail,
+                    'thumbnail_url' => $product->thumbnail_url,
                     'price_buy' => (float) $product->price_buy,
                     'quantity' => $availableQuantity,
                     'available_quantity' => $availableQuantity,

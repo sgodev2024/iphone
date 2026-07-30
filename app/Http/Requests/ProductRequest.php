@@ -34,7 +34,7 @@ class ProductRequest extends FormRequest
                             'name' => 'required|string|min:6',
                             'mota' => 'required|string',
                             'gia' => 'required|integer|min:0',
-                            'anh' => 'required|image|max:2048',
+                            'anh' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
                         ];
                         break;
                     case 'updateProduct':
@@ -42,7 +42,7 @@ class ProductRequest extends FormRequest
                             'name' => 'required|string|min:6',
                             'mota' => 'required|string',
                             'gia' => 'required|integer|min:0',
-                            'anh' => 'nullable|image|max:2048',
+                            'anh' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
                         ];
                         break;
                     default:
@@ -65,7 +65,6 @@ class ProductRequest extends FormRequest
            'gia.required'=>':attribute không để trống',
            'gia.integer'=>':attribute phải là sô',
            'gia.min'=>':attribute phải lớn hơn 0',
-           'anh.required'=>'Vui lòng nhập file',
            'anh.image'=>'Vui Lòng chọn :attribute',
            'anh.max'=>':attribute không được lớn hơn 2048',
        ];

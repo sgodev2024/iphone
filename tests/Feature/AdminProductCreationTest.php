@@ -53,6 +53,32 @@ class AdminProductCreationTest extends TestCase
         $this->assertSame(Product::INVENTORY_TRACKING_IMEI, $product->inventory_tracking);
     }
 
+    public function test_admin_can_create_product_without_thumbnail(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Categories::create(['name' => 'Dien thoai']);
+
+        $response = $this->actingAs($admin)->post('/admin/products', [
+            'name' => 'iPhone Without Thumbnail',
+            'price' => 20000000,
+            'price_buy' => 23000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => 'May moi',
+            'status' => 'published',
+        ], ['Accept' => 'application/json']);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $product = Product::where('name', 'iPhone Without Thumbnail')->first();
+
+        $this->assertNotNull($product);
+        $this->assertNull($product->thumbnail);
+        $this->assertSame(asset(Product::DEFAULT_THUMBNAIL), $product->thumbnail_url);
+    }
+
     public function test_inventory_tracking_is_required_when_creating_product(): void
     {
         $admin = $this->createAdmin();

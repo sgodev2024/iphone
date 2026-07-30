@@ -333,7 +333,7 @@
                                                     <div style="display: flex; ">
                                                         <div class="mr-4">
                                                             <img style="width:80px; height:70px;"
-                                                                src="{{ showImage($item->thumbnail) }}" alt="Sản phẩm">
+                                                                src="{{ productImage($item->thumbnail) }}" alt="Sản phẩm">
                                                         </div>
                                                         <div class="ovh">
                                                             <p class="txtB ng-binding">{{ $item->name }}
