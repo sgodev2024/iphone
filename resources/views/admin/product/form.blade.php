@@ -92,8 +92,7 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="brands_id" class="form-label mb-1 fw-bold">Thương hiệu <span
-                                            class="text-danger">*</span></label>
+                                    <label for="brands_id" class="form-label mb-1 fw-bold">Thương hiệu</label>
                                     <select name="brands_id" id="brands_id" class="form-control form-select">
                                         <option value="">-- Chọn thương hiệu --</option>
                                         @foreach ($brands as $brandId => $brandName)
