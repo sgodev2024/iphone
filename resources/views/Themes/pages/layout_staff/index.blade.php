@@ -64,7 +64,16 @@
         }
 
         .barcode-feedback {
-            min-height: 20px;
+            min-height: 0;
+        }
+
+        .barcode-feedback:empty {
+            display: none;
+        }
+
+        .barcode-feedback:not(:empty) {
+            display: block;
+            margin-top: .35rem !important;
         }
 
         .cart-empty {
@@ -160,14 +169,608 @@
             background-color: #fff;
         }
 
-        .product-search-hint {
-            margin-top: 4px;
+        .sale-product-add-stack {
+            display: grid;
+            gap: .625rem;
+        }
+
+        .sales-page .sale-product-search-heading,
+        .sales-page .sale-barcode-heading,
+        .sales-page .product-search-hint {
+            display: none !important;
+        }
+
+        .sale-product-add-stack .search-wrapper,
+        .sale-product-add-stack .input-group {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .sale-product-add-stack .input-group {
+            position: relative;
+            flex-wrap: nowrap;
+        }
+
+        .sale-product-add-stack .input-group-text {
+            position: absolute;
+            top: 50%;
+            left: .8rem;
+            z-index: 4;
+            width: auto;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: #64748b;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .sale-product-add-stack .input-group>.form-control {
+            min-width: 0;
+            border-radius: .45rem !important;
+            padding-left: 2.35rem;
+        }
+
+        .sale-product-search-group #productSearch {
+            padding-right: .75rem;
+        }
+
+        .sale-barcode-pane .input-group {
+            align-items: stretch;
+            gap: .5rem;
+        }
+
+        .sale-barcode-pane .input-group>.form-control {
+            flex: 1 1 0;
+            width: 1%;
+        }
+
+        .sale-barcode-add-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            min-width: 72px;
+            min-height: 38px;
+            border-radius: .45rem !important;
+            font-weight: 700;
+        }
+
+        @media (min-width: 768px) {
+            .sales-page .sale-product-add-stack {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                align-items: start;
+                gap: 1rem;
+            }
+
+            .sales-page .sale-product-search-heading,
+            .sales-page .sale-barcode-heading {
+                display: flex !important;
+            }
+
+            .sales-page .product-search-hint {
+                display: block !important;
+            }
+
+            .sales-page .sale-barcode-pane .input-group {
+                gap: 0;
+            }
+
+            .sales-page .sale-barcode-pane .input-group>.form-control {
+                width: 100%;
+            }
+
+            .sales-page .sale-barcode-add-btn {
+                display: none !important;
+            }
+        }
+
+        .sales-page select,
+        .sales-page .form-select {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            text-overflow: ellipsis;
+        }
+
+        .sales-page select option {
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .sales-page .dropdown-menu {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .select2-hidden-accessible {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0 0 0 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
+        .select2-container {
+            box-sizing: border-box;
+            display: inline-block;
+            position: relative;
+            vertical-align: middle;
+        }
+
+        .select2-container .select2-selection--single {
+            box-sizing: border-box;
+            cursor: pointer;
+            display: block;
+            user-select: none;
+        }
+
+        .select2-container .select2-selection--single .select2-selection__rendered {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .select2-dropdown {
+            position: absolute;
+            left: -100000px;
+            width: 100%;
+            background: #fff;
+            border: 1px solid #aaa;
+            border-radius: .375rem;
+            box-sizing: border-box;
+            display: block;
+        }
+
+        .select2-container--open .select2-dropdown {
+            left: 0;
+        }
+
+        .select2-results {
+            display: block;
+        }
+
+        .select2-results__options {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .select2-results__option {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .select2-search--dropdown {
+            display: none;
+        }
+
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background: #0d6efd;
+            color: #fff;
+        }
+
+        .sale-select2-wrap {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .sale-discount-type-wrap {
+            flex: 0 0 120px;
+            max-width: 120px;
+            min-width: 0;
+        }
+
+        .sales-page .select2-container {
+            display: block;
+            width: 100% !important;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .sales-page .select2-container--default .select2-selection--single {
+            height: 38px;
+            border: 1px solid #ced4da;
+            border-radius: .375rem;
+            background-color: #fff;
+        }
+
+        .sale-storage-select-wrapper .select2-container--default .select2-selection--single {
+            height: 34px;
+        }
+
+        .sales-page .select2-container--default .select2-selection--single .select2-selection__rendered {
+            min-width: 0;
+            padding-left: .75rem;
+            padding-right: 2rem;
+            color: #212529;
+            font-size: .875rem;
+            line-height: 36px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .sale-storage-select-wrapper .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 32px;
+        }
+
+        .sales-page .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px;
+            right: .45rem;
+        }
+
+        .sale-storage-select-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 32px;
+        }
+
+        .sales-select2-dropdown {
+            max-width: calc(100vw - 24px);
+            border-color: #ced4da;
+            overflow-x: hidden;
+            box-sizing: border-box;
+            z-index: 2055;
+        }
+
+        .sales-select2-dropdown .select2-results__options {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .sales-select2-dropdown .select2-results__option {
+            max-width: 100%;
+            padding: .45rem .65rem;
+            font-size: .875rem;
             line-height: 1.25;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .sale-save-action {
+            margin-top: .625rem;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+        }
+
+        #saveOrderBtn {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            min-height: 42px;
+            font-weight: 700;
         }
 
         @media (max-width: 576px) {
             .sale-storage-select-wrapper {
                 width: 100%;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            body {
+                overflow-x: hidden;
+            }
+
+            .sales-page {
+                padding: 4.75rem .75rem .75rem !important;
+                padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+            }
+
+            .sales-page .card {
+                margin-bottom: .75rem !important;
+            }
+
+            .sales-page .card-header {
+                padding: .65rem .75rem;
+            }
+
+            .sales-page .card-body,
+            .sale-storage-card .card-body {
+                padding: .75rem;
+            }
+
+            .sale-layout {
+                --bs-gutter-x: 0;
+                --bs-gutter-y: .75rem;
+            }
+
+            .sale-main,
+            .sale-side,
+            .sale-search-row>div,
+            .sale-summary-row>div {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .sale-storage-card .d-flex,
+            .sale-storage-current,
+            .sale-storage-select-wrapper,
+            .sale-storage-select-wrapper .form-select,
+            .sale-search-card .input-group,
+            .sale-search-card .form-control,
+            .sale-search-card .search-wrapper {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .sale-storage-card .d-flex {
+                align-items: stretch !important;
+            }
+
+            .sale-search-card .d-flex {
+                align-items: flex-start !important;
+                gap: .25rem;
+            }
+
+            .sale-search-card .text-muted.small {
+                display: none;
+            }
+
+            .form-text {
+                display: none;
+            }
+
+            .barcode-feedback {
+                margin-top: 0;
+                font-size: .78rem;
+                line-height: 1.3;
+                min-height: 0;
+            }
+
+            .sale-search-card .input-group {
+                position: relative;
+            }
+
+            .sale-search-card .input-group-text {
+                position: absolute;
+                top: 50%;
+                left: .8rem;
+                z-index: 4;
+                width: auto;
+                padding: 0;
+                border: 0;
+                background: transparent;
+                color: #64748b;
+                transform: translateY(-50%);
+                pointer-events: none;
+            }
+
+            .sale-search-card .input-group>.form-control {
+                border-radius: .45rem !important;
+                padding-left: 2.35rem;
+            }
+
+            .sale-barcode-pane .input-group {
+                align-items: stretch;
+                gap: .5rem;
+                flex-wrap: nowrap;
+                margin-bottom: 0;
+            }
+
+            .sale-barcode-pane .input-group-text {
+                top: 19px;
+            }
+
+            .sale-barcode-pane .form-control {
+                flex: 1 1 auto;
+                width: 1%;
+                min-width: 0;
+            }
+
+            #barcodeFeedback {
+                display: block;
+                min-height: 0;
+                margin-top: 0 !important;
+            }
+
+            #barcodeFeedback:empty {
+                display: none;
+            }
+
+            #barcodeFeedback:not(:empty) {
+                display: block;
+                margin-top: .35rem !important;
+            }
+
+            @media (max-width: 359.98px) {
+                .sale-barcode-pane .input-group {
+                    flex-wrap: nowrap;
+                }
+
+                .sale-barcode-add-btn {
+                    width: auto;
+                }
+            }
+
+            .cart-empty {
+                padding: 1rem .5rem;
+            }
+
+            .cart-row {
+                display: grid;
+                grid-template-columns: 44px minmax(0, 1fr) auto;
+                align-items: center;
+                column-gap: .5rem;
+                row-gap: .25rem;
+                padding: .65rem 0;
+                flex-wrap: nowrap;
+            }
+
+            .cart-thumb {
+                width: 44px;
+                height: 44px;
+                grid-column: 1;
+                align-self: center;
+            }
+
+            .cart-info {
+                min-width: 0;
+                grid-column: 2;
+                align-self: center;
+                overflow-wrap: anywhere;
+            }
+
+            .cart-info .fw-semibold {
+                line-height: 1.25;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
+
+            .cart-actions {
+                grid-column: 3;
+                align-self: center;
+                width: auto;
+                min-width: 0;
+                justify-content: flex-end;
+                gap: 8px;
+                padding-left: 0;
+            }
+
+            .cart-actions .qty-input {
+                flex: 0 0 60px;
+                width: 60px !important;
+                max-width: 60px;
+                min-width: 55px;
+                height: 32px;
+                padding-left: .25rem;
+                padding-right: .25rem;
+            }
+
+            .cart-actions .remove-btn {
+                flex: 0 0 32px;
+                width: 32px;
+                min-width: 32px;
+                height: 32px;
+                padding: 0;
+                line-height: 1;
+            }
+
+            .sticky-summary {
+                position: static;
+                padding: .75rem !important;
+                margin-top: .5rem;
+            }
+
+            .sale-summary-row {
+                --bs-gutter-y: .75rem;
+            }
+
+            .sale-summary-spacer {
+                display: none;
+            }
+
+            .sale-summary-totals .row {
+                row-gap: .25rem;
+            }
+
+            #discountInput,
+            #discountType {
+                min-width: 0;
+            }
+
+            .sale-discount-field {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+            }
+
+            .sale-discount-field>.form-label {
+                display: block;
+                width: calc(100% + 1.5rem);
+                margin-left: -.75rem;
+                margin-right: -.75rem;
+            }
+
+            .sale-discount-field .input-group {
+                display: flex;
+                width: calc(100% + 1.5rem);
+                max-width: none;
+                min-width: 0;
+                margin-left: -.75rem;
+                margin-right: -.75rem;
+                flex-wrap: nowrap;
+            }
+
+            #discountInput {
+                flex: 1 1 0;
+                width: 100%;
+                max-width: none;
+            }
+
+            #discountType {
+                width: auto;
+                max-width: none !important;
+            }
+
+            .sale-discount-type-wrap {
+                flex: 0 0 auto;
+                width: auto;
+                max-width: none;
+                min-width: 72px;
+            }
+
+            .sale-discount-type-wrap .select2-container {
+                width: auto !important;
+                max-width: none;
+                min-width: 72px;
+            }
+
+            .sale-discount-help {
+                display: block;
+                width: calc(100% + 1.5rem);
+                margin-top: .25rem;
+                margin-left: -.75rem;
+                margin-right: -.75rem;
+            }
+
+            .sale-customer-card .row {
+                --bs-gutter-y: .65rem;
+            }
+
+            .sale-save-action {
+                position: static;
+                display: grid !important;
+                justify-items: stretch;
+                margin: .625rem 0 0;
+                padding-top: 0;
+                padding-right: calc(var(--bs-gutter-x) * .5);
+                padding-bottom: 0;
+                padding-left: calc(var(--bs-gutter-x) * .5);
+                background: transparent;
+                border: 0;
+                box-shadow: none;
+            }
+
+            .sales-page~.custom-list-item {
+                width: 100%;
+                max-width: 100%;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+
+            .sales-page~.custom-list-item>[class*="col-"] {
+                max-width: 100%;
+                padding-left: 0;
+                padding-right: 0;
+            }
+
+            #saveOrderBtn {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                height: 42px;
+                padding: .5rem 1rem;
+                box-shadow: 0 8px 18px rgba(25, 135, 84, .28);
             }
         }
     </style>
@@ -181,8 +784,8 @@
         $receiver = $config?->receiver ?? 'Chưa cấu hình người nhận';
     @endphp
 
-    <div class="container-fluid py-4">
-        <div class="card mb-3 sale-storage-card">
+    <div class="container-fluid py-4 sales-page">
+        {{-- <div class="card mb-3 sale-storage-card">
             <div class="card-body">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <div class="sale-storage-current">
@@ -200,15 +803,17 @@
                                 Chọn kho bán hàng
                             </label>
 
-                            <select id="saleStorageSelect" class="form-select">
-                                <option value="">-- Chọn kho --</option>
+                            <span class="sale-select2-wrap">
+                                <select id="saleStorageSelect" class="form-select">
+                                    <option value="">-- Chọn kho --</option>
 
-                                @foreach ($saleStorages as $storage)
-                                    <option value="{{ $storage->id }}" @selected($saleStorage?->id === $storage->id)>
-                                        {{ $storage->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                                    @foreach ($saleStorages as $storage)
+                                        <option value="{{ $storage->id }}" @selected($saleStorage?->id === $storage->id)>
+                                            {{ $storage->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </span>
                         </div>
                     @endif
                 </div>
@@ -219,32 +824,29 @@
                     </div>
                 @endif
             </div>
-        </div>
+        </div> --}}
 
-        <div class="row g-4">
+        <div class="row g-4 sale-layout">
             <!-- LEFT 9 cols -->
-            <div class="col-lg-9">
+            <div class="col-lg-9 sale-main">
                 <!-- Section: Sản phẩm + search -->
-                <div class="card mb-4">
+                <div class="card mb-4 sale-search-card">
                     <div class="card-body">
-                        <div class="row g-3">
+                        <div class="sale-product-add-stack">
                             {{-- Tìm kiếm sản phẩm --}}
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <label for="productSearch" class="form-label fw-semibold mb-0">
-                                        Tìm & chọn sản phẩm
-                                    </label>
-
+                            <div class="sale-product-search-pane">
+                                <div class="d-flex align-items-center justify-content-between mb-2 sale-product-search-heading">
+                                    <label for="productSearch" class="form-label fw-semibold mb-0">Tìm &amp; chọn sản phẩm</label>
                                 </div>
 
                                 <div class="search-wrapper">
-                                    <div class="input-group">
+                                    <div class="input-group sale-product-search-group">
                                         <span class="input-group-text">
                                             <i class="fa-solid fa-magnifying-glass"></i>
                                         </span>
 
                                         <input id="productSearch" type="text" class="form-control"
-                                            @disabled(!$saleStorage) placeholder="Tìm kiếm sản phẩm..."
+                                            @disabled(!$saleStorage) placeholder="Tìm sản phẩm"
                                             autocomplete="off" />
                                     </div>
 
@@ -252,21 +854,17 @@
                                         <div id="productList" class="list-group list-group-flush"></div>
                                     </div>
                                 </div>
+
                                 <div class="form-text product-search-hint">
                                     Gợi ý sẽ xuất hiện khi bạn nhập — bấm vào dòng sản phẩm để thêm vào giỏ.
                                 </div>
                             </div>
 
                             {{-- Quét hoặc nhập barcode --}}
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <label for="barcodeInput" class="form-label fw-semibold mb-0">
-                                        Quét hoặc nhập barcode
-                                    </label>
-
-                                    <span class="text-muted small">
-                                        Nhấn Enter để thêm vào giỏ
-                                    </span>
+                            <div class="sale-barcode-pane">
+                                <div class="d-flex align-items-center justify-content-between mb-2 sale-barcode-heading">
+                                    <label for="barcodeInput" class="form-label fw-semibold mb-0">Quét hoặc nhập barcode</label>
+                                    <span class="text-muted small">Nhấn Enter để thêm vào giỏ</span>
                                 </div>
 
                                 <div class="input-group">
@@ -275,8 +873,13 @@
                                     </span>
 
                                     <input id="barcodeInput" type="text" class="form-control"
-                                        @disabled(!$saleStorage) placeholder="Quét hoặc nhập barcode..."
+                                        @disabled(!$saleStorage) placeholder="Nhập hoặc quét barcode"
                                         autocomplete="off" />
+
+                                    <button type="button" class="btn btn-primary sale-barcode-add-btn"
+                                        @disabled(!$saleStorage)>
+                                        Thêm
+                                    </button>
                                 </div>
 
                                 <div id="barcodeFeedback" class="barcode-feedback small text-muted mt-1"></div>
@@ -286,7 +889,7 @@
                 </div>
 
                 <!-- Section: Giỏ hàng / tính tiền -->
-                <div class="card">
+                <div class="card sale-cart-card">
                     <div class="card-header">
                         <div class="d-flex align-items-center justify-content-between">
                             <h5 class="card-title mb-0">Giỏ hàng</h5>
@@ -302,22 +905,24 @@
 
                         <!-- Summary -->
                         <div class="sticky-summary p-3 rounded-bottom">
-                            <div class="row g-3 align-items-end">
-                                <div class="col-md-4">
+                            <div class="row g-3 align-items-end sale-summary-row">
+                                <div class="col-md-4 sale-discount-field">
                                     <label class="form-label mb-1">Khuyến mãi</label>
                                     <div class="input-group">
                                         <input id="discountInput" type="number" class="form-control" min="0"
                                             step="1000" placeholder="Số tiền hoặc %" />
-                                        <select id="discountType" class="form-select" style="max-width:120px">
-                                            <option value="amount">VND</option>
-                                            <option value="percent">%</option>
-                                        </select>
+                                        <span class="sale-select2-wrap sale-discount-type-wrap">
+                                            <select id="discountType" class="form-select">
+                                                <option value="amount">VND</option>
+                                                <option value="percent">%</option>
+                                            </select>
+                                        </span>
                                     </div>
-                                    <div class="form-text">Để trống nếu không áp dụng.</div>
+                                    <div class="form-text sale-discount-help">Để trống nếu không áp dụng.</div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-4 sale-summary-spacer">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-4 sale-summary-totals">
                                     <div class="row">
                                         <!-- Cột text -->
                                         <div class="col-6 col-md-6 text-start">
@@ -342,9 +947,9 @@
             </div>
 
             <!-- RIGHT 3 cols -->
-            <div class="col-lg-3">
+            <div class="col-lg-3 sale-side">
 
-                <div class="card mb-4">
+                <div class="card mb-4 sale-customer-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Khách hàng</h5>
                         <i class="fa-solid fa-circle-plus add-customer-btn" role="button" data-bs-toggle="modal"
@@ -380,21 +985,23 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Phương thức thanh toán</label>
-                                <select id="paymentMethod" class="form-select">
-                                    <option value="cash">Tiền mặt</option>
-                                    <option value="bank_transfer">Chuyển khoản</option>
-                                    <option value="debt">Công nợ</option>
-                                </select>
+                                <span class="sale-select2-wrap">
+                                    <select id="paymentMethod" class="form-select">
+                                        <option value="cash">Tiền mặt</option>
+                                        <option value="bank_transfer">Chuyển khoản</option>
+                                        <option value="debt">Công nợ</option>
+                                    </select>
+                                </span>
                             </div>
                             <input type="hidden" id="custId">
-                            <div class="col-12 d-grid">
+                            <div class="col-12 d-grid sale-save-action">
                                 <button class="btn btn-success" id="saveOrderBtn">Lưu đơn</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card sale-note-card">
                     <div class="card-body">
                         <h6 class="mb-2">Ghi chú</h6>
                         <textarea id="orderNote" class="form-control" rows="3" placeholder="Nhập ghi chú cho đơn hàng…"></textarea>
@@ -561,6 +1168,7 @@
 
 
 @push('script')
+    <script src="{{ asset('assets/js/plugin/select2/select2.full.min.js') }}"></script>
     <script>
         $(function() {
             // --------- Helpers ---------
@@ -609,6 +1217,57 @@
                     }
                 });
             });
+
+            function sizeOpenSalesSelect2Dropdown(selectElement) {
+                const select2Container = $(selectElement).next('.select2');
+                const dropdown = $('.select2-container--open .sales-select2-dropdown');
+                const width = Math.ceil(select2Container.outerWidth());
+
+                if (!width || dropdown.length === 0) {
+                    return;
+                }
+
+                dropdown.css({
+                    width: `${width}px`,
+                    minWidth: `${width}px`,
+                    maxWidth: `${width}px`
+                });
+            }
+
+            function initSalesSelect2() {
+                if (!$.fn.select2) {
+                    return;
+                }
+
+                $('#saleStorageSelect, #paymentMethod, #discountType').each(function() {
+                    const selectElement = this;
+                    const select = $(selectElement);
+
+                    if (select.data('select2')) {
+                        return;
+                    }
+
+                    select.select2({
+                        width: '100%',
+                        dropdownAutoWidth: false,
+                        dropdownParent: $(document.body),
+                        dropdownCssClass: 'sales-select2-dropdown',
+                        minimumResultsForSearch: Infinity
+                    });
+
+                    select.on('select2:open', function() {
+                        requestAnimationFrame(() => sizeOpenSalesSelect2Dropdown(selectElement));
+                    });
+
+                    select.on('select2:select select2:clear', function() {
+                        selectElement.dispatchEvent(new Event('change', {
+                            bubbles: true
+                        }));
+                    });
+                });
+            }
+
+            initSalesSelect2();
 
             function escapeHtml(value) {
                 return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -660,7 +1319,8 @@
                 const name = escapeHtml(safeText(product?.name, 'Sản phẩm'));
                 const thumbnailUrl = safeText(product?.thumbnail_url);
                 const thumbnail = safeText(product?.thumbnail);
-                const imageUrl = thumbnailUrl || (thumbnail ? `${storageBaseUrl}/${encodeURI(thumbnail)}` : defaultProductImageUrl);
+                const imageUrl = thumbnailUrl || (thumbnail ? `${storageBaseUrl}/${encodeURI(thumbnail)}` :
+                    defaultProductImageUrl);
 
                 return `<img class="${className}" src="${imageUrl}" alt="${name}" onerror="this.onerror=null;this.src='${defaultProductImageUrl}'" />`;
             }
@@ -735,6 +1395,7 @@
             const productList = qs('#productList');
             const barcodeInput = qs('#barcodeInput');
             const barcodeFeedback = qs('#barcodeFeedback');
+            const barcodeAddBtn = qs('.sale-barcode-add-btn');
             let isCallApiProducts = true;
             let isCallApiClients = true;
             let barcodeResolving = false;
@@ -742,12 +1403,17 @@
             let lastBarcodeAt = 0;
 
             let searchTimer = null;
+
             setTimeout(() => barcodeInput?.focus(), 100);
 
             barcodeInput?.addEventListener('keydown', (event) => {
                 if (event.key !== 'Enter') return;
 
                 event.preventDefault();
+                resolveBarcode(barcodeInput.value.trim());
+            });
+
+            barcodeAddBtn?.addEventListener('click', () => {
                 resolveBarcode(barcodeInput.value.trim());
             });
 
@@ -780,8 +1446,7 @@
                     success: (product) => {
                         addToCart(product);
                         productPopup.style.display = 'none';
-                        barcodeFeedback.textContent =
-                            `${product.product_name || product.name} đã được thêm vào giỏ.`;
+                        barcodeFeedback.textContent = 'Đã thêm vào giỏ.';
                         Toast.fire({
                             icon: "success",
                             title: "Đã thêm barcode vào giỏ."
@@ -1005,8 +1670,7 @@
                         }
 
                         addToCart(resolvedProduct);
-                        barcodeFeedback.textContent =
-                            `${resolvedProduct.product_name || resolvedProduct.name} đã được thêm vào giỏ.`;
+                        barcodeFeedback.textContent = 'Đã thêm vào giỏ.';
                         Toast.fire({
                             icon: "success",
                             title: "Đã thêm thiết bị IMEI vào giỏ."
