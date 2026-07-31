@@ -145,28 +145,161 @@
             color: #2989d8;
         }
 
-        @media (max-width: 768px) {
-            .main-container {
-                padding: 10px;
+        @media (max-width: 767.98px) {
+            .auth-login-page .main-container {
+                min-height: 100dvh;
+                align-items: flex-start;
+                padding: 12px;
+                overflow-x: hidden;
             }
 
-            .contact-section,
-            .login-section {
-                padding: 30px 20px;
+            .auth-login-page .login-card,
+            .auth-login-page .login-card .row,
+            .auth-login-page .contact-section,
+            .auth-login-page .login-section {
+                width: 100%;
+                height: auto !important;
+                min-height: 0;
+                box-sizing: border-box;
             }
 
-            .contact-title {
-                font-size: 1.3rem;
+            .auth-login-page .login-card .row {
+                display: flex;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                margin: 0;
             }
 
-            .contact-item {
+            .auth-login-page .login-form-col {
+                order: 1;
+            }
+
+            .auth-login-page .login-contact-col {
+                order: 2;
+            }
+
+            .auth-login-page .login-section {
+                padding: 22px 16px 20px;
+            }
+
+            .auth-login-page .logo-container {
+                margin-bottom: 20px;
+                text-align: center;
+            }
+
+            .auth-login-page .logo {
+                display: block;
+                margin: 0 auto;
+                max-width: 160px;
+            }
+
+            .auth-login-page form,
+            .auth-login-page .input-group,
+            .auth-login-page .form-control,
+            .auth-login-page .btn-login {
+                width: 100%;
+            }
+
+            .auth-login-page .form-label {
+                margin-bottom: 6px;
+            }
+
+            .auth-login-page .login-section .mb-3 {
+                margin-bottom: 14px !important;
+            }
+
+            .auth-login-page .login-section .mb-4 {
+                margin-bottom: 18px !important;
+            }
+
+            .auth-login-page .input-group {
+                flex-wrap: nowrap;
+            }
+
+            .auth-login-page .input-group-text {
+                flex: 0 0 auto;
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+
+            .auth-login-page .form-control {
+                min-width: 0;
+            }
+
+            .auth-login-page .password-toggle {
+                justify-content: center;
+                min-width: 44px;
+            }
+
+            .auth-login-page .form-check {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 24px;
+                padding-left: 0;
+            }
+
+            .auth-login-page .form-check-input {
+                flex: 0 0 auto;
+                margin: 0;
+            }
+
+            .auth-login-page .form-check-label {
+                line-height: 20px;
+            }
+
+            .auth-login-page .contact-section {
+                padding: 18px 16px 20px;
+            }
+
+            .auth-login-page .contact-title {
+                font-size: 1.15rem;
+                line-height: 1.3;
+                margin-bottom: 14px;
+            }
+
+            .auth-login-page .contact-box {
+                padding: 14px;
+            }
+
+            .auth-login-page .contact-item {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 5px;
+                gap: 6px;
+                margin-bottom: 12px;
             }
 
-            .contact-info {
+            .auth-login-page .contact-item:last-child {
+                margin-bottom: 0;
+            }
+
+            .auth-login-page .contact-label {
+                min-width: 0;
+                font-size: 14px;
+                line-height: 20px;
+            }
+
+            .auth-login-page .contact-item>div {
+                width: 100%;
+                align-items: flex-start !important;
+            }
+
+            .auth-login-page .contact-info {
+                flex-wrap: wrap;
+                gap: 4px 6px;
                 text-align: left;
+                max-width: 100%;
+            }
+
+            .auth-login-page .phone-number {
+                font-size: 14px;
+                line-height: 20px;
+                overflow-wrap: anywhere;
+            }
+
+            .auth-login-page .time-info {
+                font-size: 12px;
+                line-height: 18px;
             }
         }
 
@@ -244,12 +377,12 @@
     </style>
 </head>
 
-<body>
+<body class="auth-login-page">
     <div class="main-container">
         <div class="login-card">
             <div class="row g-0">
                 <!-- Contact Section -->
-                <div class="col-lg-6 col-md-6">
+                <div class="col-lg-6 col-md-6 login-contact-col">
                     <div class="contact-section h-100">
                         <h2 class="contact-title">LIÊN HỆ VỚI CHÚNG TÔI</h2>
                         <div class="contact-box">
@@ -308,7 +441,7 @@
                 </div>
 
                 <!-- Login Section -->
-                <div class="col-lg-6 col-md-6">
+                <div class="col-lg-6 col-md-6 login-form-col">
                     <div class="login-section">
                         <div class="logo-container text-center">
                             <img src="{{ asset('images/sgovn.png') }}" alt="SGO Media" class="logo"
