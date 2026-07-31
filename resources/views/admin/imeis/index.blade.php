@@ -8,21 +8,21 @@
             padding-top: 12px;
         }
 
-        .imei-page-header {
+        .imei-page .imei-page-header {
             margin-bottom: 12px;
         }
 
-        .imei-page-title {
+        .imei-page .imei-page-title {
             font-size: 22px;
             line-height: 1.2;
         }
 
-        .imei-page-subtitle {
+        .imei-page .imei-page-subtitle {
             font-size: 13px;
             line-height: 1.35;
         }
 
-        .imei-summary-line {
+        .imei-page .imei-summary-line {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -33,52 +33,52 @@
             line-height: 1.4;
         }
 
-        .imei-summary-label {
+        .imei-page .imei-summary-label {
             color: #4b5563;
             font-weight: 500;
         }
 
-        .imei-summary-value {
+        .imei-page .imei-summary-value {
             color: #1f2937;
             font-weight: 700;
         }
 
-        .imei-summary-separator {
+        .imei-page .imei-summary-separator {
             color: #9ca3af;
         }
 
-        .imei-list-card {
+        .imei-page .imei-list-card {
             margin-bottom: 0;
         }
 
-        .imei-card-toolbar {
+        .imei-page .imei-card-toolbar {
             padding: 1rem 1.25rem;
             border-bottom: 1px solid #ebecec;
         }
 
-        .imei-list-card .card-title {
+        .imei-page .imei-list-card .card-title {
             font-size: 18px;
             line-height: 1.25;
         }
 
-        .imei-card-toolbar .alert {
+        .imei-page .imei-card-toolbar .alert {
             margin-bottom: 12px;
             padding: 8px 12px;
         }
 
-        .imei-filter-form .form-label {
+        .imei-page .imei-filter-form .form-label {
             margin-bottom: 4px;
             font-size: 13px;
             font-weight: 500;
         }
 
-        .imei-filter-actions {
+        .imei-page .imei-filter-actions {
             display: flex;
             align-items: flex-end;
             gap: 10px;
         }
 
-        .imei-filter-actions .btn {
+        .imei-page .imei-filter-actions .btn {
             display: inline-flex;
             min-height: 40px;
             align-items: center;
@@ -86,30 +86,188 @@
             white-space: nowrap;
         }
 
-        @media (max-width: 575.98px) {
-            .imei-page {
-                padding-top: 8px;
+        .imei-page .imei-table-scroll-hint {
+            display: none;
+        }
+
+        @media (max-width: 767.98px) {
+            #wrapper:has(.imei-page) .sidebar {
+                transform: translate3d(-265px, 0, 0);
             }
 
-            .imei-page-title {
+            html.nav_open #wrapper:has(.imei-page) .sidebar {
+                transform: translate3d(0, 0, 0);
+                z-index: 1001;
+            }
+
+            #wrapper:has(.imei-page) .main-panel,
+            #wrapper:has(.imei-page) .main-header {
+                width: 100%;
+            }
+
+            #wrapper:has(.imei-page) .main-panel {
+                float: none;
+            }
+
+            .imei-page {
+                padding-top: 8px;
+                overflow-x: hidden;
+            }
+
+            .imei-page .imei-page-title {
                 font-size: 20px;
             }
 
-            .imei-summary-line {
-                gap: 5px;
+            .imei-page .imei-summary-line {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                gap: 8px;
                 margin-bottom: 8px;
+                font-size: 12px;
             }
 
-            .imei-filter-actions {
+            .imei-page .imei-summary-item {
+                display: flex;
+                min-width: 0;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+                padding: 7px 9px;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                background: #f8fafc;
+            }
+
+            .imei-page .imei-summary-label {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-summary-value {
+                flex: 0 0 auto;
+                font-size: 14px;
+            }
+
+            .imei-page .imei-summary-separator {
+                display: none;
+            }
+
+            .imei-page .imei-card-toolbar,
+            .imei-page .imei-list-card .card-body {
+                padding: 0.75rem;
+            }
+
+            .imei-page .imei-filter-form .row {
+                --bs-gutter-x: 0;
+                --bs-gutter-y: 8px;
+            }
+
+            .imei-page .imei-filter-actions {
                 display: grid;
                 width: 100%;
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr) 42px;
+                gap: 8px;
             }
 
-            .imei-filter-actions .btn {
+            .imei-page .imei-filter-actions .btn {
                 width: 100%;
                 padding-right: 8px;
                 padding-left: 8px;
+            }
+
+            .imei-page .imei-reset-btn {
+                width: 42px;
+                height: 42px;
+                padding: 0;
+            }
+
+            .imei-page .imei-reset-btn i {
+                margin-right: 0 !important;
+            }
+
+            .imei-page .imei-table-scroll-hint {
+                display: block;
+                margin: 0 0 6px;
+                color: #6b7280;
+                font-size: 12px;
+                line-height: 1.3;
+            }
+
+            .imei-page .imei-table-responsive {
+                max-width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .imei-page .imei-table {
+                min-width: 1100px;
+                margin-bottom: 0;
+            }
+
+            .imei-page .imei-col-imei {
+                font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-col-coupon,
+            .imei-page .imei-col-price,
+            .imei-page .imei-col-date,
+            .imei-page .imei-col-status {
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-col-actions {
+                min-width: 126px;
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-action-buttons {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-action-btn {
+                display: inline-flex;
+                width: 36px;
+                height: 36px;
+                flex: 0 0 36px;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+            }
+
+            .imei-page .imei-pagination-mobile {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                margin-top: 12px;
+            }
+
+            .imei-page .imei-pagination-mobile .page-link,
+            .imei-page .imei-pagination-current {
+                display: inline-flex;
+                min-width: 36px;
+                height: 36px;
+                align-items: center;
+                justify-content: center;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                background: #fff;
+                font-size: 13px;
+                line-height: 1;
+                white-space: nowrap;
+            }
+
+            .imei-page .imei-pagination-current {
+                min-width: 104px;
+                padding: 0 10px;
+                color: #495057;
             }
         }
     </style>
@@ -126,12 +284,12 @@
             </div>
         </div> --}}
         <div class="imei-summary-line" aria-label="Thống kê IMEI">
-            <span>
+            <span class="imei-summary-item">
                 <span class="imei-summary-label">Tổng thiết bị:</span>
                 <span class="imei-summary-value">{{ number_format($statistics['total']) }}</span>
             </span>
             <span class="imei-summary-separator">/</span>
-            <span>
+            <span class="imei-summary-item">
                 <span class="imei-summary-label">Đang tồn kho:</span>
                 <span class="imei-summary-value">{{ number_format($statistics['in_stock']) }}</span>
             </span>
@@ -155,11 +313,11 @@
                     @endforeach
 
                     <div class="row g-2 align-items-end">
-                        <div class="col-12 col-md-6 col-lg-3">
+                        <div class="col-12 col-md-4 col-lg-3">
                             <input id="imei" type="text" name="imei" class="form-control"
                                 value="{{ $filters['imei'] }}" placeholder="Nhập IMEI">
                         </div>
-                        <div class="col-12 col-md-6 col-lg-4">
+                        <div class="col-12 col-md-4 col-lg-4">
                             <input id="product" type="text" name="product" class="form-control"
                                 value="{{ $filters['product'] }}" placeholder="Mã hoặc tên sản phẩm">
                         </div>
@@ -172,12 +330,13 @@
                                 @endforeach
                             </select>
                         </div> --}}
-                        <div class="col-12 col-lg-auto">
+                        <div class="col-12 col-md-4 col-lg-auto">
                             <div class="imei-filter-actions">
-                                <button type="submit" class="btn btn-primary">
+                                <button type="submit" class="btn btn-primary imei-search-btn">
                                     <i class="fa-solid fa-magnifying-glass me-1"></i> Tìm kiếm
                                 </button>
-                                <a href="{{ route('admin.imeis.index') }}" class="btn btn-outline-secondary">
+                                <a href="{{ route('admin.imeis.index') }}" class="btn btn-outline-secondary imei-reset-btn"
+                                    title="Làm mới" aria-label="Làm mới">
                                     <i class="fa-solid fa-rotate me-1"></i>
                                 </a>
                             </div>
@@ -216,20 +375,21 @@
                 <h5 class="card-title mb-0">Danh sách IMEI</h5>
             </div> --}}
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped table-bordered align-middle">
+                <div class="imei-table-scroll-hint">Vuốt ngang để xem đầy đủ thông tin</div>
+                <div class="table-responsive imei-table-responsive">
+                    <table class="table table-hover table-striped table-bordered align-middle imei-table">
                         <thead>
                             <tr>
                                 <th>STT</th>
-                                <th>IMEI</th>
+                                <th class="imei-col-imei">IMEI</th>
                                 {{-- <th>Mã sản phẩm</th> --}}
                                 <th>Sản phẩm</th>
-                                <th>Phiếu nhập</th>
+                                <th class="imei-col-coupon">Phiếu nhập</th>
                                 <th>Nhà cung cấp</th>
-                                <th>Giá nhập</th>
-                                <th>Ngày nhập</th>
-                                <th>Trạng thái</th>
-                                <th class="text-center">Hành động</th>
+                                <th class="imei-col-price">Giá nhập</th>
+                                <th class="imei-col-date">Ngày nhập</th>
+                                <th class="imei-col-status">Trạng thái</th>
+                                <th class="text-center imei-col-actions">Hành động</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -243,10 +403,10 @@
                                 @endphp
                                 <tr>
                                     <td>{{ $imeis->firstItem() + $loop->index }}</td>
-                                    <td class="font-monospace text-nowrap">{{ $productImei->imei }}</td>
+                                    <td class="font-monospace text-nowrap imei-col-imei">{{ $productImei->imei }}</td>
                                     {{-- <td>{{ $product?->code ?: '—' }}</td> --}}
                                     <td>{{ $product?->name ?: 'Sản phẩm không tồn tại' }}</td>
-                                    <td>
+                                    <td class="imei-col-coupon">
                                         @if ($importCoupon)
                                             <a
                                                 href="{{ route('admin.importproduct.importCoupon.detail', $importCoupon->id) }}">{{ $importCoupon->coupon_code ?: '#' . $importCoupon->id }}</a>
@@ -255,22 +415,26 @@
                                         @endif
                                     </td>
                                     <td>{{ $importCoupon?->companyRelation?->name ?: '—' }}</td>
-                                    <td>{{ $importDetail ? number_format($importDetail->price, 0, ',', '.') . ' đ' : '—' }}
+                                    <td class="imei-col-price">{{ $importDetail ? number_format($importDetail->price, 0, ',', '.') . ' đ' : '—' }}
                                     </td>
-                                    <td>{{ $importCoupon?->created_at?->format('d/m/Y') ?: '—' }}</td>
-                                    <td>
+                                    <td class="imei-col-date">{{ $importCoupon?->created_at?->format('d/m/Y') ?: '—' }}</td>
+                                    <td class="imei-col-status">
                                         @if ($isInStock)
-                                            <span class="badge bg-success">{{ $productImei->status_label }}</span>
+                                            <span class="badge bg-success">
+                                                <span class="d-none d-md-inline">{{ $productImei->status_label }}</span>
+                                                <span class="d-inline d-md-none">Đang tồn</span>
+                                            </span>
                                         @elseif ($isSold)
                                             <span class="badge bg-secondary">{{ $productImei->status_label }}</span>
                                         @else
                                             <span class="badge bg-warning text-dark">Trạng thái khác</span>
                                         @endif
                                     </td>
-                                    <td class="text-center text-nowrap">
+                                    <td class="text-center text-nowrap imei-col-actions">
+                                        <div class="imei-action-buttons">
                                         @if ($product)
                                             <a href="{{ route('admin.products.imeis.index', $product) }}"
-                                                class="btn btn-outline-primary btn-sm" title="Xem IMEI theo sản phẩm"
+                                                class="btn btn-outline-primary btn-sm imei-action-btn" title="Xem IMEI theo sản phẩm"
                                                 aria-label="Xem IMEI theo sản phẩm">
                                                 <i class="fa-solid fa-barcode"></i>
                                             </a>
@@ -278,14 +442,15 @@
 
                                         @if ($importCoupon)
                                             <a href="{{ route('admin.importproduct.importCoupon.detail', $importCoupon->id) }}"
-                                                class="btn btn-info btn-sm" title="Xem phiếu nhập"
+                                                class="btn btn-info btn-sm imei-action-btn" title="Xem phiếu nhập"
                                                 aria-label="Xem phiếu nhập">
                                                 <i class="fa-solid fa-receipt"></i>
                                             </a>
                                         @endif
 
                                         @if ($isInStock)
-                                            <button type="button" class="btn btn-danger btn-sm" title="Xóa IMEI"
+                                            <button type="button" class="btn btn-danger btn-sm imei-action-btn" title="Xóa IMEI"
+                                                aria-label="Xóa IMEI"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#deleteImeiModal{{ $productImei->id }}">
                                                 <i class="fa-solid fa-trash"></i>
@@ -295,11 +460,12 @@
                                         @if (!$product && !$importCoupon && !$isInStock)
                                             <span class="text-muted">—</span>
                                         @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="text-center py-4">Không tìm thấy IMEI phù hợp.</td>
+                                    <td colspan="9" class="text-center py-4">Không tìm thấy IMEI phù hợp.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -361,7 +527,31 @@
                     @endif
                 @endforeach
 
-                {{ $imeis->links('vendor.pagination.custom') }}
+                <div class="imei-pagination-desktop d-none d-md-block">
+                    {{ $imeis->links('vendor.pagination.custom') }}
+                </div>
+
+                @if ($imeis->hasPages())
+                    <nav class="imei-pagination-mobile d-md-none" aria-label="Phân trang IMEI">
+                        @if ($imeis->onFirstPage())
+                            <span class="page-link disabled" aria-disabled="true">&lsaquo;</span>
+                        @else
+                            <a class="page-link" href="{{ $imeis->previousPageUrl() }}" rel="prev"
+                                aria-label="Trang trước">&lsaquo;</a>
+                        @endif
+
+                        <span class="imei-pagination-current">
+                            Trang {{ $imeis->currentPage() }} / {{ $imeis->lastPage() }}
+                        </span>
+
+                        @if ($imeis->hasMorePages())
+                            <a class="page-link" href="{{ $imeis->nextPageUrl() }}" rel="next"
+                                aria-label="Trang sau">&rsaquo;</a>
+                        @else
+                            <span class="page-link disabled" aria-disabled="true">&rsaquo;</span>
+                        @endif
+                    </nav>
+                @endif
             </div>
         </div>
     </div>
