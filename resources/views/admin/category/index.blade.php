@@ -1,16 +1,164 @@
 @extends('admin.layout.index')
 
+@push('style')
+    <style>
+        @media (max-width: 767.98px) {
+            .category-index-page {
+                max-width: 100%;
+                overflow-x: hidden;
+            }
+
+            .category-index-page .card,
+            .category-index-page .card-body {
+                max-width: 100%;
+            }
+
+            .category-index-page .category-toolbar {
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: stretch !important;
+            }
+
+            .category-index-page .category-toolbar-start {
+                display: contents !important;
+            }
+
+            .category-index-page .category-search {
+                order: 1;
+                width: 100%;
+                flex: 0 0 100%;
+                gap: 8px;
+            }
+
+            .category-index-page .category-search input[name="search"] {
+                width: auto !important;
+                min-width: 0;
+                flex: 1 1 auto;
+                margin-right: 0 !important;
+            }
+
+            .category-index-page #btn-reset {
+                width: 40px;
+                height: 38px;
+                flex: 0 0 40px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+            }
+
+            .category-index-page .category-actions {
+                order: 2;
+                flex: 0 0 auto;
+            }
+
+            .category-index-page .category-actions > .btn {
+                min-height: 38px;
+            }
+
+            .category-index-page .category-add {
+                order: 3;
+                min-width: 132px;
+                min-height: 38px;
+                flex: 1 1 auto;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+            }
+
+            .category-index-page .category-table-hint {
+                display: block;
+                margin-bottom: 8px;
+                color: #6c757d;
+                font-size: 13px;
+            }
+
+            .category-index-page .category-table-scroll {
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .category-index-page .category-table {
+                min-width: 920px;
+                table-layout: auto;
+            }
+
+            .category-index-page .category-table th,
+            .category-index-page .category-table td {
+                overflow: visible;
+                vertical-align: middle;
+            }
+
+            .category-index-page .category-table th:nth-child(1),
+            .category-index-page .category-table td:nth-child(1) {
+                width: 52px;
+                min-width: 52px;
+                white-space: nowrap;
+            }
+
+            .category-index-page .category-table th:nth-child(2),
+            .category-index-page .category-table td:nth-child(2) {
+                width: 150px;
+                min-width: 150px;
+                white-space: nowrap;
+            }
+
+            .category-index-page .category-table th:nth-child(3),
+            .category-index-page .category-table td:nth-child(3) {
+                min-width: 180px;
+            }
+
+            .category-index-page .category-table th:nth-child(4),
+            .category-index-page .category-table td:nth-child(4) {
+                min-width: 260px;
+            }
+
+            .category-index-page .category-table th:nth-child(5),
+            .category-index-page .category-table td:nth-child(5) {
+                width: 150px;
+                min-width: 150px;
+                white-space: nowrap;
+            }
+
+            .category-index-page .category-table th:nth-child(6),
+            .category-index-page .category-table td:nth-child(6) {
+                width: 128px;
+                min-width: 128px;
+                white-space: nowrap;
+            }
+
+            .category-index-page .category-table .category-row-actions {
+                flex-wrap: nowrap;
+            }
+
+            .category-index-page .category-table .category-row-actions .btn {
+                width: 34px;
+                height: 32px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                flex: 0 0 34px;
+            }
+        }
+    </style>
+@endpush
+
 @section('content')
-    <div class="page-inner">
+    <div class="page-inner category-index-page">
 
         <x-breadcrumb :items="[['label' => 'Danh mục', 'url' => route('admin.category.index')]]" />
 
         <div class="row">
             <div class="col-md-12">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div class="d-flex justify-content-between align-items-center gap-2">
-                            <div class="btn-group">
+                    <div class="card-header d-flex justify-content-between align-items-center category-toolbar">
+                        <div class="d-flex justify-content-between align-items-center gap-2 category-toolbar-start">
+                            <div class="btn-group category-actions">
                                 <button type="button" class="btn btn-outline-secondary dropdown-toggle"
                                     data-bs-toggle="dropdown" aria-expanded="false">
                                     Thao tác
@@ -29,7 +177,7 @@
                                 </ul>
                             </div>
 
-                            <div class="d-flex justify-content-end align-items-center">
+                            <div class="d-flex justify-content-end align-items-center category-search">
                                 <input type="text" name="search" class="form-control me-2" style="width: 300px;"
                                     placeholder="Tìm kiếm...">
 
@@ -37,7 +185,7 @@
                                         class="fa-solid fa-rotate"></i></button>
                             </div>
                         </div>
-                        <button class="btn btn-primary" id="show-modal"><i class="fa-solid fa-plus"></i> Thêm mới</button>
+                        <button class="btn btn-primary category-add" id="show-modal"><i class="fa-solid fa-plus"></i> Thêm mới</button>
                     </div>
                     <div class="card-body">
 
