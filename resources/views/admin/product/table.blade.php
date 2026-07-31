@@ -1,4 +1,5 @@
-<table class="table table-hover table-striped table-bordered mt-3" role="grid">
+<div class="table-responsive product-table-scroll">
+<table class="table table-hover table-striped table-bordered mt-3 product-table" role="grid">
     <thead>
         <tr>
             <th style="width: 3%" class="text-center"><input type="checkbox" id="check-all"></th>
@@ -92,6 +93,7 @@
         @endforelse
     </tbody>
 </table>
+</div>
 
 
 <div class="row">
