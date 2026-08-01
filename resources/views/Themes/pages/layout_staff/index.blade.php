@@ -133,42 +133,6 @@
             }
         }
 
-        /* Khu vực kho bán hàng */
-        .sale-storage-card {
-            background: #fff;
-        }
-
-        .sale-storage-card .card-body {
-            padding: 10px 14px;
-        }
-
-        .sale-storage-current .small {
-            line-height: 1.1;
-            margin-bottom: 3px;
-        }
-
-        .sale-storage-current .fw-semibold {
-            line-height: 1.2;
-        }
-
-        .sale-storage-select-wrapper {
-            width: 240px;
-        }
-
-        .sale-storage-select-wrapper .form-label {
-            margin-bottom: 3px;
-            line-height: 1;
-        }
-
-        .sale-storage-select-wrapper .form-select {
-            height: 34px;
-            min-height: 34px;
-            padding-top: 3px;
-            padding-bottom: 3px;
-            font-size: 14px;
-            background-color: #fff;
-        }
-
         .sale-product-add-stack {
             display: grid;
             gap: .625rem;
@@ -384,10 +348,6 @@
             background-color: #fff;
         }
 
-        .sale-storage-select-wrapper .select2-container--default .select2-selection--single {
-            height: 34px;
-        }
-
         .sales-page .select2-container--default .select2-selection--single .select2-selection__rendered {
             min-width: 0;
             padding-left: .75rem;
@@ -400,17 +360,9 @@
             white-space: nowrap;
         }
 
-        .sale-storage-select-wrapper .select2-container--default .select2-selection--single .select2-selection__rendered {
-            line-height: 32px;
-        }
-
         .sales-page .select2-container--default .select2-selection--single .select2-selection__arrow {
             height: 36px;
             right: .45rem;
-        }
-
-        .sale-storage-select-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 32px;
         }
 
         .sales-select2-dropdown {
@@ -450,12 +402,6 @@
             font-weight: 700;
         }
 
-        @media (max-width: 576px) {
-            .sale-storage-select-wrapper {
-                width: 100%;
-            }
-        }
-
         @media (max-width: 767.98px) {
             body {
                 overflow-x: hidden;
@@ -474,8 +420,7 @@
                 padding: .65rem .75rem;
             }
 
-            .sales-page .card-body,
-            .sale-storage-card .card-body {
+            .sales-page .card-body {
                 padding: .75rem;
             }
 
@@ -492,19 +437,11 @@
                 max-width: 100%;
             }
 
-            .sale-storage-card .d-flex,
-            .sale-storage-current,
-            .sale-storage-select-wrapper,
-            .sale-storage-select-wrapper .form-select,
             .sale-search-card .input-group,
             .sale-search-card .form-control,
             .sale-search-card .search-wrapper {
                 width: 100%;
                 min-width: 0;
-            }
-
-            .sale-storage-card .d-flex {
-                align-items: stretch !important;
             }
 
             .sale-search-card .d-flex {
@@ -785,46 +722,11 @@
     @endphp
 
     <div class="container-fluid py-4 sales-page">
-        {{-- <div class="card mb-3 sale-storage-card">
-            <div class="card-body">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <div class="sale-storage-current">
-                        <div class="small text-muted">Kho đang bán hàng</div>
-
-                        <div class="fw-semibold">
-                            <i class="fa-solid fa-warehouse me-1"></i>
-                            {{ $saleStorage?->name ?? 'Chưa chọn kho' }}
-                        </div>
-                    </div>
-
-                    @if ($canSelectSaleStorage)
-                        <div class="sale-storage-select-wrapper">
-                            <label for="saleStorageSelect" class="form-label small fw-semibold">
-                                Chọn kho bán hàng
-                            </label>
-
-                            <span class="sale-select2-wrap">
-                                <select id="saleStorageSelect" class="form-select">
-                                    <option value="">-- Chọn kho --</option>
-
-                                    @foreach ($saleStorages as $storage)
-                                        <option value="{{ $storage->id }}" @selected($saleStorage?->id === $storage->id)>
-                                            {{ $storage->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </span>
-                        </div>
-                    @endif
-                </div>
-
-                @if ($saleStorageMessage)
-                    <div class="alert alert-warning py-2 px-3 mt-2 mb-0">
-                        {{ $saleStorageMessage }}
-                    </div>
-                @endif
+        @if (! $saleStorage && $saleStorageMessage)
+            <div id="saleStorageMessage" class="alert alert-warning py-2 px-3 mb-3">
+                {{ $saleStorageMessage }}
             </div>
-        </div> --}}
+        @endif
 
         <div class="row g-4 sale-layout">
             <!-- LEFT 9 cols -->
@@ -846,6 +748,7 @@
                                         </span>
 
                                         <input id="productSearch" type="text" class="form-control"
+                                            data-sale-storage-control
                                             @disabled(!$saleStorage) placeholder="Tìm sản phẩm"
                                             autocomplete="off" />
                                     </div>
@@ -873,10 +776,12 @@
                                     </span>
 
                                     <input id="barcodeInput" type="text" class="form-control"
+                                        data-sale-storage-control
                                         @disabled(!$saleStorage) placeholder="Nhập hoặc quét barcode"
                                         autocomplete="off" />
 
                                     <button type="button" class="btn btn-primary sale-barcode-add-btn"
+                                        data-sale-storage-control
                                         @disabled(!$saleStorage)>
                                         Thêm
                                     </button>
@@ -995,7 +900,8 @@
                             </div>
                             <input type="hidden" id="custId">
                             <div class="col-12 d-grid sale-save-action">
-                                <button class="btn btn-success" id="saveOrderBtn">Lưu đơn</button>
+                                <button class="btn btn-success" id="saveOrderBtn" data-sale-storage-control
+                                    @disabled(!$saleStorage)>Lưu đơn</button>
                             </div>
                         </div>
                     </div>
@@ -1159,7 +1065,8 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button class="btn btn-dark" id="pay-button" @disabled(!$saleStorage)>Thanh toán</button>
+                    <button class="btn btn-dark" id="pay-button" data-sale-storage-control
+                        @disabled(!$saleStorage)>Thanh toán</button>
                 </div>
             </div>
         </div>
@@ -1186,37 +1093,44 @@
             const bankCode = @json($bankCode);
             const bankAccount = @json($bankAccountForQr);
             let currentInvoiceGrand = 0;
-            const saleStorageSelect = qs('#saleStorageSelect');
+            let hasSaleStorage = @json((bool) $saleStorage);
+            const saleStorageMessage = qs('#saleStorageMessage');
 
-            saleStorageSelect?.addEventListener('change', function() {
-                const storageId = Number(this.value || 0);
+            function setSaleStorageControlsEnabled(enabled) {
+                qsa('[data-sale-storage-control]').forEach((control) => {
+                    control.disabled = !enabled;
+                });
+            }
 
-                if (!storageId) {
-                    return;
+            function saleStorageRequiredMessage() {
+                return saleStorageMessage?.textContent.trim() || 'Vui lòng chọn kho bán hàng.';
+            }
+
+            function showSaleStorageRequired(message = saleStorageRequiredMessage()) {
+                const feedback = qs('#barcodeFeedback');
+
+                if (feedback) {
+                    feedback.textContent = message;
+                    feedback.classList.remove('text-muted');
+                    feedback.classList.add('text-warning');
                 }
 
-                this.disabled = true;
-
-                $.ajax({
-                    url: "{{ route('staff.storage.select') }}",
-                    method: 'POST',
-                    data: {
-                        storage_id: storageId
-                    },
-                    headers: {
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    success: () => window.location.reload(),
-                    error: (xhr) => {
-                        this.disabled = false;
-                        Toast.fire({
-                            icon: 'error',
-                            title: xhr.responseJSON?.message ||
-                                'Không thể chọn kho bán hàng.'
-                        });
-                    }
+                Toast.fire({
+                    icon: 'warning',
+                    title: message
                 });
-            });
+            }
+
+            function ensureSaleStorageReady() {
+                if (hasSaleStorage) {
+                    return true;
+                }
+
+                showSaleStorageRequired();
+                return false;
+            }
+
+            setSaleStorageControlsEnabled(hasSaleStorage);
 
             function sizeOpenSalesSelect2Dropdown(selectElement) {
                 const select2Container = $(selectElement).next('.select2');
@@ -1239,7 +1153,7 @@
                     return;
                 }
 
-                $('#saleStorageSelect, #paymentMethod, #discountType').each(function() {
+                $('#paymentMethod, #discountType').each(function() {
                     const selectElement = this;
                     const select = $(selectElement);
 
@@ -1418,6 +1332,7 @@
             });
 
             function resolveBarcode(barcode) {
+                if (!ensureSaleStorageReady()) return;
                 if (!barcode || barcodeResolving) return;
 
                 const now = Date.now();
@@ -1430,6 +1345,8 @@
                 barcodeResolving = true;
                 lastBarcode = barcode;
                 lastBarcodeAt = now;
+                barcodeFeedback.classList.remove('text-warning', 'text-danger');
+                barcodeFeedback.classList.add('text-muted');
                 barcodeFeedback.textContent = 'Đang xử lý barcode...';
 
                 $.ajax({
@@ -1446,6 +1363,8 @@
                     success: (product) => {
                         addToCart(product);
                         productPopup.style.display = 'none';
+                        barcodeFeedback.classList.remove('text-warning', 'text-danger');
+                        barcodeFeedback.classList.add('text-muted');
                         barcodeFeedback.textContent = 'Đã thêm vào giỏ.';
                         Toast.fire({
                             icon: "success",
@@ -1454,6 +1373,8 @@
                     },
                     error: (xhr) => {
                         const message = xhr.responseJSON?.message || 'Không thể xử lý barcode.';
+                        barcodeFeedback.classList.remove('text-muted', 'text-warning');
+                        barcodeFeedback.classList.add('text-danger');
                         barcodeFeedback.textContent = message;
                         Toast.fire({
                             icon: "error",
@@ -1495,21 +1416,20 @@
             }
 
             productSearch.addEventListener('input', debounce((e) => {
+                if (!ensureSaleStorageReady()) return;
+
                 const keyword = e.target.value.trim();
 
                 productPopup.style.display = 'block';
                 fetchProducts(keyword);
             }, 300));
 
-            productSearch.addEventListener('focus', () => {
-                productPopup.style.display = 'block';
-
-                if (productList.children.length === 0) {
-                    fetchProducts('');
-                }
-            });
             productSearch.addEventListener('focus', async () => {
-                isCallApiProducts && await fetchProducts()
+                if (!ensureSaleStorageReady()) return;
+
+                if (productList.children.length === 0 || isCallApiProducts) {
+                    await fetchProducts('');
+                }
 
                 productPopup.style.display = 'block';
             });
@@ -1624,6 +1544,8 @@
             const cartEmptyRow = qs('#cartEmptyRow');
 
             function verifyAndAddImeiDevice(product) {
+                if (!ensureSaleStorageReady()) return;
+
                 const productImeiId = Number(product.product_imei_id || 0);
 
                 if (!productImeiId) {
@@ -1647,6 +1569,8 @@
                 if (!identifier || barcodeResolving) return;
 
                 barcodeResolving = true;
+                barcodeFeedback.classList.remove('text-warning', 'text-danger');
+                barcodeFeedback.classList.add('text-muted');
                 barcodeFeedback.textContent = 'Đang xác thực thiết bị IMEI...';
 
                 $.ajax({
@@ -1670,6 +1594,8 @@
                         }
 
                         addToCart(resolvedProduct);
+                        barcodeFeedback.classList.remove('text-warning', 'text-danger');
+                        barcodeFeedback.classList.add('text-muted');
                         barcodeFeedback.textContent = 'Đã thêm vào giỏ.';
                         Toast.fire({
                             icon: "success",
@@ -1679,6 +1605,8 @@
                     error: (xhr) => {
                         const message = xhr.responseJSON?.message ||
                             'Không thể xác thực thiết bị IMEI.';
+                        barcodeFeedback.classList.remove('text-muted', 'text-warning');
+                        barcodeFeedback.classList.add('text-danger');
                         barcodeFeedback.textContent = message;
                         Toast.fire({
                             icon: "error",
@@ -2030,6 +1958,16 @@
             });
 
             function fetchProducts(search = '') {
+                if (!ensureSaleStorageReady()) {
+                    productPopup.style.display = 'block';
+                    productList.innerHTML = `
+        <div class="list-group-item text-center text-warning">
+            ${escapeHtml(saleStorageRequiredMessage())}
+        </div>
+    `;
+                    return Promise.resolve([]);
+                }
+
                 productList.innerHTML = `
         <div class="list-group-item text-center text-muted">
             Đang tìm kiếm...

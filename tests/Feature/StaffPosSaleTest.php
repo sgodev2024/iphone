@@ -29,6 +29,11 @@ class StaffPosSaleTest extends TestCase
     {
         parent::setUp();
 
+        config([
+            'pos.default_storage_id' => null,
+            'pos.default_storage_name' => 'Kho A',
+        ]);
+
         $this->createSchema();
     }
 
@@ -70,14 +75,18 @@ class StaffPosSaleTest extends TestCase
         $this->assertDatabaseCount('transaction_entries', 2);
     }
 
-    public function test_owner_with_one_managed_branch_storage_can_sell_immediately(): void
+    public function test_admin_uses_default_kho_a_and_storage_picker_is_hidden(): void
     {
         $this->seedAccounts();
         $owner = $this->createManager(1);
         $branch = $this->createManager(2, $owner->id);
-        $storage = Storage::create([
+        $storageA = Storage::create([
             'user_id' => $branch->id,
-            'name' => 'Kho chi nhánh',
+            'name' => 'Kho A',
+        ]);
+        $storageB = Storage::create([
+            'user_id' => $branch->id,
+            'name' => 'Kho B',
         ]);
         $product = $this->createProduct([
             'user_id' => $owner->id,
@@ -85,15 +94,23 @@ class StaffPosSaleTest extends TestCase
         ]);
         ProductStorage::create([
             'product_id' => $product->id,
-            'storage_id' => $storage->id,
+            'storage_id' => $storageA->id,
             'quantity' => 4,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 9,
         ]);
 
         $this->actingAs($owner)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('Kho chi nhánh', false)
-            ->assertDontSee('id="saleStorageSelect"', false);
+            ->assertDontSee('Kho đang bán hàng', false)
+            ->assertDontSee('Chọn kho bán hàng', false)
+            ->assertDontSee('id="saleStorageSelect"', false)
+            ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertDontSee('disabled placeholder="Nhập hoặc quét barcode"', false);
 
         $this->actingAs($owner)
             ->getJson('/ban-hang/product')
@@ -101,7 +118,7 @@ class StaffPosSaleTest extends TestCase
             ->assertJsonFragment([
                 'product_id' => $product->id,
                 'available_quantity' => 4,
-                'storage_id' => $storage->id,
+                'storage_id' => $storageA->id,
             ]);
 
         $this->actingAs($owner)
@@ -112,13 +129,18 @@ class StaffPosSaleTest extends TestCase
 
         $this->assertDatabaseHas('order_details', [
             'product_id' => $product->id,
-            'storage_id' => $storage->id,
+            'storage_id' => $storageA->id,
             'quantity' => 2,
         ]);
         $this->assertDatabaseHas('product_storage', [
             'product_id' => $product->id,
-            'storage_id' => $storage->id,
+            'storage_id' => $storageA->id,
             'quantity' => 2,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 9,
         ]);
     }
 
@@ -130,7 +152,11 @@ class StaffPosSaleTest extends TestCase
             ->get('/ban-hang')
             ->assertOk()
             ->assertSee('Chưa có kho bán hàng. Vui lòng tạo hoặc phân quyền kho.', false)
-            ->assertDontSee('Nhân viên chưa được gán kho bán hàng.', false);
+            ->assertDontSee('Nhân viên chưa được gán kho bán hàng.', false)
+            ->assertSee('id="productSearch"', false)
+            ->assertSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertSee('id="barcodeInput"', false)
+            ->assertSee('disabled placeholder="Nhập hoặc quét barcode"', false);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
@@ -140,80 +166,122 @@ class StaffPosSaleTest extends TestCase
             ]);
     }
 
-    public function test_manager_with_multiple_storages_must_select_and_session_storage_is_used_everywhere(): void
+    public function test_manager_with_multiple_storages_uses_kho_a_for_search_barcode_and_checkout(): void
     {
         $this->seedAccounts();
         $manager = $this->createManager();
-        $firstStorage = Storage::create([
+        $storageA = Storage::create([
             'user_id' => $manager->id,
-            'name' => 'Kho Quận 1',
+            'name' => 'Kho A',
         ]);
-        $secondStorage = Storage::create([
+        $storageB = Storage::create([
             'user_id' => $manager->id,
-            'name' => 'Kho Quận 2',
+            'name' => 'Kho B',
         ]);
-        $product = $this->createProduct([
+        $productInA = $this->createProduct([
             'user_id' => $manager->id,
+            'barcode' => 'BAR-KHO-A',
+            'name' => 'Sản phẩm Kho A',
             'price_buy' => 100000,
         ]);
+        $productInB = $this->createProduct([
+            'user_id' => $manager->id,
+            'barcode' => 'BAR-KHO-B',
+            'name' => 'Sản phẩm Kho B',
+            'price_buy' => 100000,
+        ]);
+        $imeiProduct = $this->createProduct([
+            'user_id' => $manager->id,
+            'barcode' => 'IMEI-PRODUCT-B',
+            'name' => 'IMEI Kho B',
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'price_buy' => 12000000,
+        ]);
         ProductStorage::create([
-            'product_id' => $product->id,
-            'storage_id' => $firstStorage->id,
+            'product_id' => $productInA->id,
+            'storage_id' => $storageA->id,
             'quantity' => 5,
         ]);
         ProductStorage::create([
-            'product_id' => $product->id,
-            'storage_id' => $secondStorage->id,
+            'product_id' => $productInB->id,
+            'storage_id' => $storageB->id,
             'quantity' => 9,
+        ]);
+        ProductStorage::create([
+            'product_id' => $imeiProduct->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 1,
+        ]);
+        $imeiInB = $this->createImeiInStorage($imeiProduct, $storageB, 'IMEI-B-001', [
+            'barcode' => 'IMEI-B-BARCODE',
         ]);
 
         $this->actingAs($manager)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('id="saleStorageSelect"', false)
-            ->assertSee('Vui lòng chọn kho bán hàng.', false);
+            ->assertDontSee('Kho đang bán hàng', false)
+            ->assertDontSee('Chọn kho bán hàng', false)
+            ->assertDontSee('id="saleStorageSelect"', false)
+            ->assertSee('id="productSearch"', false)
+            ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertSee('id="barcodeInput"', false)
+            ->assertDontSee('disabled placeholder="Nhập hoặc quét barcode"', false);
 
         $this->actingAs($manager)
-            ->getJson('/ban-hang/product')
-            ->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Vui lòng chọn kho bán hàng.']);
-
-        $this->actingAs($manager)
-            ->postJson('/ban-hang/storage/select', [
-                'storage_id' => $secondStorage->id,
-            ])
-            ->assertOk()
-            ->assertJsonPath('storage.id', $secondStorage->id);
-
-        $this->actingAs($manager)
-            ->getJson('/ban-hang/product')
+            ->getJson('/ban-hang/product?search=BAR-KHO')
             ->assertOk()
             ->assertJsonFragment([
-                'product_id' => $product->id,
-                'available_quantity' => 9,
-                'storage_id' => $secondStorage->id,
+                'product_id' => $productInA->id,
+                'available_quantity' => 5,
+                'storage_id' => $storageA->id,
+            ])
+            ->assertJsonMissing(['product_id' => $productInB->id]);
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'BAR-KHO-A',
+            ])
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $productInA->id,
+                'storage_id' => $storageA->id,
+                'available_quantity' => 5,
             ]);
 
         $this->actingAs($manager)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => 'BAR-KHO-B',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Sản phẩm thường đã hết hàng.']);
+
+        $this->actingAs($manager)
+            ->postJson('/ban-hang/barcode/resolve', [
+                'barcode' => $imeiInB->barcode,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Thiết bị không thuộc kho hiện tại.']);
+
+        $this->actingAs($manager)
             ->postJson('/ban-hang/order', $this->orderPayload([
-                ['id' => $product->id, 'qty' => 3],
+                ['id' => $productInA->id, 'qty' => 3],
             ], 300000))
             ->assertCreated();
 
         $this->assertDatabaseHas('order_details', [
-            'product_id' => $product->id,
-            'storage_id' => $secondStorage->id,
+            'product_id' => $productInA->id,
+            'storage_id' => $storageA->id,
             'quantity' => 3,
         ]);
         $this->assertDatabaseHas('product_storage', [
-            'product_id' => $product->id,
-            'storage_id' => $firstStorage->id,
-            'quantity' => 5,
+            'product_id' => $productInA->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 2,
         ]);
         $this->assertDatabaseHas('product_storage', [
-            'product_id' => $product->id,
-            'storage_id' => $secondStorage->id,
-            'quantity' => 6,
+            'product_id' => $productInB->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 9,
         ]);
     }
 
@@ -223,7 +291,7 @@ class StaffPosSaleTest extends TestCase
         $otherManager = $this->createManager();
         $managedStorage = Storage::create([
             'user_id' => $manager->id,
-            'name' => 'Kho hợp lệ',
+            'name' => 'Kho A',
         ]);
         Storage::create([
             'user_id' => $manager->id,
@@ -265,6 +333,93 @@ class StaffPosSaleTest extends TestCase
                 'storage_id' => $managedStorage->id,
                 'available_quantity' => 2,
             ]);
+    }
+
+    public function test_configured_default_storage_id_must_exist_and_be_in_management_scope(): void
+    {
+        $manager = $this->createManager();
+        $otherManager = $this->createManager();
+        Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho A',
+        ]);
+        $outsideStorage = Storage::create([
+            'user_id' => $otherManager->id,
+            'name' => 'Kho A',
+        ]);
+
+        config(['pos.default_storage_id' => 999999]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Kho bán hàng mặc định không tồn tại.', false)
+            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Kho bán hàng mặc định không tồn tại.']);
+
+        config(['pos.default_storage_id' => $outsideStorage->id]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Kho bán hàng mặc định không thuộc quyền quản lý của tài khoản.', false)
+            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Kho bán hàng mặc định không thuộc quyền quản lý của tài khoản.']);
+    }
+
+    public function test_duplicate_kho_a_names_are_not_selected_ambiguously(): void
+    {
+        $manager = $this->createManager();
+        Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho A',
+        ]);
+        Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho A',
+        ]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Có nhiều kho tên Kho A trong phạm vi quản lý. Vui lòng cấu hình POS_DEFAULT_STORAGE_ID.', false)
+            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Có nhiều kho tên Kho A trong phạm vi quản lý. Vui lòng cấu hình POS_DEFAULT_STORAGE_ID.',
+            ]);
+    }
+
+    public function test_manager_with_storages_but_no_kho_a_gets_default_storage_message(): void
+    {
+        $manager = $this->createManager();
+        Storage::create([
+            'user_id' => $manager->id,
+            'name' => 'Kho B',
+        ]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Chưa cấu hình kho bán hàng mặc định.', false)
+            ->assertSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertDontSee('id="saleStorageSelect"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Chưa cấu hình kho bán hàng mặc định.']);
     }
 
     public function test_staff_cannot_change_assigned_sale_storage(): void

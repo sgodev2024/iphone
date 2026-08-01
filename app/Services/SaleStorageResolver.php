@@ -57,24 +57,10 @@ class SaleStorageResolver
             return (int) $storageId;
         }
 
-        if ($storages->count() === 1) {
-            $storageId = (int) $storages->first()->id;
-            $this->storeSelection($user, $storageId);
+        $storage = $this->resolveDefaultManagedStorage($storages);
+        $this->storeSelection($user, (int) $storage->id);
 
-            return $storageId;
-        }
-
-        $selectedStorageId = (int) Session::get($this->sessionKey($user), 0);
-
-        if ($selectedStorageId > 0 && $storages->contains('id', $selectedStorageId)) {
-            return $selectedStorageId;
-        }
-
-        $this->forgetSelection($user);
-
-        throw ValidationException::withMessages([
-            'storage_id' => 'Vui lòng chọn kho bán hàng.',
-        ]);
+        return (int) $storage->id;
     }
 
     public function selectSaleStorageId(User $user, mixed $requestedStorageId): int
@@ -116,25 +102,26 @@ class SaleStorageResolver
             ];
         }
 
-        $selectedStorage = null;
-
-        if ($storages->count() === 1) {
-            $selectedStorage = $storages->first();
+        try {
+            $selectedStorage = $this->resolveDefaultManagedStorage($storages);
             $this->storeSelection($user, (int) $selectedStorage->id);
-        } else {
-            $selectedStorageId = (int) Session::get($this->sessionKey($user), 0);
-            $selectedStorage = $storages->firstWhere('id', $selectedStorageId);
+        } catch (ValidationException $exception) {
+            $this->forgetSelection($user);
 
-            if (! $selectedStorage) {
-                $this->forgetSelection($user);
-            }
+            return [
+                'storages' => $storages,
+                'selectedStorage' => null,
+                'canSelectStorage' => false,
+                'message' => collect($exception->errors())->flatten()->first()
+                    ?: 'Chưa cấu hình kho bán hàng mặc định.',
+            ];
         }
 
         return [
             'storages' => $storages,
             'selectedStorage' => $selectedStorage,
-            'canSelectStorage' => $storages->count() > 1,
-            'message' => $selectedStorage ? null : 'Vui lòng chọn kho bán hàng.',
+            'canSelectStorage' => false,
+            'message' => null,
         ];
     }
 
@@ -165,6 +152,100 @@ class SaleStorageResolver
             ->all();
 
         return Storage::query()->whereIn('user_id', $ownerIds);
+    }
+
+    private function resolveDefaultManagedStorage(Collection $storages): Storage
+    {
+        $configuredStorageId = $this->configuredDefaultStorageId();
+
+        if ($configuredStorageId !== null) {
+            $storage = Storage::query()->find($configuredStorageId);
+
+            if (! $storage) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho bán hàng mặc định không tồn tại.',
+                ]);
+            }
+
+            if (! $storages->contains('id', $configuredStorageId)) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho bán hàng mặc định không thuộc quyền quản lý của tài khoản.',
+                ]);
+            }
+
+            if (! $this->storageIsActive($storage)) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho bán hàng mặc định không hoạt động.',
+                ]);
+            }
+
+            return $storages->firstWhere('id', $configuredStorageId) ?: $storage;
+        }
+
+        $defaultStorageName = trim((string) config('pos.default_storage_name', 'Kho A'));
+        $defaultStorageName = $defaultStorageName === '' ? 'Kho A' : $defaultStorageName;
+
+        $matches = $storages
+            ->filter(fn (Storage $storage) => trim((string) $storage->name) === $defaultStorageName)
+            ->values();
+
+        if ($matches->isEmpty()) {
+            throw ValidationException::withMessages([
+                'storage_id' => 'Chưa cấu hình kho bán hàng mặc định.',
+            ]);
+        }
+
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'storage_id' => "Có nhiều kho tên {$defaultStorageName} trong phạm vi quản lý. Vui lòng cấu hình POS_DEFAULT_STORAGE_ID.",
+            ]);
+        }
+
+        $storage = $matches->first();
+
+        if (! $this->storageIsActive($storage)) {
+            throw ValidationException::withMessages([
+                'storage_id' => 'Kho bán hàng mặc định không hoạt động.',
+            ]);
+        }
+
+        return $storage;
+    }
+
+    private function configuredDefaultStorageId(): ?int
+    {
+        $configuredStorageId = config('pos.default_storage_id');
+
+        if ($configuredStorageId === null || $configuredStorageId === '') {
+            return null;
+        }
+
+        $storageId = filter_var($configuredStorageId, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        if ($storageId === false) {
+            throw ValidationException::withMessages([
+                'storage_id' => 'POS_DEFAULT_STORAGE_ID không hợp lệ.',
+            ]);
+        }
+
+        return (int) $storageId;
+    }
+
+    private function storageIsActive(Storage $storage): bool
+    {
+        $attributes = $storage->getAttributes();
+
+        if (array_key_exists('is_active', $attributes)) {
+            return in_array($attributes['is_active'], [true, 1, '1'], true);
+        }
+
+        if (array_key_exists('status', $attributes)) {
+            return in_array($attributes['status'], [true, 1, '1', 'active', 'published'], true);
+        }
+
+        return true;
     }
 
     private function storeSelection(User $user, int $storageId): void
