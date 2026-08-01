@@ -1,15 +1,17 @@
-<div class="table-responsive">
+<div class="order-table-hint">Vuốt ngang để xem đầy đủ bảng</div>
+
+<div class="table-responsive order-table-scroll">
     <table class="table table-hover table-striped table-bordered align-middle mb-3">
         <thead>
             <tr>
-                <th style="width: 14%"># | Ngày tạo</th>
-                <th>Mã đơn hàng</th>
-                <th>Nhân viên</th>
-                <th>Khách hàng</th>
-                <th class="text-center">SL sản phẩm</th>
-                <th>Phương thức thanh toán</th>
-                <th>Trạng thái</th>
-                <th class="text-end">Tổng tiền</th>
+                <th class="order-col-created" style="width: 14%"># | Ngày tạo</th>
+                <th class="order-col-code">Mã đơn hàng</th>
+                <th class="order-col-employee">Nhân viên</th>
+                <th class="order-col-customer">Khách hàng</th>
+                <th class="text-center order-col-quantity">SL sản phẩm</th>
+                <th class="order-col-payment">Phương thức thanh toán</th>
+                <th class="order-col-status">Trạng thái</th>
+                <th class="text-end order-col-total">Tổng tiền</th>
             </tr>
         </thead>
 
@@ -29,29 +31,29 @@
                 @endphp
 
                 <tr>
-                    <td>
+                    <td class="order-col-created">
                         {{ $orders->firstItem() + $loop->index }}
                         |
                         {{ $order->created_at?->format('d/m/Y') ?? '---' }}
                     </td>
 
-                    <td>
+                    <td class="order-col-code">
                         <a href="{{ route('admin.order.show', $order->id) }}" class="text-primary fw-bold">
                             {{ $order->code ?? 'DH-' . $order->id }}
                         </a>
                     </td>
 
-                    <td>{{ $employeeName }}</td>
+                    <td class="order-col-employee">{{ $employeeName }}</td>
 
-                    <td>{{ $customerName }}</td>
+                    <td class="order-col-customer">{{ $customerName }}</td>
 
-                    <td class="text-center">
+                    <td class="text-center order-col-quantity">
                         {{ $order->order_details_count ?? 0 }}
                     </td>
 
-                    <td>{{ $paymentMethodLabel }}</td>
+                    <td class="order-col-payment">{{ $paymentMethodLabel }}</td>
 
-                    <td>
+                    <td class="order-col-status">
                         @if ((int) $order->status === 1)
                             <span class="badge bg-success">
                                 Đã thanh toán
@@ -63,7 +65,7 @@
                         @endif
                     </td>
 
-                    <td class="text-end fw-semibold">
+                    <td class="text-end fw-semibold order-col-total">
                         {{ formatPrice($order->total_money ?? 0) }} VND
                     </td>
                 </tr>
@@ -79,7 +81,27 @@
 </div>
 
 @if ($orders->hasPages())
-    <div class="d-flex justify-content-center" id="pagination">
-        {{ $orders->onEachSide(1)->links('vendor.pagination.custom') }}
+    <div class="d-flex justify-content-center order-pagination" id="pagination">
+        <div class="order-pagination-desktop">
+            {{ $orders->onEachSide(1)->links('vendor.pagination.custom') }}
+        </div>
+
+        <div class="order-pagination-mobile">
+            @if ($orders->onFirstPage())
+                <span class="page-disabled" aria-disabled="true">&lsaquo;</span>
+            @else
+                <a class="page-link" href="{{ $orders->previousPageUrl() }}" rel="prev">&lsaquo;</a>
+            @endif
+
+            <span class="order-page-count">
+                Trang {{ $orders->currentPage() }} / {{ $orders->lastPage() }}
+            </span>
+
+            @if ($orders->hasMorePages())
+                <a class="page-link" href="{{ $orders->nextPageUrl() }}" rel="next">&rsaquo;</a>
+            @else
+                <span class="page-disabled" aria-disabled="true">&rsaquo;</span>
+            @endif
+        </div>
     </div>
 @endif
