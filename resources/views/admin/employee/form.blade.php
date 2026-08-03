@@ -2,10 +2,11 @@
 
 @section('content')
     @php
+        $isAdminAccount = ($accountType ?? null) === 'admin' || (int) optional($user)->role_id === 1;
         $requiresStorage = $requiresStorage ?? false;
         $storages = $storages ?? collect();
-        $accountLabel = $requiresStorage ? 'nhân viên' : 'chi nhánh';
-        $backUrl = $requiresStorage ? route('admin.employees.index') : route('admin.users.index');
+        $accountLabel = $isAdminAccount ? 'Admin' : ($requiresStorage ? 'nhân viên' : 'chi nhánh');
+        $backUrl = $isAdminAccount || $requiresStorage ? route('admin.employees.index') : route('admin.users.index');
         $selectedStatus = old('status', optional($user)->status ?? 'active');
         $selectedStorageId = old('storage_id', optional($user)->storage_id);
     @endphp
@@ -14,7 +15,7 @@
         <x-breadcrumb :items="[['label' => 'Tài khoản', 'url' => $backUrl], ['label' => $title]]" />
 
 
-        <form id="myForm" action="{{ $api }}" method="POST" novalidate>
+        <form id="myForm" action="{{ $api }}" method="POST" enctype="multipart/form-data" novalidate>
             @csrf
 
             @if (!empty($user))
@@ -69,6 +70,15 @@
                                     @enderror
                                 </div>
 
+                                <div class="col-md-6">
+                                    <label for="img_url" class="form-label mb-1 fw-bold">Ảnh đại diện</label>
+                                    <input type="file" class="form-control @error('img_url') is-invalid @enderror"
+                                        name="img_url" accept="image/jpeg,image/png,image/jpg,image/gif">
+                                    @error('img_url')
+                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                    @enderror
+                                </div>
+
                                 @if ($requiresStorage)
                                     <div class="col-md-6">
                                         <label for="storage_id" class="form-label mb-1 fw-bold">Kho bán hàng</label>
@@ -91,13 +101,20 @@
                                     </div>
                                 @endif
 
-                                <div class="col-md-12">
-                                    <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
-                                    <textarea name="address" placeholder="Nhập địa chỉ" class="form-control @error('address') is-invalid @enderror">{{ old('address', optional($user)->address) }}</textarea>
-                                    @error('address')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
-                                    @enderror
-                                </div>
+                                @if ($isAdminAccount)
+                                    <div class="col-md-6">
+                                        <label class="form-label mb-1 fw-bold">Nơi làm việc</label>
+                                        <div class="form-control bg-light">{{ $adminWorkplaceLabel ?? 'Toàn hệ thống' }}</div>
+                                    </div>
+                                @else
+                                    <div class="col-md-12">
+                                        <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
+                                        <textarea name="address" placeholder="Nhập địa chỉ" class="form-control @error('address') is-invalid @enderror">{{ old('address', optional($user)->address) }}</textarea>
+                                        @error('address')
+                                            <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -120,14 +137,19 @@
                             <h5 class="card-title">Trạng thái</h5>
                         </div>
                         <div class="card-body">
-                            <select name="status" class="form-select form-control @error('status') is-invalid @enderror">
-                                <option value="active" @selected($selectedStatus === 'active')>Kích hoạt</option>
-                                <option value="inactive" @selected($selectedStatus === 'inactive')>Không kích hoạt</option>
-                                <option value="locked" @selected($selectedStatus === 'locked')>Khóa tài khoản</option>
-                            </select>
-                            @error('status')
-                                <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
-                            @enderror
+                            @if ($isAdminAccount)
+                                <span class="badge bg-success">Kích hoạt</span>
+                            @else
+                                <select name="status"
+                                    class="form-select form-control @error('status') is-invalid @enderror">
+                                    <option value="active" @selected($selectedStatus === 'active')>Kích hoạt</option>
+                                    <option value="inactive" @selected($selectedStatus === 'inactive')>Không kích hoạt</option>
+                                    <option value="locked" @selected($selectedStatus === 'locked')>Khóa tài khoản</option>
+                                </select>
+                                @error('status')
+                                    <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                @enderror
+                            @endif
                         </div>
                     </div>
                 </div>
