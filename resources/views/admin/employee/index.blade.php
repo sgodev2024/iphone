@@ -75,6 +75,7 @@
                 $('input[name="search"]').val('')
 
                 setTimeout(() => resetCooldown = false, 1500) // 1.5s sau mới cho bấm lại
+                
             })
 
             $(document).on('click', '.btn-delete', function() {

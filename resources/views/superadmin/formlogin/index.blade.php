@@ -103,7 +103,7 @@
                                         </div>
                                         <div
                                             style="margin: 0px; display: flex; justify-content: flex-end; padding: 10px 5px;">
-                                            <a href="{{ route('forget-password') }}" class="text-muted">Quên mật
+                                            <a href="#" class="text-muted">Quên mật
                                                 khẩu?</a>
                                         </div>
 

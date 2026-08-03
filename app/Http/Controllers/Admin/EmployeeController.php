@@ -24,6 +24,7 @@ class EmployeeController extends Controller
 
     public function index(Request $request)
     {
+       
         $title = "Nhân viên bán hàng";
         $mode = 'employees';
         if ($request->ajax()) {

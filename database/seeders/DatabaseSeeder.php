@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             UsersTableSeeder::class,
             ClientSeeder::class,
             OrderSeeder::class,
+            PermissionSeeder::class,
         ]);
         // $this->call(OrderDetailSeeder::class);
         // $this->call([
