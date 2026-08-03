@@ -213,7 +213,9 @@ class AdminEmployeeCreationTest extends TestCase
             ->json('html');
 
         $this->assertStringContainsString('Admin hệ thống', $html);
-        $this->assertStringContainsString('Toàn hệ thống · Kho bán mặc định: Kho A', $html);
+        $this->assertStringContainsString('Toàn hệ thống', $html);
+        $this->assertStringContainsString('Kho bán: Kho A', $html);
+        $this->assertStringNotContainsString('Toàn hệ thống · Kho bán mặc định: Kho A', $html);
         $this->assertStringContainsString($admin->email, $html);
         $this->assertStringContainsString($employee->email, $html);
         $this->assertStringNotContainsString($otherAdmin->email, $html);

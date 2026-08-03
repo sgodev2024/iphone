@@ -24,6 +24,12 @@
                 $workplaceLabel = $isAdminAccount
                     ? ($adminWorkplaceLabel ?? 'Toàn hệ thống')
                     : optional($employee->storage)->name ?? '-';
+                $adminSaleStorageName = null;
+
+                if ($isAdminAccount) {
+                    $workplaceParts = explode(':', (string) $workplaceLabel, 2);
+                    $adminSaleStorageName = isset($workplaceParts[1]) ? trim($workplaceParts[1]) : null;
+                }
             @endphp
             <tr>
                 <td>
@@ -43,7 +49,18 @@
                 </td>
                 <td>{{ $employee->email }}</td>
                 <td>{{ $employee->phone }}</td>
-                <td>{{ $workplaceLabel }}</td>
+                <td>
+                    @if ($isAdminAccount)
+                        <div @if ($adminSaleStorageName) title="Kho bán mặc định: {{ $adminSaleStorageName }}" @endif>
+                            <div class="fw-semibold">Toàn hệ thống</div>
+                            @if ($adminSaleStorageName)
+                                <div class="small text-muted">Kho bán: {{ $adminSaleStorageName }}</div>
+                            @endif
+                        </div>
+                    @else
+                        {{ $workplaceLabel }}
+                    @endif
+                </td>
                 <td>
                     @if ($isAdminAccount)
                         <span class="badge bg-success">Kích hoạt</span>
