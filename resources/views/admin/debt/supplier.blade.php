@@ -1,7 +1,7 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <div class="page-inner">
+    <div class="page-inner supplier-debt-page">
         <div class="page-header">
             <x-breadcrumb :items="[['label' => 'CÔNG NỢ NHÀ CUNG CẤP']]" />
             {{-- <ul class="breadcrumbs mb-3">
@@ -19,42 +19,58 @@
             </ul> --}}
         </div>
 
-        <div class="card p-3 mb-3 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div class="card supplier-debt-filter-card p-3 mb-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center flex-wrap supplier-debt-filter">
                 <!-- Lọc ngày sang trái -->
-                <div class="d-flex align-items-center mb-2">
+                <div class="d-flex align-items-center mb-2 supplier-debt-date">
                     <input type="text" id="dateFilter" name="date_range" class="form-control"
                         placeholder="Chọn khoảng ngày">
                 </div>
 
-                <!-- Tên khách hàng và nút Lọc sang phải -->
-                <div class="d-flex align-items-center mb-2">
-                    <input type="text" class="form-control me-2" name="name" placeholder="Tên khách hàng">
-                    <button type="button" id="filter" class="btn btn-primary">
-                        <i class="bi bi-search"></i> Lọc
+                <!-- Tên nhà cung cấp và nút Lọc sang phải -->
+                <div class="d-flex align-items-center mb-2 supplier-debt-search">
+                    <input type="text" class="form-control me-2 supplier-debt-name" name="name" placeholder="Tên nhà cung cấp">
+                    <button type="button" id="filter" class="btn btn-primary supplier-debt-filter-button">
+                        <i class="bi bi-search"></i> <span>Lọc</span>
                     </button>
                 </div>
             </div>
         </div>
 
 
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle text-center mb-0" id="supplierDebtTable">
+        <div class="table-responsive supplier-debt-table-wrap">
+            <table class="table table-bordered table-hover align-middle text-center mb-0 supplier-debt-table" id="supplierDebtTable">
+                <colgroup>
+                    <col class="col-stt">
+                    <col class="col-supplier">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-ending">
+                    <col class="col-ending">
+                </colgroup>
                 <thead class="table-light align-middle">
                     <tr>
                         <th rowspan="3" style="width: 50px;">#</th>
                         <th rowspan="3">Đối tượng</th>
-                        <th colspan="2">Số dư đầu kỳ</th>
-                        <th colspan="2">Phát sinh trong kỳ</th>
-                        <th colspan="2">Số dư cuối kỳ</th>
+                        <th colspan="2"><span class="heading-nowrap">Số dư đầu kỳ</span></th>
+                        <th colspan="2"><span class="heading-nowrap">Phát sinh trong kỳ</span></th>
+                        <th colspan="2"><span class="heading-nowrap">Số dư cuối kỳ</span></th>
                     </tr>
                     <tr>
-                        <th>Nợ [Phải thu]</th>
-                        <th>Có [Phải trả]</th>
-                        <th>Ghi nợ</th>
-                        <th>Ghi có</th>
-                        <th>Nợ [Phải thu] = 3 + 5 - 4 - 6</th>
-                        <th>Có [Phải trả] = 4 + 6 - 3 -5</th>
+                        <th><span class="heading-nowrap">Nợ (Phải thu)</span></th>
+                        <th><span class="heading-nowrap">Có (Phải trả)</span></th>
+                        <th><span class="heading-nowrap">Ghi nợ</span></th>
+                        <th><span class="heading-nowrap">Ghi có</span></th>
+                        <th>
+                            <span class="heading-nowrap">Nợ (Phải thu)</span>
+                            <span class="header-formula">= 3 + 5 - 4 - 6</span>
+                        </th>
+                        <th>
+                            <span class="heading-nowrap">Có (Phải trả)</span>
+                            <span class="header-formula">= 4 + 6 - 3 - 5</span>
+                        </th>
                     </tr>
                     <tr>
                         <th>[3]</th>
@@ -69,20 +85,20 @@
                     @forelse($supplierDebts as $index => $debt)
                         <tr>
                             <td>{{ $index + 1 }}</td>
-                            <td class="text-start">
-                                {{ $debt->supplier_name }} <br>
-                                SDT: {{ $debt->supplier_phone }}
+                            <td class="text-start supplier-cell">
+                                <span class="supplier-name">{{ $debt->supplier_name }}</span><br>
+                                <span class="supplier-phone">SĐT: {{ $debt->supplier_phone ?: '—' }}</span>
                             </td>
-                            <td class="text-end">{{ formatPrice($debt->opening_debit) }}</td>
-                            <td class="text-end">{{ formatPrice($debt->opening_credit) }}</td>
-                            <td class="text-end">{{ formatPrice($debt->period_debit) }}</td>
-                            <td class="text-end">{{ formatPrice($debt->period_credit) }}</td>
-                            <td class="text-end">{{ formatPrice($debt->ending_debit) }}</td>
-                            <td class="text-end">{{ formatPrice($debt->ending_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->opening_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->opening_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->period_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->period_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->ending_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatPrice($debt->ending_credit) }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="text-center">Không có dữ liệu</td>
+                            <td colspan="8" class="text-center">Không có dữ liệu</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -154,31 +170,212 @@
         function renderTable(data) {
             let tbody = '';
             if (data.length === 0) {
-                tbody = `<tr><td colspan="9" class="text-center">Không có dữ liệu</td></tr>`;
+                tbody = `<tr><td colspan="8" class="text-center">Không có dữ liệu</td></tr>`;
             } else {
                 data.forEach((debt, index) => {
+                    const supplierName = escapeHtml(debt.supplier_name || '');
+                    const supplierPhone = escapeHtml(debt.supplier_phone || '—');
+
                     tbody += `
                     <tr>
                         <td>${index + 1}</td>
-                        <td class="text-start">
-                            ${debt.supplier_name} <br/>
-                            SDT: ${debt.supplier_phone}
+                        <td class="text-start supplier-cell">
+                            <span class="supplier-name">${supplierName}</span><br/>
+                            <span class="supplier-phone">SĐT: ${supplierPhone}</span>
                         </td>
-                        <td class="text-end">${debt.opening_debit != 0 ? formatNumber(debt.opening_debit) : ''}</td>
-                        <td class="text-end">${debt.opening_credit != 0 ? formatNumber(debt.opening_credit) : ''}</td>
-                        <td class="text-end">${debt.period_debit != 0 ? formatNumber(debt.period_debit) : ''}</td>
-                        <td class="text-end">${debt.period_credit != 0 ? formatNumber(debt.period_credit) : ''}</td>
-                        <td class="text-end">${debt.ending_debit != 0 ? formatNumber(debt.ending_debit) : ''}</td>
-                        <td class="text-end">${debt.ending_credit != 0 ? formatNumber(debt.ending_credit) : ''}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.opening_debit)}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.opening_credit)}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.period_debit)}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.period_credit)}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.ending_debit)}</td>
+                        <td class="text-end money-cell">${formatDebtPrice(debt.ending_credit)}</td>
                     </tr>`;
                 });
             }
 
             $('#supplierDebtTable tbody').html(tbody);
         }
+
+        function formatDebtPrice(amount) {
+            const value = Number(amount) || 0;
+
+            if (Math.floor(value) === value) {
+                return new Intl.NumberFormat('de-DE', {
+                    maximumFractionDigits: 0
+                }).format(value);
+            }
+
+            return new Intl.NumberFormat('de-DE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
     </script>
 @endpush
 
 @push('style')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
+    <style>
+        @media (max-width: 767.98px) {
+            .supplier-debt-page,
+            .supplier-debt-page * {
+                box-sizing: border-box;
+            }
+
+            .supplier-debt-page {
+                width: 100%;
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+                padding-right: 10px;
+                padding-left: 10px;
+                overflow-x: hidden;
+            }
+
+            .supplier-debt-page .page-header {
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+            .supplier-debt-page .breadcrumb,
+            .supplier-debt-page .breadcrumbs {
+                margin-left: 0;
+            }
+
+            .supplier-debt-page .supplier-debt-filter-card,
+            .supplier-debt-page .supplier-debt-table-wrap {
+                width: 100%;
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+            }
+
+            .supplier-debt-page .supplier-debt-filter {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 8px;
+            }
+
+            .supplier-debt-page .supplier-debt-date,
+            .supplier-debt-page .supplier-debt-search {
+                width: 100%;
+                margin-bottom: 0 !important;
+            }
+
+            .supplier-debt-page .supplier-debt-date .form-control,
+            .supplier-debt-page .supplier-debt-search .form-control,
+            .supplier-debt-page .supplier-debt-filter-button {
+                min-height: 40px;
+            }
+
+            .supplier-debt-page .supplier-debt-search {
+                gap: 8px;
+            }
+
+            .supplier-debt-page .supplier-debt-name {
+                flex: 1 1 auto;
+                min-width: 0;
+                margin-right: 0 !important;
+            }
+
+            .supplier-debt-page .supplier-debt-filter-button {
+                flex: 0 0 auto;
+                padding-right: 14px;
+                padding-left: 14px;
+                white-space: nowrap;
+            }
+
+            .supplier-debt-page .supplier-debt-table-wrap {
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .supplier-debt-page .supplier-debt-table {
+                min-width: 1280px;
+                table-layout: auto;
+            }
+
+            .supplier-debt-page .supplier-debt-table col.col-stt {
+                width: 50px;
+            }
+
+            .supplier-debt-page .supplier-debt-table col.col-supplier {
+                width: 210px;
+            }
+
+            .supplier-debt-page .supplier-debt-table col.col-money {
+                width: 140px;
+            }
+
+            .supplier-debt-page .supplier-debt-table col.col-ending {
+                width: 240px;
+            }
+
+            .supplier-debt-page .supplier-debt-table th,
+            .supplier-debt-page .supplier-debt-table td {
+                padding-right: 10px;
+                padding-left: 10px;
+                vertical-align: middle;
+                word-break: normal;
+                overflow-wrap: normal;
+            }
+
+            .supplier-debt-page .supplier-debt-table th {
+                text-align: center;
+            }
+
+            .supplier-debt-page .heading-nowrap,
+            .supplier-debt-page .header-formula,
+            .supplier-debt-page .money-cell {
+                white-space: nowrap;
+            }
+
+            .supplier-debt-page .header-formula {
+                display: block;
+                margin-top: 2px;
+                font-weight: 500;
+            }
+
+            .supplier-debt-page .supplier-cell {
+                min-width: 190px;
+            }
+
+            .supplier-debt-page .supplier-name,
+            .supplier-debt-page .supplier-phone {
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .supplier-debt-page .money-cell {
+                text-align: right;
+            }
+
+            .supplier-debt-page nav[role="navigation"],
+            .supplier-debt-page .pagination {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 767.98px) and (max-width: 340px) {
+            .supplier-debt-page .supplier-debt-search {
+                flex-wrap: wrap;
+            }
+
+            .supplier-debt-page .supplier-debt-filter-button {
+                width: 100%;
+            }
+        }
+    </style>
 @endpush
