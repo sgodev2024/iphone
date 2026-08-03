@@ -29,7 +29,7 @@
         </td>
         <td class="cash-col-party">
             <span class="cash-cell-line d-block">{{ $entry->related_party ?? '-' }}</span>
-            <span class="cash-cell-line d-block">{{ $type === 'cash' ? 'SĐT' : 'STD' }}: {{ $entry->related_party_phone ?? '-' }}</span>
+            <span class="cash-cell-line d-block">SĐT: {{ $entry->related_party_phone ?? '-' }}</span>
         </td>
         <td class="cash-col-money cash-money-cell text-end">
             {{ $entry->debit_amount > 0 ? formatPrice($entry->debit_amount) : ($type === 'cash' ? '—' : '') }}
@@ -68,13 +68,13 @@
     </tr>
 @empty
     <tr>
-        <td colspan="10" class="text-center">Không có dữ liệu</td>
+        <td colspan="10" class="text-center cash-empty-cell">Không có dữ liệu</td>
     </tr>
 @endforelse
 
-<tr class="fw-bold">
-    <td colspan="5" class="text-end fw-bold">Tổng</td>
-    <td class="text-end fw-bold">{{ formatPrice($totalThu) }}</td>
-    <td class="text-end fw-bold">{{ formatPrice($totalChi) }}</td>
+<tr class="fw-bold cash-total-row">
+    <td colspan="5" class="text-end fw-bold cash-total-label">Tổng</td>
+    <td class="text-end fw-bold cash-total-money">{{ formatPrice($totalThu) }}</td>
+    <td class="text-end fw-bold cash-total-money">{{ formatPrice($totalChi) }}</td>
     <td colspan="3"></td>
 </tr>
