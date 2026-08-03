@@ -722,7 +722,7 @@
     @endphp
 
     <div class="container-fluid py-4 sales-page">
-        @if (! $saleStorage && $saleStorageMessage)
+        @if (!$saleStorage && $saleStorageMessage)
             <div id="saleStorageMessage" class="alert alert-warning py-2 px-3 mb-3">
                 {{ $saleStorageMessage }}
             </div>
@@ -737,8 +737,10 @@
                         <div class="sale-product-add-stack">
                             {{-- Tìm kiếm sản phẩm --}}
                             <div class="sale-product-search-pane">
-                                <div class="d-flex align-items-center justify-content-between mb-2 sale-product-search-heading">
-                                    <label for="productSearch" class="form-label fw-semibold mb-0">Tìm &amp; chọn sản phẩm</label>
+                                <div
+                                    class="d-flex align-items-center justify-content-between mb-2 sale-product-search-heading">
+                                    <label for="productSearch" class="form-label fw-semibold mb-0">Tìm &amp; chọn sản
+                                        phẩm</label>
                                 </div>
 
                                 <div class="search-wrapper">
@@ -748,9 +750,8 @@
                                         </span>
 
                                         <input id="productSearch" type="text" class="form-control"
-                                            data-sale-storage-control
-                                            @disabled(!$saleStorage) placeholder="Tìm sản phẩm"
-                                            autocomplete="off" />
+                                            data-sale-storage-control @disabled(!$saleStorage)
+                                            placeholder="Tìm sản phẩm" autocomplete="off" />
                                     </div>
 
                                     <div id="productPopup" class="search-popup">
@@ -766,7 +767,8 @@
                             {{-- Quét hoặc nhập barcode --}}
                             <div class="sale-barcode-pane">
                                 <div class="d-flex align-items-center justify-content-between mb-2 sale-barcode-heading">
-                                    <label for="barcodeInput" class="form-label fw-semibold mb-0">Quét hoặc nhập barcode</label>
+                                    <label for="barcodeInput" class="form-label fw-semibold mb-0">Quét hoặc nhập
+                                        barcode</label>
                                     <span class="text-muted small">Nhấn Enter để thêm vào giỏ</span>
                                 </div>
 
@@ -775,14 +777,12 @@
                                         <i class="fa-solid fa-barcode"></i>
                                     </span>
 
-                                    <input id="barcodeInput" type="text" class="form-control"
-                                        data-sale-storage-control
+                                    <input id="barcodeInput" type="text" class="form-control" data-sale-storage-control
                                         @disabled(!$saleStorage) placeholder="Nhập hoặc quét barcode"
                                         autocomplete="off" />
 
                                     <button type="button" class="btn btn-primary sale-barcode-add-btn"
-                                        data-sale-storage-control
-                                        @disabled(!$saleStorage)>
+                                        data-sale-storage-control @disabled(!$saleStorage)>
                                         Thêm
                                     </button>
                                 </div>
@@ -1512,7 +1512,7 @@
                         if (isImeiProduct) {
                             Toast.fire({
                                 icon: "info",
-                                title: "Sản phẩm này quản lý theo IMEI. Vui lòng quét barcode của thiết bị cụ thể để thêm vào giỏ."
+                                title: "Sản phẩm này quản lý theo IMEI. Hãy nhập IMEI của thết bị hoặc quét Barcode."
                             });
                             productPopup.style.display = 'none';
                             productSearch.value = '';
