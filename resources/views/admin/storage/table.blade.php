@@ -2,7 +2,7 @@
     <thead>
         <tr>
             <th style="width: 3%" class="text-center"><input type="checkbox" id="check-all"></th>
-            <th style="width: 8%">ID</th>
+            <th style="width: 8%">STT</th>
             <th style="width: 15%">Ngày tạo</th>
             <th>TÊN KHO</th>
             <th>Địa chỉ</th>

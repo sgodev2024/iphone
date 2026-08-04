@@ -54,6 +54,8 @@
                 </div>
 
                 <div class="col-xl-3 col-md-6">
+                    <a href="{{ route('admin.order.index') }}"
+                    class="text-decoration-none text-reset">
                     <div class="metric-card">
                         <div class="metric-icon orders">
                             <i class="fas fa-shopping-cart"></i>
@@ -80,6 +82,7 @@
                             </div>
                         @endif
                     </div>
+                    </a>
                 </div>
 
 
@@ -107,6 +110,8 @@
 
 
                 <div class="col-xl-3 col-md-6">
+                    <a href="{{ route('admin.storage.index') }}"
+                    class="text-decoration-none text-reset">
                     <div class="metric-card">
                         <div class="metric-icon inventory">
                             <i class="fas fa-boxes"></i>
@@ -129,6 +134,7 @@
                             @endif
                         </div>
                     </div>
+                    </a>
                 </div>
 
             </div>
@@ -136,6 +142,8 @@
             <!-- Additional Metrics -->
             <div class="row g-4 mb-4">
                 <div class="col-xl-3 col-md-6">
+                    <a href="{{ route('admin.report.orders.getDailyOrder') }}"
+                    class="text-decoration-none text-reset">
                     <div class="metric-card">
                         <div class="metric-icon customers">
                             <i class="fas fa-users"></i>
@@ -148,6 +156,7 @@
                             {{ abs($newCustomers['percent_change'] ?? 0) }}% so với hôm qua
                         </div>
                     </div>
+                    </a>
                 </div>
 
                 <div class="col-xl-3 col-md-6">
