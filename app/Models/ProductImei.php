@@ -29,6 +29,7 @@ class ProductImei extends Model
         'print_count',
         'deleted_by',
         'delete_reason',
+        'storage_id',
     ];
     protected $casts = [
         'printed_at' => 'datetime',
@@ -52,6 +53,11 @@ class ProductImei extends Model
     {
         return $query->where('status', self::STATUS_IN_STOCK);
     }
+
+    public function storage(): BelongsTo
+{
+    return $this->belongsTo(Storage::class);
+}
 
     public function getStatusLabelAttribute(): string
     {

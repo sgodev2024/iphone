@@ -24,7 +24,9 @@ class ConfigController extends Controller
 
     public function save(Request $request)
     {
+       
         $credentials = $this->validateRequest($request);
+       
 
         return transaction(function () use ($credentials, $request) {
             $user = Auth::user();
