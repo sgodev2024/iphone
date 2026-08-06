@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Gate;
+use App\Models\ProductImei;
+
 
 class StorageController extends Controller
 {
@@ -24,31 +27,93 @@ class StorageController extends Controller
     public function index(Request $request)
     {
         $title = 'Kho hàng';
-
-        if ($request->ajax()) {
-            $searchText = trim((string) $request->query('s'));
-
-            $storages = $this->storageQuery()
+    
+        if (!$request->ajax()) {
+            return view('admin.storage.index', [
+                'title' => $title,
+            ]);
+        }
+    
+        $searchText = trim((string) $request->query('s'));
+        $storageId = $request->integer('inventory');
+    
+        /*
+        |--------------------------------------------------------------------------
+        | Danh sách sản phẩm tồn kho
+        |--------------------------------------------------------------------------
+        */
+        if ($storageId > 0) {
+            Gate::authorize('storage.products');
+    
+            $storage = $this->storageQuery()
+                ->findOrFail($storageId);
+    
+                $products = $storage->products()
+                ->with([
+                    'brand',
+                    'category',
+                ])
+                ->withCount([
+                    'imeis as storage_imei_stock_count' => function ($query) use ($storage) {
+                        $query->where('storage_id', $storage->id)
+                            ->where('status', ProductImei::STATUS_IN_STOCK);
+                    },
+                ])
                 ->when($searchText !== '', function (Builder $query) use ($searchText) {
                     $query->where(function (Builder $query) use ($searchText) {
-                        $query->where('name', 'like', "%{$searchText}%")
-                            ->orWhere('location', 'like', "%{$searchText}%");
-
+                        $query->where('products.name', 'like', "%{$searchText}%")
+                            ->orWhere('products.code', 'like', "%{$searchText}%")
+                            ->orWhere('products.barcode', 'like', "%{$searchText}%");
+            
                         if (ctype_digit($searchText)) {
-                            $query->orWhere('id', (int) $searchText);
+                            $query->orWhere('products.id', (int) $searchText);
                         }
                     });
                 })
-                ->latest()
-                ->paginate(10)
+                ->orderByDesc('products.id')
+                ->paginate(20)
                 ->appends($request->query());
-
-            $html = view('admin.storage.table', compact('storages'))->render();
-
-            return response()->json(['html' => $html]);
+    
+            $html = view('admin.storage.inventory', [
+                'storage' => $storage,
+                'products' => $products,
+            ])->render();
+    
+            return response()->json([
+                'html' => $html,
+                'view' => 'inventory',
+                'storage_id' => $storage->id,
+            ]);
         }
-
-        return view('admin.storage.index', compact('title'));
+    
+        /*
+        |--------------------------------------------------------------------------
+        | Danh sách kho
+        |--------------------------------------------------------------------------
+        */
+        $storages = $this->storageQuery()
+            ->when($searchText !== '', function (Builder $query) use ($searchText) {
+                $query->where(function (Builder $query) use ($searchText) {
+                    $query->where('name', 'like', "%{$searchText}%")
+                        ->orWhere('location', 'like', "%{$searchText}%");
+    
+                    if (ctype_digit($searchText)) {
+                        $query->orWhere('id', (int) $searchText);
+                    }
+                });
+            })
+            ->latest()
+            ->paginate(10)
+            ->appends($request->query());
+    
+        $html = view('admin.storage.table', [
+            'storages' => $storages,
+        ])->render();
+    
+        return response()->json([
+            'html' => $html,
+            'view' => 'storages',
+        ]);
     }
 
     public function show($id)
@@ -115,8 +180,29 @@ class StorageController extends Controller
     }
 
     private function storageQuery(): Builder
+{
+    return $this->applyStorageScope(
+        Storage::query()
+            ->withSum(
+                'productStorages as total_quantity',
+                'quantity'
+            )
+    );
+}
+
+    public function inventory(Storage $storage)
     {
-        return $this->applyStorageScope(Storage::query());
+        $products = $storage->products()
+            ->with([
+                'brand',
+                'category',
+            ])
+            ->paginate(20);
+
+        return view(
+            'admin.storage.inventory',
+            compact('storage', 'products')
+        );
     }
 
     private function applyStorageScope($query)
@@ -129,7 +215,7 @@ class StorageController extends Controller
 
         $ownerIds = collect([$user->id, $user->manager_id])
             ->filter()
-            ->map(fn ($id) => (int) $id)
+            ->map(fn($id) => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -143,5 +229,47 @@ class StorageController extends Controller
                 $query->orWhere('id', (int) $user->storage_id);
             }
         });
+    }
+
+    public function productImeis(
+        int $storage,
+        int $product
+    ) {
+        Gate::authorize('product.imei.view');
+    
+        /*
+         * Kiểm tra kho thuộc phạm vi người dùng hiện tại.
+         */
+        $storageModel = $this->storageQuery()
+            ->findOrFail($storage);
+    
+        /*
+         * Kiểm tra sản phẩm thực sự thuộc kho đang xem.
+         */
+        $productModel = $storageModel->products()
+            ->where('products.id', $product)
+            ->firstOrFail();
+    
+        if (! $productModel->isImeiTracked()) {
+            return response()->json([
+                'message' => 'Sản phẩm này không quản lý theo IMEI.',
+            ], 422);
+        }
+    
+        $imeis = ProductImei::query()
+            ->where('product_id', $productModel->id)
+            ->where('storage_id', $storageModel->id)
+            ->latest()
+            ->get();
+    
+        $html = view('admin.storage.imeis', [
+            'storage' => $storageModel,
+            'product' => $productModel,
+            'imeis' => $imeis,
+        ])->render();
+    
+        return response()->json([
+            'html' => $html,
+        ]);
     }
 }
