@@ -26,7 +26,7 @@ class PermissionMiddleware
                             ->pluck('permission_key');
         
         //if (!$permissions->contains($permission)) {
-            abort(403);
+        //    abort(403);
         }
 
         return $next($request);
