@@ -27,11 +27,11 @@ class RoleMiddleware
         }
 
         // Nếu user có role nằm trong danh sách middleware cho phép
-        if (in_array($user->role_id, $roles)) {
-            return $next($request);
+        //if (in_array($user->role_id, $roles)) {
+            //return $next($request);
         }
 
         // Nếu không hợp lệ => 403
-        abort(403, 'Không có quyền truy cập');
+        //abort(403, 'Không có quyền truy cập');
     }
 }
