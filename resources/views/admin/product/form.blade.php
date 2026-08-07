@@ -4,6 +4,15 @@
     @php
         $selectedInventoryTracking = old('inventory_tracking', optional($product)->inventory_tracking);
         $trackingLocked = !($canChangeInventoryTracking ?? true);
+        $thumbnailPath = normalizePublicImagePath(optional($product)->thumbnail);
+        $thumbnailIsRemote = $thumbnailPath && (preg_match('/^(https?:)?\\/\\//i', $thumbnailPath) || str_starts_with($thumbnailPath, 'data:'));
+        $thumbnailUrl = $thumbnailPath
+            ? ($thumbnailIsRemote
+                ? $thumbnailPath
+                : ($thumbnailPath === defaultProductImagePath()
+                    ? asset($thumbnailPath)
+                    : asset('storage/' . ltrim($thumbnailPath, '/'))))
+            : asset(defaultProductImagePath());
     @endphp
     <div class="page-inner">
         <x-breadcrumb :items="[['label' => 'Sản phẩm', 'url' => route('admin.products.index')], ['label' => $title]]" />
@@ -152,11 +161,22 @@
                             <h5 class="card-title">Ảnh đại diện</h5>
                         </div>
                         <div class="card-body">
-                            <img class="img-fluid img-thumbnail w-100" id="preview-thumbnail" style="cursor: pointer"
-                                src="{{ productImage(optional($product)->thumbnail) }}" alt=""
-                                onclick="document.getElementById('thumbnail').click();">
-                            <input type="file" name="thumbnail" id="thumbnail" class="form-control d-none"
-                                accept="image/*" onchange="previewImage(event, 'preview-thumbnail')">
+                            <div class="product-thumbnail-uploader">
+                                <input type="file" name="thumbnail" id="thumbnail"
+                                    class="product-thumbnail-input" accept="image/*">
+                                <label class="product-thumbnail-dropzone" for="thumbnail">
+                                    <span class="product-thumbnail-preview-frame">
+                                        <img id="preview-thumbnail" class="product-thumbnail-preview"
+                                            src="{{ $thumbnailUrl }}"
+                                            data-fallback-src="{{ asset(defaultProductImagePath()) }}"
+                                            alt="{{ optional($product)->name ? 'Ảnh đại diện ' . optional($product)->name : 'Ảnh mặc định sản phẩm' }}">
+                                    </span>
+                                    <span class="product-thumbnail-copy">
+                                        <span class="product-thumbnail-title">Chọn ảnh đại diện</span>
+                                        <span class="product-thumbnail-hint">Nhấn để tải ảnh lên</span>
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -190,6 +210,36 @@
             handleSubmit('#myForm', function(res) {
                 window.location.href = '/admin/products';
             }, url)
+
+            const thumbnailInput = document.getElementById('thumbnail');
+            const thumbnailPreview = document.getElementById('preview-thumbnail');
+
+            thumbnailInput?.addEventListener('change', function(event) {
+                const file = event.target.files?.[0];
+
+                if (!file) {
+                    return;
+                }
+
+                if (!file.type.startsWith('image/')) {
+                    event.target.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.addEventListener('load', function() {
+                    thumbnailPreview.src = reader.result;
+                });
+                reader.readAsDataURL(file);
+            });
+
+            thumbnailPreview?.addEventListener('error', function() {
+                const fallbackSrc = thumbnailPreview.dataset.fallbackSrc;
+
+                if (fallbackSrc && thumbnailPreview.src !== fallbackSrc) {
+                    thumbnailPreview.src = fallbackSrc;
+                }
+            });
 
         })
     </script>
@@ -257,6 +307,102 @@
 
         .slider.round::before {
             border-radius: 50%;
+        }
+
+        .product-thumbnail-uploader {
+            position: relative;
+            width: 100%;
+            min-height: 180px;
+        }
+
+        .product-thumbnail-dropzone {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 180px;
+            padding: 16px;
+            border: 1px dashed #d9dee8;
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #2a2f5b;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .product-thumbnail-dropzone:hover {
+            border-color: #3e93ff;
+            background: #f0f6ff;
+        }
+
+        .product-thumbnail-input {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            cursor: pointer;
+            opacity: 0;
+        }
+
+        .product-thumbnail-input:focus-visible + .product-thumbnail-dropzone {
+            outline: 3px solid rgba(62, 147, 255, 0.35);
+            outline-offset: 2px;
+        }
+
+        .product-thumbnail-preview-frame {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 160px;
+            height: 160px;
+            max-width: 100%;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fff;
+            pointer-events: none;
+        }
+
+        .product-thumbnail-preview {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .product-thumbnail-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 10px;
+            pointer-events: none;
+        }
+
+        .product-thumbnail-title {
+            font-weight: 600;
+        }
+
+        .product-thumbnail-hint {
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+
+        @media (max-width: 767.98px) {
+            .product-thumbnail-dropzone,
+            .product-thumbnail-uploader {
+                width: 100%;
+            }
+
+            .product-thumbnail-preview-frame {
+                width: min(160px, 70vw);
+                height: min(160px, 70vw);
+            }
         }
     </style>
 @endpush

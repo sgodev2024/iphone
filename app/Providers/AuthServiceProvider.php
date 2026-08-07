@@ -28,10 +28,12 @@ class AuthServiceProvider extends ServiceProvider
             /*
              * Chỉ role 1 là Super Admin.
              */
-            if ((int) $user->role_id === 1) {
+            // if ((int) $user->role_id === 1) {
+            //     return true;
+            // }
+            if ($user->role->name === 'admin') {
                 return true;
             }
-
             /*
              * Kiểm tra ability, ví dụ product.view,
              * có được gán cho role của user hay không.
