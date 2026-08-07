@@ -84,8 +84,6 @@ Route::middleware(['auth'])
         Route::post('logout', [AuthController::class, 'logout'])
             ->name('logout');
 
-        Route::post('bulk/{type}', [BulkController::class, 'bulk'])
-            ->name('bulk');
 
         Route::middleware(['role:1'])->group(function () {
 
@@ -779,230 +777,6 @@ Route::middleware(['auth'])
             |--------------------------------------------------------------------------
             */
 
-            Route::post('/delete-multiple', [MultipleController::class, 'deleteMultiple'])
-                ->middleware('permission:multiple.delete');
-
-            // ============================
-                    // ============================
-        // KHO
-        // ============================
-        Route::middleware(['role:4'])->group(function () {
-
-            /*
-            |--------------------------------------------------------------------------
-            | INVENTORY CHECK
-            |--------------------------------------------------------------------------
-            */
-
-            Route::prefix('checkInventory')
-                ->name('check.')
-                ->group(function () {
-
-                    Route::get('/', [CheckInventoryController::class, 'index'])
-                        ->middleware('permission:inventory_check.view')
-                        ->name('index');
-
-                    Route::get('/filter', [CheckInventoryController::class, 'filterCheck'])
-                        ->middleware('permission:inventory_check.filter')
-                        ->name('filter');
-
-                    Route::get('/detail/{id}', [CheckInventoryController::class, 'detail'])
-                        ->middleware('permission:inventory_check.detail')
-                        ->name('detail');
-                });
-
-            /*
-            |--------------------------------------------------------------------------
-            | INVENTORY REPORT
-            |--------------------------------------------------------------------------
-            */
-
-            Route::prefix('inventory')
-                ->name('inventory.')
-                ->group(function () {
-
-                    Route::get('', [ReportController::class, 'index'])
-                        ->middleware('permission:report.inventory.view')
-                        ->name('index');
-
-                    Route::post('report', [ReportController::class, 'getReportByStorage'])
-                        ->middleware('permission:report.inventory.filter')
-                        ->name('getReportByStorage');
-
-                    Route::get('exportPdf', [ReportController::class, 'exportPdf'])
-                        ->middleware('permission:report.inventory.low_stock')
-                        ->name('exportPdf');
-                });
-
-            /*
-            |--------------------------------------------------------------------------
-            | IMPORT PRODUCT
-            |--------------------------------------------------------------------------
-            */
-
-            Route::prefix('importproduct')
-                ->name('importproduct.')
-                ->group(function () {
-
-                    Route::get('/', [ImportProductController::class, 'index'])
-                        ->middleware('permission:import_product.view')
-                        ->name('index');
-
-                    Route::get('/add', [ImportProductController::class, 'add'])
-                        ->middleware('permission:import_product.create')
-                        ->name('add');
-
-                    Route::post('/bulk-delete', [ImportProductController::class, 'bulkDelete'])
-                        ->middleware('permission:import_product.delete')
-                        ->name('bulk-delete');
-
-                    Route::get('/import', [ImportProductController::class, 'listImport'])
-                        ->middleware('permission:import_product.import')
-                        ->name('import');
-
-                    Route::post('/import/add', [ImportProductController::class, 'importadd'])
-                        ->middleware('permission:import_product.import')
-                        ->name('import.add');
-
-                    Route::post('/import/update', [ImportProductController::class, 'importupdate'])
-                        ->middleware('permission:import_product.update')
-                        ->name('import.update');
-
-                    Route::post('/import/update/price', [ImportProductController::class, 'importupdateprice'])
-                        ->middleware('permission:import_product.update')
-                        ->name('import.update.price');
-
-                    Route::get('/import/delete', [ImportProductController::class, 'importdelete'])
-                        ->middleware('permission:import_product.delete')
-                        ->name('import.delete');
-
-                    Route::post('/import/addCategory', [ImportProductController::class, 'addCategory'])
-                        ->middleware('permission:import_product.create')
-                        ->name('import.addCategory');
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | IMPORT COUPON
-                    |--------------------------------------------------------------------------
-                    */
-
-                    Route::post('/importCoupon', [ImportCouponController::class, 'add'])
-                        ->middleware('permission:import_coupon.create')
-                        ->name('importCoupon.add');
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | IMPORT DETAIL
-                    |--------------------------------------------------------------------------
-                    */
-
-                    Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])
-                        ->middleware('permission:import_product.detail')
-                        ->name('importCoupon.detail');
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | IMPORT BARCODE
-                    |--------------------------------------------------------------------------
-                    */
-
-                    Route::get('/detail/{id}/barcodes', [ImportBarcodeController::class, 'index'])
-                        ->middleware('permission:import_barcode.view')
-                        ->name('barcodes.index');
-
-                    Route::post('/detail/{id}/barcodes/print', [ImportBarcodeController::class, 'print'])
-                        ->middleware('permission:import_barcode.print')
-                        ->name('barcodes.print');
-                });
-
-            /*
-            |--------------------------------------------------------------------------
-            | STORAGE
-            |--------------------------------------------------------------------------
-            */
-
-            Route::prefix('storage')
-                ->controller(StorageController::class)
-                ->name('storage.')
-                ->group(function () {
-
-                    Route::get('/', 'index')
-                        ->middleware('permission:storage.view')
-                        ->name('index');
-
-                    Route::post('/', 'store')
-                        ->middleware('permission:storage.create')
-                        ->name('store');
-
-                    Route::get('{id}', 'show')
-                        ->middleware('permission:storage.detail')
-                        ->name('show');
-
-                    Route::put('{id}', 'update')
-                        ->middleware('permission:storage.update')
-                        ->name('update');
-
-                    Route::get('/products/{id}', 'detail')
-                        ->middleware('permission:storage.products')
-                        ->name('products');
-                });
-        });
-
-        // ============================
-        // END KHO
-        // ============================
-                    /*
-            |--------------------------------------------------------------------------
-            | ROLE
-            |--------------------------------------------------------------------------
-            */
-
-            Route::prefix('roles')
-                ->name('role.')
-                ->group(function () {
-
-                    Route::get('/', [RoleController::class, 'index'])
-                        ->middleware('permission:role.view')
-                        ->name('index');
-
-                    Route::get('/create', [RoleController::class, 'create'])
-                        ->middleware('permission:role.create')
-                        ->name('create');
-
-                    Route::post('/', [RoleController::class, 'store'])
-                        ->middleware('permission:role.create')
-                        ->name('store');
-
-                    Route::get('/{role}/edit', [RoleController::class, 'edit'])
-                        ->middleware('permission:role.update')
-                        ->name('edit');
-
-                    Route::put('/{role}', [RoleController::class, 'update'])
-                        ->middleware('permission:role.update')
-                        ->name('update');
-
-                    Route::delete('/{role}', [RoleController::class, 'destroy'])
-                        ->middleware('permission:role.delete')
-                        ->name('destroy');
-
-                    Route::get('/{role}/permissions', [RoleController::class, 'permissions'])
-                        ->middleware('permission:role.permission')
-                        ->name('permissions');
-
-                    Route::post('/{role}/permissions', [RoleController::class, 'savePermissions'])
-                        ->middleware('permission:role.permission')
-                        ->name('permissions.save');
-                });
-
-            /*
-            |--------------------------------------------------------------------------
-            | MULTIPLE DELETE
-            |--------------------------------------------------------------------------
-            */
-
-            Route::post('/delete-multiple', [MultipleController::class, 'deleteMultiple'])
-                ->middleware('permission:multiple.delete')
-                ->name('multiple.delete');
 
             /*
             |--------------------------------------------------------------------------
@@ -1064,7 +838,7 @@ Route::middleware(['auth'])
                         ->middleware('permission:report.inventory.filter')
                         ->name('getReportByStorage');
 
-                    Route::get('low-stock', [ReportController::class, 'lowStock'])
+                    Route::get('low-stock', [ReportController::class, 'getProductsWithSmallQuanity'])
                         ->middleware('permission:report.inventory.low_stock')
                         ->name('lowStock');
                 });
@@ -1162,6 +936,14 @@ Route::middleware(['auth'])
                     Route::get('/products/{id}', 'detail')
                         ->middleware('permission:storage.products')
                         ->name('products');
+
+                    Route::get('{storage}/products/{product}/imeis', [StorageController::class, 'productImeis'])
+                        ->middleware('permission:product.imei.view')
+                        ->name('products.imeis');
+
+                    Route::get('{storage}/inventory', [StorageController::class, 'inventory'])
+                        ->middleware('permission:storage.products')
+                        ->name('inventory');
                 });
         });
                 /*
@@ -1324,10 +1106,12 @@ Route::middleware(['auth'])
                         ->name('list');
                 });
         });
+
     });
 
 // bán hàng
 Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staff.')->group(function () {
+    Route::post('storage/select', [StaffProductController::class, 'selectSaleStorage'])->name('storage.select');
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
     Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');
     Route::get('get-clients', [StaffProductController::class, 'getClients']);
@@ -1343,13 +1127,13 @@ Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staf
     Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])->name('orderFetch');
     Route::get('product', [StaffProductController::class, 'product'])->name('product.get');
 
-        Route::get('checkInventory', [staffcheckController::class, 'index'])
+        Route::get('checkInventory', [StaffCheckController::class, 'index'])
             ->name('Inventory.get');
 
-        Route::get('checkInventory/add', [staffcheckController::class, 'add'])
+        Route::get('checkInventory/add', [StaffCheckController::class, 'add'])
             ->name('Inventory.add');
 
-        Route::post('checkInventory/add', [staffcheckController::class, 'submitadd'])
+        Route::post('checkInventory/add', [StaffCheckController::class, 'submitadd'])
             ->name('Inventory.add.submit');
 
         Route::get('warehome', [WareHomeController::class, 'index'])
@@ -1375,7 +1159,7 @@ Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staf
 
 /* ==========================================================
 | SUPER ADMIN
-========================================================== */
+| ========================================================== */
 
 Route::get('super-dang-nhap', [SuperAdminController::class, 'loginForm'])
     ->middleware('permission:superadmin.login.view')

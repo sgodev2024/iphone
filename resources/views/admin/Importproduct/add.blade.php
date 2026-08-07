@@ -597,6 +597,7 @@
             </div>
         </div>
     </div>
+    @push('script')
     <script>
         const MAX_IMPORT_QUANTITY = @json(\App\Models\ProductImei::MAX_IMPORT_QUANTITY);
         const MAX_IMPORT_QUANTITY_MESSAGE = 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm';
@@ -659,9 +660,11 @@
             }
         }
     </script>
+    @endpush
 
+    @push('script')
     <script>
-        var $j = jQuery.noConflict();
+        var $j = window.jQuery;
 
         function parseMoneyValue(value) {
             if (value === null || value === undefined) {
@@ -735,7 +738,69 @@
                     return false;
                 });
 
-            var appliedCategoryIds = [];
+            var categorySelection = {
+                allIds: new Set(),
+                draftIds: new Set(),
+                appliedIds: new Set(),
+            };
+
+            function getCategoryCheckboxes() {
+                return $j('#checkboxForm_category .category-checkbox');
+            }
+
+            function getCategoryIdsFromDom() {
+                var ids = new Set();
+
+                getCategoryCheckboxes().each(function() {
+                    ids.add(String($j(this).val()).trim());
+                });
+
+                return ids;
+            }
+
+            function getAllCategoryIds() {
+                if (categorySelection.allIds.size === 0) {
+                    categorySelection.allIds = getCategoryIdsFromDom();
+                }
+
+                return new Set(categorySelection.allIds);
+            }
+
+            function updateSelectAllState() {
+                var $checkboxes = getCategoryCheckboxes();
+                var total = $checkboxes.length;
+                var checked = $checkboxes.filter(':checked').length;
+                var allChecked = total > 0 && checked === total;
+                var isIndeterminate = checked > 0 && checked < total;
+
+                $j('#selectAll')
+                    .prop('checked', allChecked)
+                    .prop('indeterminate', isIndeterminate);
+            }
+
+            function syncDraftIdsFromDom() {
+                categorySelection.draftIds = new Set();
+
+                getCategoryCheckboxes().filter(':checked').each(function() {
+                    categorySelection.draftIds.add(String($j(this).val()).trim());
+                });
+
+                updateSelectAllState();
+            }
+
+            function renderDraftSelection() {
+                getCategoryCheckboxes().each(function() {
+                    var categoryId = String($j(this).val()).trim();
+                    $j(this).prop('checked', categorySelection.draftIds.has(categoryId));
+                });
+
+                updateSelectAllState();
+            }
+
+            function resetDraftSelection() {
+                categorySelection.draftIds = new Set(categorySelection.appliedIds);
+                renderDraftSelection();
+            }
 
             function filterProducts() {
                 var query = $j('#search').val().toLowerCase().trim();
@@ -747,7 +812,9 @@
                         .trim();
                     var text = $li.text().toLowerCase();
 
-                    var matchCat = (appliedCategoryIds.length === 0) || appliedCategoryIds.includes(catId);
+                    var hasNoCategoryFilter = categorySelection.appliedIds.size === 0 ||
+                        categorySelection.appliedIds.size === categorySelection.allIds.size;
+                    var matchCat = hasNoCategoryFilter || categorySelection.appliedIds.has(catId);
                     var matchQuery = (query.length === 0) || text.includes(query);
 
                     if (matchCat && matchQuery) {
@@ -766,17 +833,7 @@
             }
 
             function syncModalCheckboxes() {
-                var total = $j('#checkboxForm_category .category-checkbox').length;
-                if (appliedCategoryIds.length === 0 || appliedCategoryIds.length === total) {
-                    $j('#selectAll').prop('checked', true);
-                    $j('#checkboxForm_category .category-checkbox').prop('checked', true);
-                } else {
-                    $j('#selectAll').prop('checked', false);
-                    $j('#checkboxForm_category .category-checkbox').each(function() {
-                        var val = String($j(this).val());
-                        $j(this).prop('checked', appliedCategoryIds.includes(val));
-                    });
-                }
+                resetDraftSelection();
             }
 
             $j.ajax({
@@ -788,6 +845,12 @@
                     category.empty();
                     updateReceiptTotal(data.total);
                     var list_category = data.category || [];
+                    categorySelection.allIds = new Set(list_category.map(function(item) {
+                        return String(item.id).trim();
+                    }));
+                    categorySelection.appliedIds = new Set(categorySelection.allIds);
+                    categorySelection.draftIds = new Set(categorySelection.appliedIds);
+
                     list_category.forEach(function(item, index) {
                         var categoryHtml = `
                         <div class="form-check category-item" style='margin:0px; padding-top:4px; padding-bottom:4px;'>
@@ -930,18 +993,26 @@
                 }
             });
 
-            $j(document).on('change', '#selectAll', function() {
+            $j(document)
+                .off('change.importCategorySelection', '#selectAll')
+                .on('change.importCategorySelection', '#selectAll', function() {
                 var isChecked = $j(this).is(':checked');
-                $j('#checkboxForm_category .category-checkbox').prop('checked', isChecked);
+                categorySelection.draftIds = isChecked ?
+                    getAllCategoryIds() :
+                    new Set();
+
+                renderDraftSelection();
             });
 
-            $j(document).on('change', '#checkboxForm_category .category-checkbox', function() {
-                var total = $j('#checkboxForm_category .category-checkbox').length;
-                var checked = $j('#checkboxForm_category .category-checkbox:checked').length;
-                $j('#selectAll').prop('checked', total > 0 && total === checked);
+            $j(document)
+                .off('change.importCategorySelection', '#checkboxForm_category .category-checkbox')
+                .on('change.importCategorySelection', '#checkboxForm_category .category-checkbox', function() {
+                syncDraftIdsFromDom();
             });
 
-            $j(document).on('keyup input', '#search_category_input', function() {
+            $j(document)
+                .off('keyup.importCategorySearch input.importCategorySearch', '#search_category_input')
+                .on('keyup.importCategorySearch input.importCategorySearch', '#search_category_input', function() {
                 var q = $j(this).val().toLowerCase().trim();
                 $j('#checkboxForm_category .category-item').each(function() {
                     var labelText = $j(this).text().toLowerCase();
@@ -999,30 +1070,14 @@
             });
 
             // chọn danh sách sản phẩm theo loại
-            $j(document).on('click', '.submit_hang', function(e) {
+            $j(document)
+                .off('click.importCategorySelection', '.submit_hang')
+                .on('click.importCategorySelection', '.submit_hang', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
 
-                const checked = $j(
-                    '#checkboxForm_category .category-checkbox:checked'
-                );
-
-                const total = $j(
-                    '#checkboxForm_category .category-checkbox'
-                );
-
-                appliedCategoryIds = [];
-
-                // Chọn riêng một hoặc nhiều nhóm
-                if (checked.length > 0 && checked.length < total.length) {
-                    checked.each(function() {
-                        appliedCategoryIds.push(
-                            String($j(this).val()).trim()
-                        );
-                    });
-                }
-
-                console.log('Danh mục đã chọn:', appliedCategoryIds);
+                syncDraftIdsFromDom();
+                categorySelection.appliedIds = new Set(categorySelection.draftIds);
 
                 // Phải lọc trước khi đóng modal
                 filterProducts();
@@ -1044,13 +1099,15 @@
                 }
             });
 
-            $j('#listcategory').on('show.bs.modal', function() {
+            $j('#listcategory')
+                .off('show.bs.modal')
+                .on('show.bs.modal', function() {
                 syncModalCheckboxes();
-            });
-
-            $j('.miss_model').on('click', function() {
-                syncModalCheckboxes();
-            });
+                })
+                .off('hidden.bs.modal')
+                .on('hidden.bs.modal', function() {
+                    resetDraftSelection();
+                });
 
             $j(document).on('focus', '.giaban', function() {
                 $j(this).val(String(Math.round(parseMoneyValue($j(this).data('raw-value')))));
@@ -1295,7 +1352,9 @@
             }
         });
     </script>
+    @endpush
 
+    @push('script')
     <script>
         function getImportPaymentTotal() {
             return Math.max(Math.round(parseMoneyValue(document.getElementById('total_input')?.value || 0)), 0);
@@ -1387,6 +1446,9 @@
             normalizePaymentBeforeSubmit();
         });
     </script>
+    @endpush
+
+    @push('script')
     <script>
         function normalizeImei(value) {
             return String(value ?? '').trim();
@@ -1495,4 +1557,5 @@
             });
         }
     </script>
+    @endpush
 @endsection

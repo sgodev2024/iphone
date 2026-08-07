@@ -198,48 +198,46 @@
         }
     </style>
 @endpush
-
 @section('content')
-    <div class="page-inner storage-page">
-        <x-breadcrumb :items="[['label' => 'Kho hàng']]" />
+<div class="page-inner">
+    <x-breadcrumb :items="[['label' => 'Kho hàng']]" />
 
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card storage-card">
-                    <div class="card-header d-flex justify-content-between align-items-center storage-toolbar">
-                        <div class="d-flex justify-content-between align-items-center gap-2 storage-toolbar-main">
-                            <div class="btn-group storage-bulk-actions">
-                                <button type="button" class="btn btn-outline-secondary dropdown-toggle"
-                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                    Thao tác
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="#" id="bulk-delete">
-                                            <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <div class="d-flex justify-content-end align-items-center storage-search-actions">
-                                <input type="search" name="search" class="form-control me-2 storage-search-input" style="width: 300px;"
-                                    placeholder="Tìm kiếm...">
-
-                                <button type="button" class="btn storage-reset-btn" id="btn-reset" title="Làm mới"> <i
-                                        class="fa-solid fa-rotate"></i></button>
-                            </div>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-secondary dropdown-toggle"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                                Thao tác
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="#" id="bulk-delete">
+                                        <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
+                                    </a>
+                                </li>
+                            </ul>
                         </div>
-                        <button type="button" class="btn btn-primary storage-add-btn" id="show-modal">
-                            <i class="fa-solid fa-plus"></i>
-                            Thêm mới
-                        </button>
+
+                        <div class="d-flex justify-content-end align-items-center">
+                            <input type="search" name="search" class="form-control me-2" style="width: 300px;"
+                                placeholder="Tìm kiếm...">
+
+                            <button type="button" class="btn" id="btn-reset"> <i
+                                    class="fa-solid fa-rotate"></i></button>
+                        </div>
                     </div>
-                    <div class="card-body storage-card-body">
+                    <button type="button" class="btn btn-primary" id="show-modal">
+                        <i class="fa-solid fa-plus"></i>
+                        Thêm mới
+                    </button>
+                </div>
+                <div class="card-body">
 
 
-                        <div class="storage-mobile-hint">Vuốt ngang để xem đầy đủ bảng</div>
-                        <div id="table-wrapper" class="storage-table-region">
+                    <div id="table-wrapper">
 
                     </div>
                 </div>
