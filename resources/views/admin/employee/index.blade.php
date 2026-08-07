@@ -17,7 +17,7 @@
                                 <ul class="dropdown-menu">
                                     <li>
                                         <a class="dropdown-item" href="#" id="bulk-delete">
-                                            <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
+                                            <i class="fa-solid fa-user-slash me-2"></i> Ngừng hoạt động đã chọn
                                         </a>
                                     </li>
                                 </ul>
@@ -82,13 +82,17 @@
                 let id = $(this).data('id');
                 handleDestroy(function() {
                     fetchUsers(1, searchText)
-                }, 'User', id)
+                }, 'User', id, {
+                    action: 'deactivate'
+                })
             });
 
             $('#bulk-delete').click(function() {
                 handleDestroy(function() {
                     fetchUsers(1, searchText)
-                }, 'User')
+                }, 'User', null, {
+                    action: 'deactivate'
+                })
             })
 
             $('#bulk-status').click(function() {

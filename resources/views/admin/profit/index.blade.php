@@ -2,19 +2,7 @@
 
 @section('content')
     <style>
-        /* #reportDateRange {
-                    margin-bottom: 1rem;
-                    font-size: 1.2rem;
-                    font-weight: 500;
-                }
-
-                #reportDateRange span {
-                    font-weight: 700;
-                    color: #007bff;
-                }
-
-                /* Loader */
-        .loader {
+        .profit-page .loader {
             border: 4px solid rgba(0, 0, 0, 0.1);
             border-radius: 50%;
             border-top: 4px solid #007bff;
@@ -35,39 +23,353 @@
             }
         }
 
-        .close {
+        .profit-page .close {
             color: #aaa;
             float: right;
             font-size: 28px;
             font-weight: bold;
         }
 
-        .close:hover,
-        .close:focus {
+        .profit-page .close:hover,
+        .profit-page .close:focus {
             color: black;
             text-decoration: none;
             cursor: pointer;
         }
 
-        #error {
+        .profit-page #error {
             color: red;
 
         }
 
-        .modal-dialog {
+        .profit-page .modal-dialog {
             margin: 0 auto;
             max-width: 500px;
         }
 
-        .modal-content {
+        .profit-page .modal-content {
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        */
+        .profit-page .profit-table-hint,
+        .profit-page .profit-page-arrow,
+        .profit-page .profit-pagination-status {
+            display: none;
+        }
+
+        .profit-page .profit-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (max-width: 767.98px) {
+            .profit-page {
+                box-sizing: border-box;
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                margin-right: auto;
+                margin-left: auto;
+                padding-right: 10px !important;
+                padding-left: 10px !important;
+                overflow-x: visible;
+            }
+
+            .profit-page .page-header {
+                align-items: flex-start;
+                margin-bottom: 10px;
+            }
+
+            .profit-page .page-header .breadcrumb,
+            .profit-page .page-header .breadcrumbs {
+                max-width: 100%;
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+            .profit-page > .row {
+                --bs-gutter-x: 0;
+                margin-right: 0;
+                margin-left: 0;
+            }
+
+            .profit-page > .row > [class*="col-"] {
+                min-width: 0;
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            .profit-page .card {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                margin-right: auto;
+                margin-left: auto;
+                overflow: visible;
+            }
+
+            .profit-page .card-header,
+            .profit-page .card-body {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                padding-right: 10px;
+                padding-left: 10px;
+            }
+
+            .profit-page .profit-title-header {
+                padding-top: 12px;
+                padding-bottom: 8px;
+            }
+
+            .profit-page .profit-report-title {
+                margin-bottom: 0;
+                font-size: 18px;
+                line-height: 1.3;
+                white-space: normal;
+            }
+
+            .profit-page .profit-toolbar {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) 42px;
+                gap: 8px;
+                align-items: center;
+                justify-content: normal !important;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+
+            .profit-page .profit-date-field {
+                grid-column: 1 / -1;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .profit-page #dateFilter {
+                width: 100% !important;
+            }
+
+            .profit-page .profit-search-row {
+                display: contents !important;
+                min-width: 0;
+            }
+
+            .profit-page .profit-search-input {
+                grid-column: 1;
+                width: 100% !important;
+                min-width: 0;
+                max-width: 100%;
+                margin-right: 0 !important;
+            }
+
+            .profit-page #btn-reset {
+                display: inline-flex;
+                grid-column: 2;
+                align-items: center;
+                justify-content: center;
+                width: 42px;
+                min-width: 42px;
+                height: 42px;
+                min-height: 42px;
+                padding: 0;
+                border: 1px solid #d7dde7;
+                border-radius: 4px;
+                background: #fff;
+                color: #495057;
+            }
+
+            .profit-page #dateFilter,
+            .profit-page .profit-search-input,
+            .profit-page #storageSelect,
+            .profit-page #periodSelect {
+                height: 40px;
+                min-height: 40px;
+                font-size: 14px;
+            }
+
+            .profit-page .profit-filter-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin: 0;
+            }
+
+            .profit-page .profit-filter-row > .profit-filter-field {
+                flex: 0 0 100%;
+                max-width: 100%;
+                width: 100%;
+                min-width: 0;
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            .profit-page .profit-filter-row label {
+                margin-bottom: 4px;
+                font-size: 13px;
+            }
+
+            .profit-page #storageSelect,
+            .profit-page #periodSelect {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                text-overflow: ellipsis;
+            }
+
+            .profit-page .loader {
+                margin-top: 4px;
+            }
+
+            .profit-page .profit-report-table-area {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                overflow-x: visible;
+            }
+
+            .profit-page .profit-item-count-row {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                margin-top: 8px;
+                margin-bottom: 6px !important;
+            }
+
+            .profit-page #itemCount {
+                font-weight: 600;
+            }
+
+            .profit-page .profit-table-hint {
+                display: block;
+                margin: 0 0 6px;
+                color: #6c757d;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+
+            .profit-page .profit-table-scroll {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .profit-page .profit-table {
+                display: table !important;
+                width: 100% !important;
+                min-width: 1000px;
+                table-layout: auto;
+            }
+
+            .profit-page .profit-table th,
+            .profit-page .profit-table td {
+                display: table-cell !important;
+                vertical-align: middle;
+                font-size: 13px;
+            }
+
+            .profit-page .profit-table th {
+                white-space: nowrap;
+            }
+
+            .profit-page .profit-table th:nth-child(1),
+            .profit-page .profit-table td:nth-child(1),
+            .profit-page .profit-table th:nth-child(3),
+            .profit-page .profit-table td:nth-child(3),
+            .profit-page .profit-table th:nth-child(4),
+            .profit-page .profit-table td:nth-child(4),
+            .profit-page .profit-table th:nth-child(5),
+            .profit-page .profit-table td:nth-child(5),
+            .profit-page .profit-table th:nth-child(6),
+            .profit-page .profit-table td:nth-child(6),
+            .profit-page .profit-table th:nth-child(7),
+            .profit-page .profit-table td:nth-child(7) {
+                white-space: nowrap;
+            }
+
+            .profit-page .profit-table th:nth-child(1),
+            .profit-page .profit-table td:nth-child(1) {
+                min-width: 130px;
+            }
+
+            .profit-page .profit-table th:nth-child(2),
+            .profit-page .profit-table td:nth-child(2) {
+                min-width: 260px;
+                white-space: normal;
+                word-break: normal;
+                overflow-wrap: break-word;
+            }
+
+            .profit-page .profit-table th:nth-child(3),
+            .profit-page .profit-table td:nth-child(3) {
+                min-width: 90px;
+                text-align: center;
+            }
+
+            .profit-page .profit-table th:nth-child(4),
+            .profit-page .profit-table td:nth-child(4),
+            .profit-page .profit-table th:nth-child(5),
+            .profit-page .profit-table td:nth-child(5),
+            .profit-page .profit-table th:nth-child(6),
+            .profit-page .profit-table td:nth-child(6) {
+                min-width: 140px;
+                text-align: right;
+            }
+
+            .profit-page .profit-table th:nth-child(7),
+            .profit-page .profit-table td:nth-child(7) {
+                min-width: 100px;
+                text-align: right;
+            }
+
+            .profit-page #pagination {
+                display: flex !important;
+                align-items: center;
+                justify-content: center !important;
+                gap: 8px;
+                width: 100%;
+                max-width: 100%;
+                margin-top: 12px !important;
+                overflow-x: hidden;
+            }
+
+            .profit-page .profit-pagination-number {
+                display: none;
+            }
+
+            .profit-page .profit-page-arrow,
+            .profit-page .profit-pagination-status {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .profit-page .profit-page-arrow {
+                width: 38px;
+                min-width: 38px;
+                height: 38px;
+                padding: 0;
+                font-size: 18px;
+                line-height: 1;
+            }
+
+            .profit-page .profit-pagination-status {
+                min-height: 38px;
+                color: #495057;
+                font-size: 13px;
+                font-weight: 500;
+                white-space: nowrap;
+            }
+        }
     </style>
 
-    <div class="page-inner">
+    <div class="page-inner profit-page">
         <div class="page-header">
             <x-breadcrumb :items="[['label' => 'BÁO CÁO'], ['label' => 'BÁO CÁO LỢI NHUẬN']]" />
             {{-- <ul class="breadcrumbs mb-3">
@@ -97,26 +399,26 @@
             <div class="col-md-12">
                 <div class="card">
 
-                    <div class="card-header">
-                        <h4 style="color: rgb(15, 0, 0); text-align: center" class="card-title">Báo cáo lợi nhuận</h4>
+                    <div class="card-header profit-title-header">
+                        <h4 style="color: rgb(15, 0, 0); text-align: center" class="card-title profit-report-title">Báo cáo lợi nhuận</h4>
                     </div>
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div class="search-container">
-                            <input type="text" id="dateFilter" style="width: 350px" class="form-control search-input"
+                    <div class="card-header d-flex justify-content-between align-items-center profit-toolbar">
+                        <div class="search-container profit-date-field">
+                            <input type="text" id="dateFilter" style="width: 350px" class="form-control search-input profit-date-input"
                                 placeholder="Chọn khoảng ngày">
                         </div>
 
-                        <div class="d-flex justify-content-end align-items-center">
-                            <input type="search" name="search" class="form-control me-2" style="width: 300px;"
+                        <div class="d-flex justify-content-end align-items-center profit-search-row">
+                            <input type="search" name="search" class="form-control me-2 profit-search-input" style="width: 300px;"
                                 placeholder="Tìm kiếm...">
 
-                            <button type="button" class="btn" id="btn-reset"> <i
+                            <button type="button" class="btn profit-reset-btn" id="btn-reset"> <i
                                     class="fa-solid fa-rotate"></i></button>
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="form-group row">
-                            <div class="col-md-6">
+                        <div class="form-group row profit-filter-row">
+                            <div class="col-md-6 profit-filter-field">
                                 <label for="storageSelect">Chọn kho:</label>
                                 <select id="storageSelect" class="form-control">
                                     <option value="">--- Chọn kho ---</option>
@@ -126,7 +428,7 @@
                                 </select>
                             </div>
 
-                            <div class="col-md-6">
+                            <div class="col-md-6 profit-filter-field">
                                 <label for="periodSelect">Chọn thời gian:</label>
                                 <select id="periodSelect" class="form-control">
                                     <option value="">--- Chọn thời gian ---</option>
@@ -174,32 +476,35 @@
                             <div class="loader" id="loader"></div>
                         </div>
 
-                        <div class="table-responsive">
+                        <div class="profit-report-table-area">
                             <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
+                                class="profit-item-count-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
                                 <span id="itemCount">Số lượng mặt hàng: 0</span>
                                 {{-- <div style="display: flex">
                                     <button id="exportPdf" class="btn btn-primary" style="display: none;">Xuất PDF</button>
                                 </div> --}}
                             </div>
 
-                            <table class="table table-hover" id="reportTable">
-                                <thead>
-                                    <tr>
-                                        <th>Mã hàng</th>
-                                        <th>Tên hàng</th>
-                                        <th>SL Bán</th>
-                                        <th>Doanh thu</th>
-                                        <th>Tổng vốn</th>
-                                        <th>Lợi nhuận</th>
-                                        <th>Tỷ suất</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="reportTableBody">
-                                    <!-- Dữ liệu sẽ được chèn vào đây qua AJAX -->
-                                </tbody>
-                            </table>
-                            <div id="pagination" class="d-flex justify-content-end mt-3"></div>
+                            <p class="profit-table-hint">Vuốt ngang để xem đầy đủ báo cáo</p>
+                            <div class="table-responsive profit-table-scroll">
+                                <table class="table table-hover profit-table" id="reportTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Mã hàng</th>
+                                            <th>Tên hàng</th>
+                                            <th>SL Bán</th>
+                                            <th>Doanh thu</th>
+                                            <th>Tổng vốn</th>
+                                            <th>Lợi nhuận</th>
+                                            <th>Tỷ suất</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="reportTableBody">
+                                        <!-- Dữ liệu sẽ được chèn vào đây qua AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="pagination" class="d-flex justify-content-end mt-3 profit-pagination"></div>
 
                         </div>
                     </div>
@@ -397,8 +702,38 @@
                 const paginationContainer = $('#pagination');
                 paginationContainer.empty();
 
+                const pageCount = Math.max(totalPages, 1);
+                const prevBtn = $(
+                    `<button type="button" class="btn btn-sm btn-outline-primary mx-1 profit-page-arrow" aria-label="Trang trước">‹</button>`
+                );
+                const nextBtn = $(
+                    `<button type="button" class="btn btn-sm btn-outline-primary mx-1 profit-page-arrow" aria-label="Trang sau">›</button>`
+                );
+                const pageStatus = $(`<span class="profit-pagination-status">Trang ${currentPage} / ${pageCount}</span>`);
+
+                prevBtn.prop('disabled', currentPage <= 1 || totalPages <= 1);
+                nextBtn.prop('disabled', currentPage >= totalPages || totalPages <= 1);
+
+                prevBtn.on('click', function() {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        renderPage(currentPage);
+                        setupPagination();
+                    }
+                });
+
+                nextBtn.on('click', function() {
+                    if (currentPage < totalPages) {
+                        currentPage++;
+                        renderPage(currentPage);
+                        setupPagination();
+                    }
+                });
+
+                paginationContainer.append(prevBtn, pageStatus, nextBtn);
+
                 for (let i = 1; i <= totalPages; i++) {
-                    const pageBtn = $(`<button class="btn btn-sm btn-outline-primary mx-1">${i}</button>`);
+                    const pageBtn = $(`<button class="btn btn-sm btn-outline-primary mx-1 profit-pagination-number">${i}</button>`);
                     if (i === currentPage) {
                         pageBtn.addClass('active');
                     }

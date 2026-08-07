@@ -1,46 +1,53 @@
 @forelse ($orderedAccounts as $account)
     <tr>
         {{-- Checkbox --}}
-        <td class="text-center">
+        <td class="text-center account-col-check">
             <input type="checkbox" class="item-checkbox" data-id="{{ $account->id }}">
         </td>
 
         {{-- STT --}}
-        <td>{{ $loop->iteration }}</td>
+        <td class="account-col-index">{{ $loop->iteration }}</td>
 
         {{-- Code (thụt lề theo cấp) --}}
-        <td>
-            {!! str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $account->level_display) !!}
-            {{ $account->code }}
+        <td class="account-col-code">
+            <span class="account-code-wrap" style="--account-level: {{ (int) $account->level_display }}">
+                {{ $account->code }}
+            </span>
         </td>
 
         {{-- Name --}}
-        <td> {!! str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;', $account->level_display) !!}
-            {!! $account->parent_id === 1 && !$account->is_default ? '<i class="fas fa-money-bill-wave"></i>' : '' !!}
-            {!! $account->parent_id === 5 && !$account->is_default ? '<i class="fas fa-university"></i>' : '' !!}
-            {{ $account->name }}</td>
+        <td class="account-col-name">
+            <span class="account-name-wrap" style="--account-level: {{ (int) $account->level_display }}">
+                {!! $account->parent_id === 1 && !$account->is_default ? '<i class="fas fa-money-bill-wave"></i>' : '' !!}
+                {!! $account->parent_id === 5 && !$account->is_default ? '<i class="fas fa-university"></i>' : '' !!}
+                <span class="account-name-text" title="{{ $account->name }}">{{ $account->name }}</span>
+            </span>
+        </td>
 
-        <td class="text-center">
+        <td class="text-center account-col-default">
             {!! $account->is_default
-                ? '<i class="fas fa-check text-success"></i>'
-                : '<i class="fas fa-times text-danger"></i>' !!}
+                ? '<i class="fas fa-check text-success account-boolean-icon" title="Là tài khoản mặc định" aria-label="Là tài khoản mặc định"></i>'
+                : '<i class="fas fa-times text-danger account-boolean-icon" title="Không phải tài khoản mặc định" aria-label="Không phải tài khoản mặc định"></i>' !!}
         </td>
 
         {{-- Status --}}
-        <td class="text-center">
-            {!! $account->status ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>' !!}
+        <td class="text-center account-col-status">
+            {!! $account->status
+                ? '<i class="fas fa-check text-success account-boolean-icon" title="Đang hoạt động" aria-label="Đang hoạt động"></i>'
+                : '<i class="fas fa-times text-danger account-boolean-icon" title="Ngừng hoạt động" aria-label="Ngừng hoạt động"></i>' !!}
         </td>
 
         {{-- Creator --}}
-        <td class="text-center">{{ $account->creator?->full_name }}</td>
+        <td class="text-center account-col-creator">{{ $account->creator?->full_name }}</td>
 
         {{-- Operation Dropdown --}}
-        <td class="text-center">
-            <div class="dropdown">
-                <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <td class="text-center account-col-action">
+            <div class="dropdown account-action-dropdown">
+                <button class="btn btn-sm btn-light account-action-btn" type="button" data-bs-toggle="dropdown"
+                    data-bs-boundary="viewport" aria-expanded="false">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
-                <ul class="dropdown-menu">
+                <ul class="dropdown-menu dropdown-menu-end">
                     <li>
                         <a href="javascript:void(0);" class="dropdown-item btn-add-child" data-id="{{ $account->id }}"
                             data-name="{{ $account->name }}">

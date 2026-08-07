@@ -1,7 +1,7 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <div class="page-inner">
+    <div class="page-inner bank-transaction-page">
 
         <x-breadcrumb :items="[['label' => 'Thu chi ngân hàng']]" />
 
@@ -23,8 +23,8 @@
         <div class="card">
             <div class="card-body">
                 <div class="filter-section">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div class="d-flex gap-2">
+                    <div class="d-flex align-items-center justify-content-between bank-toolbar">
+                        <div class="d-flex gap-2 bank-date-filter">
 
                             {{-- <div class="dropdown">
                                 <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
@@ -62,7 +62,7 @@
 
                             <input type="text" id="dateFilter" class="form-control" placeholder="Chọn khoảng ngày">
                         </div>
-                        <div class="row g-3 justify-content-end align-items-center">
+                        <div class="row g-3 justify-content-end align-items-center bank-create-action">
                             <a href="/admin/transactions/bank/save" class="btn btn-primary">
                                 <i class="fa-solid fa-plus"></i>
                                 Thêm mới
@@ -72,11 +72,11 @@
                 </div>
 
                 <!-- Data Table -->
-                <div class="table-responsive">
-                    <table class="table table-hover table-bordered mb-0">
+                <div class="table-responsive bank-table-scroll">
+                    <table class="table table-hover table-bordered mb-0 bank-transactions-table">
                         <thead>
                             <tr>
-                                <th style="width: 40px;">
+                                <th class="cash-col-check" style="width: 40px;">
                                     <input type="checkbox" id="checked-all" class="form-check-input">
                                 </th>
                                 <th>ID | Ngày</th>
@@ -349,10 +349,29 @@
         $(document).on('click', '.action-toggle-btn', function(e) {
 
             e.stopPropagation();
-            const $menu = $(this).siblings('.action-menu');
+            const $button = $(this);
+            const $menu = $button.siblings('.action-menu');
 
             $('.action-menu').not($menu).hide();
             $menu.toggle();
+
+            if ($menu.is(':visible') && window.matchMedia('(max-width: 767.98px)').matches) {
+                const rect = this.getBoundingClientRect();
+                const menuWidth = $menu.outerWidth() || 150;
+                const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+
+                $menu.css({
+                    top: `${rect.bottom + 6}px`,
+                    left: `${left}px`,
+                    right: 'auto'
+                });
+            } else {
+                $menu.css({
+                    top: '',
+                    left: '',
+                    right: ''
+                });
+            }
         });
 
         function loadBankTransactions(filters = {}) {
@@ -362,7 +381,7 @@
                 data: filters,
                 success: function(res) {
                     if (res.success) {
-                        $('table tbody').html(res.html);
+                        $('.bank-transactions-table tbody').html(res.html);
                     }
                 },
                 error: function() {
@@ -491,6 +510,206 @@
 
         .cursor-pointer {
             cursor: pointer;
+        }
+
+        @media (max-width: 767.98px) {
+            .bank-transaction-page {
+                max-width: 100%;
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            .bank-transaction-page .card {
+                width: 100%;
+                max-width: 100%;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .bank-transaction-page .card-body {
+                min-width: 0;
+                padding: 12px;
+            }
+
+            .bank-transaction-page .filter-section {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+
+            .bank-transaction-page .bank-toolbar {
+                flex-wrap: nowrap;
+                gap: 8px;
+            }
+
+            .bank-transaction-page .bank-date-filter {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .bank-transaction-page #dateFilter {
+                width: 100%;
+                min-width: 0;
+                height: 40px;
+            }
+
+            .bank-transaction-page .bank-create-action {
+                flex: 0 0 auto;
+                margin-left: auto;
+                margin-right: 0;
+                --bs-gutter-x: 0;
+            }
+
+            .bank-transaction-page .bank-create-action .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                height: 40px;
+                padding-left: 12px;
+                padding-right: 12px;
+                white-space: nowrap;
+            }
+
+            .bank-transaction-page .bank-table-scroll {
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .bank-transaction-page .bank-transactions-table {
+                min-width: 1360px;
+                table-layout: auto;
+            }
+
+            .bank-transaction-page .bank-transactions-table th,
+            .bank-transaction-page .bank-transactions-table td {
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .bank-transaction-page .bank-transactions-table th {
+                text-align: center;
+                vertical-align: middle;
+                white-space: nowrap;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(1),
+            .bank-transaction-page .cash-col-check {
+                min-width: 44px;
+                width: 44px;
+                text-align: center;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(2),
+            .bank-transaction-page .cash-col-date {
+                min-width: 140px;
+                width: 140px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(3),
+            .bank-transaction-page .cash-col-account {
+                min-width: 145px;
+                width: 145px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(4),
+            .bank-transaction-page .cash-col-contra {
+                min-width: 185px;
+                width: 185px;
+                white-space: normal;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(5),
+            .bank-transaction-page .cash-col-party {
+                min-width: 220px;
+                width: 220px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(6),
+            .bank-transaction-page .bank-transactions-table th:nth-child(7),
+            .bank-transaction-page .cash-col-money {
+                min-width: 135px;
+                width: 135px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(8),
+            .bank-transaction-page .cash-col-creator {
+                min-width: 145px;
+                width: 145px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(9),
+            .bank-transaction-page .cash-col-file {
+                min-width: 155px;
+                width: 155px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(10),
+            .bank-transaction-page .cash-col-action {
+                min-width: 76px;
+                width: 76px;
+            }
+
+            .bank-transaction-page .cash-cell-line {
+                display: block;
+                white-space: nowrap;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .bank-transaction-page .cash-date-cell,
+            .bank-transaction-page .cash-money-cell,
+            .bank-transaction-page .cash-creator-cell,
+            .bank-transaction-page .cash-file-link {
+                white-space: nowrap;
+            }
+
+            .bank-transaction-page .cash-money-cell {
+                text-align: right;
+            }
+
+            .bank-transaction-page .cash-total-label,
+            .bank-transaction-page .cash-total-money {
+                white-space: nowrap;
+            }
+
+            .bank-transaction-page .cash-empty-cell {
+                text-align: center;
+                vertical-align: middle;
+            }
+
+            .bank-transaction-page .action-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 38px;
+                height: 38px;
+                padding: 0;
+            }
+
+            .bank-transaction-page .action-menu {
+                position: fixed !important;
+                right: auto;
+                z-index: 2050 !important;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .bank-transaction-page .bank-toolbar {
+                flex-wrap: wrap;
+            }
+
+            .bank-transaction-page .bank-date-filter,
+            .bank-transaction-page .bank-create-action,
+            .bank-transaction-page .bank-create-action .btn {
+                width: 100%;
+            }
+
+            .bank-transaction-page .bank-create-action {
+                margin-left: 0;
+            }
         }
     </style>
 @endpush

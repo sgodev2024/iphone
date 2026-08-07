@@ -255,283 +255,283 @@ Route::middleware(['auth'])
                         ->middleware('permission:company.update')
                         ->name('update');
                 });
-            /*
+                            /*
             |--------------------------------------------------------------------------
             | REPORT PROFIT
             |--------------------------------------------------------------------------
             */
 
             Route::prefix('profit')
-                ->name('profit.')
-                ->group(function () {
+            ->name('profit.')
+            ->group(function () {
 
-                    Route::get('', [ReportController::class, 'profitIndex'])
-                        ->middleware('permission:report.profit.view')
-                        ->name('index');
+                Route::get('', [ReportController::class, 'profitIndex'])
+                    ->middleware('permission:report.profit.view')
+                    ->name('index');
 
-                    Route::post('/profit-report', [ReportController::class, 'getProfitReportByFilterNew'])
-                        ->middleware('permission:report.profit.filter')
-                        ->name('getProfitReportByFilter');
+                Route::post('/profit-report', [ReportController::class, 'getProfitReportByFilterNew'])
+                    ->middleware('permission:report.profit.filter')
+                    ->name('getProfitReportByFilter');
 
-                    Route::post('/profit-report-all', [ReportController::class, 'getProfitReport'])
-                        ->middleware('permission:report.profit.statistics')
-                        ->name('getProfitReport');
+                Route::post('/profit-report-all', [ReportController::class, 'getProfitReport'])
+                    ->middleware('permission:report.profit.statistics')
+                    ->name('getProfitReport');
 
-                    Route::post('/profit-report-pdf', [ReportController::class, 'getProfitReportByFilterPDF'])
-                        ->middleware('permission:report.profit.export_pdf')
-                        ->name('getProfitReportByFilterPDF');
-                });
+                Route::post('/profit-report-pdf', [ReportController::class, 'getProfitReportByFilterPDF'])
+                    ->middleware('permission:report.profit.export_pdf')
+                    ->name('getProfitReportByFilterPDF');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | DASHBOARD API
         |--------------------------------------------------------------------------
         */
 
-            Route::get('/dashboard/day', [DashboardController::class, 'StatisticsByDay'])
-                ->middleware('permission:dashboard.view')
-                ->name('dashboard.day');
+        Route::get('/dashboard/day', [DashboardController::class, 'StatisticsByDay'])
+            ->middleware('permission:dashboard.view')
+            ->name('dashboard.day');
 
-            Route::get('/dashboard/month', [DashboardController::class, 'StatisticsByMonth'])
-                ->middleware('permission:dashboard.view')
-                ->name('dashboard.month');
+        Route::get('/dashboard/month', [DashboardController::class, 'StatisticsByMonth'])
+            ->middleware('permission:dashboard.view')
+            ->name('dashboard.month');
 
-            Route::get('/dashboard/year', [DashboardController::class, 'StatisticsByYear'])
-                ->middleware('permission:dashboard.view')
-                ->name('dashboard.year');
+        Route::get('/dashboard/year', [DashboardController::class, 'StatisticsByYear'])
+            ->middleware('permission:dashboard.view')
+            ->name('dashboard.year');
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | PROFILE
         |--------------------------------------------------------------------------
         */
 
-            Route::get('profile', [AdminController::class, 'profile'])
-                ->middleware('permission:superadmin.profile.view')
-                ->name('profile');
+        Route::get('profile', [AdminController::class, 'profile'])
+            ->middleware('permission:superadmin.profile.view')
+            ->name('profile');
 
-            Route::post('profile', [AdminController::class, 'updateProfile'])
-                ->middleware('permission:superadmin.profile.update')
-                ->name('update');
+        Route::post('profile', [AdminController::class, 'updateProfile'])
+            ->middleware('permission:superadmin.profile.update')
+            ->name('update');
 
-            Route::post('/changePassword', [AdminController::class, 'changePassword'])
-                ->middleware('permission:superadmin.profile.update')
-                ->name('changePassword');
+        Route::post('/changePassword', [AdminController::class, 'changePassword'])
+            ->middleware('permission:superadmin.profile.update')
+            ->name('changePassword');
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | CATEGORY
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('category')
-                ->controller(CategorieController::class)
-                ->name('category.')
-                ->group(function () {
+        Route::prefix('category')
+            ->controller(CategorieController::class)
+            ->name('category.')
+            ->group(function () {
 
-                    Route::get('/', 'index')
-                        ->middleware('permission:category.view')
-                        ->name('index');
+                Route::get('/', 'index')
+                    ->middleware('permission:category.view')
+                    ->name('index');
 
-                    Route::post('/', 'store')
-                        ->middleware('permission:category.create')
-                        ->name('store');
+                Route::post('/', 'store')
+                    ->middleware('permission:category.create')
+                    ->name('store');
 
-                    Route::get('{id}', 'show')
-                        ->middleware('permission:category.view')
-                        ->name('show');
+                Route::get('{id}', 'show')
+                    ->middleware('permission:category.view')
+                    ->name('show');
 
-                    Route::put('{id}', 'update')
-                        ->middleware('permission:category.update')
-                        ->name('update');
+                Route::put('{id}', 'update')
+                    ->middleware('permission:category.update')
+                    ->name('update');
 
-                    Route::delete('delete/{id}', 'destroy')
-                        ->middleware('permission:category.delete')
-                        ->name('destroy');
-                });
+                Route::delete('delete/{id}', 'destroy')
+                    ->middleware('permission:category.delete')
+                    ->name('destroy');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | EMPLOYEE
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('employees')
-                ->controller(EmployeeController::class)
-                ->name('employees.')
-                ->group(function () {
+        Route::prefix('employees')
+            ->controller(EmployeeController::class)
+            ->name('employees.')
+            ->group(function () {
 
-                    Route::get('/', 'index')
-                        ->middleware('permission:employee.view')
-                        ->name('index');
+                Route::get('/', 'index')
+                    ->middleware('permission:employee.view')
+                    ->name('index');
 
-                    Route::get('create', 'create')
-                        ->middleware('permission:employee.create')
-                        ->name('create');
+                Route::get('create', 'create')
+                    ->middleware('permission:employee.create')
+                    ->name('create');
 
-                    Route::post('/', 'store')
-                        ->middleware('permission:employee.create')
-                        ->name('store');
+                Route::post('/', 'store')
+                    ->middleware('permission:employee.create')
+                    ->name('store');
 
-                    Route::get('{id}/edit', 'edit')
-                        ->middleware('permission:employee.update')
-                        ->name('edit');
+                Route::get('{id}/edit', 'edit')
+                    ->middleware('permission:employee.update')
+                    ->name('edit');
 
-                    Route::put('{id}', 'update')
-                        ->middleware('permission:employee.update')
-                        ->name('update');
-                });
+                Route::put('{id}', 'update')
+                    ->middleware('permission:employee.update')
+                    ->name('update');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | BRANCH
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('branchs')
-                ->controller(BranchController::class)
-                ->name('branchs.')
-                ->group(function () {
+        Route::prefix('branchs')
+            ->controller(BranchController::class)
+            ->name('branchs.')
+            ->group(function () {
 
-                    Route::get('/', 'index')
-                        ->middleware('permission:branch.view')
-                        ->name('index');
+                Route::get('/', 'index')
+                    ->middleware('permission:branch.view')
+                    ->name('index');
 
-                    Route::get('create', 'create')
-                        ->middleware('permission:branch.create')
-                        ->name('create');
+                Route::get('create', 'create')
+                    ->middleware('permission:branch.create')
+                    ->name('create');
 
-                    Route::post('/', 'store')
-                        ->middleware('permission:branch.create')
-                        ->name('store');
+                Route::post('/', 'store')
+                    ->middleware('permission:branch.create')
+                    ->name('store');
 
-                    Route::get('{id}/show', 'show')
-                        ->middleware('permission:branch.view')
-                        ->name('show');
+                Route::get('{id}/show', 'show')
+                    ->middleware('permission:branch.view')
+                    ->name('show');
 
-                    Route::put('{id}', 'update')
-                        ->middleware('permission:branch.update')
-                        ->name('update');
+                Route::put('{id}', 'update')
+                    ->middleware('permission:branch.update')
+                    ->name('update');
 
-                    Route::delete('/', 'destroy')
-                        ->middleware('permission:branch.delete')
-                        ->name('destroy');
+                Route::delete('/', 'destroy')
+                    ->middleware('permission:branch.delete')
+                    ->name('destroy');
 
-                    Route::patch('change-status', 'changeStatus')
-                        ->middleware('permission:branch.status')
-                        ->name('status.update');
-                });
+                Route::patch('change-status', 'changeStatus')
+                    ->middleware('permission:branch.status')
+                    ->name('status.update');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | BRAND
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('brand')
-                ->controller(BrandController::class)
-                ->name('brand.')
-                ->group(function () {
+        Route::prefix('brand')
+            ->controller(BrandController::class)
+            ->name('brand.')
+            ->group(function () {
 
-                    Route::get('', 'index')
-                        ->middleware('permission:brand.view')
-                        ->name('index');
+                Route::get('', 'index')
+                    ->middleware('permission:brand.view')
+                    ->name('index');
 
-                    Route::get('create', 'create')
-                        ->middleware('permission:brand.create')
-                        ->name('create');
+                Route::get('create', 'create')
+                    ->middleware('permission:brand.create')
+                    ->name('create');
 
-                    Route::post('/', 'store')
-                        ->middleware('permission:brand.create')
-                        ->name('store');
+                Route::post('/', 'store')
+                    ->middleware('permission:brand.create')
+                    ->name('store');
 
-                    Route::get('{id}/edit', 'edit')
-                        ->middleware('permission:brand.update')
-                        ->name('edit');
+                Route::get('{id}/edit', 'edit')
+                    ->middleware('permission:brand.update')
+                    ->name('edit');
 
-                    Route::put('{id}', 'update')
-                        ->middleware('permission:brand.update')
-                        ->name('update');
-                });
+                Route::put('{id}', 'update')
+                    ->middleware('permission:brand.update')
+                    ->name('update');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | CLIENT
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('client')
-                ->name('client.')
-                ->group(function () {
+        Route::prefix('client')
+            ->name('client.')
+            ->group(function () {
 
-                    Route::get('/', [ClientController::class, 'index'])
-                        ->middleware('permission:client.view')
-                        ->name('index');
+                Route::get('/', [ClientController::class, 'index'])
+                    ->middleware('permission:client.view')
+                    ->name('index');
 
-                    Route::get('/detail/{id}', [ClientController::class, 'edit'])
-                        ->middleware('permission:client.update')
-                        ->name('detail');
+                Route::get('/detail/{id}', [ClientController::class, 'edit'])
+                    ->middleware('permission:client.update')
+                    ->name('detail');
 
-                    Route::put('/update/{id}', [ClientController::class, 'update'])
-                        ->middleware('permission:client.update')
-                        ->name('update');
+                Route::put('/update/{id}', [ClientController::class, 'update'])
+                    ->middleware('permission:client.update')
+                    ->name('update');
 
-                    Route::delete('/delete/{id}', [ClientController::class, 'delete'])
-                        ->middleware('permission:client.delete')
-                        ->name('delete');
+                Route::delete('/delete/{id}', [ClientController::class, 'delete'])
+                    ->middleware('permission:client.delete')
+                    ->name('delete');
 
-                    Route::get('/filter', [ClientController::class, 'findClient'])
-                        ->middleware('permission:client.search')
-                        ->name('filter');
+                Route::get('/filter', [ClientController::class, 'findClient'])
+                    ->middleware('permission:client.search')
+                    ->name('filter');
 
-                    Route::get('/clientgroup', [ClientController::class, 'clientgroup'])
-                        ->middleware('permission:client_group.view')
-                        ->name('clientgroup.index');
+                Route::get('/clientgroup', [ClientController::class, 'clientgroup'])
+                    ->middleware('permission:client_group.view')
+                    ->name('clientgroup.index');
 
-                    Route::get('export', [ClientController::class, 'export'])
-                        ->middleware('permission:client.export')
-                        ->name('export');
-                });
+                Route::get('export', [ClientController::class, 'export'])
+                    ->middleware('permission:client.export')
+                    ->name('export');
+            });
 
-            /*
+        /*
         |--------------------------------------------------------------------------
         | SUPPLIER
         |--------------------------------------------------------------------------
         */
 
-            Route::prefix('supplier')
-                ->name('supplier.')
-                ->group(function () {
+        Route::prefix('supplier')
+            ->name('supplier.')
+            ->group(function () {
 
-                    Route::get('/{company_id}', [SupplierController::class, 'index'])
-                        ->middleware('permission:supplier.view')
-                        ->name('index');
+                Route::get('/{company_id}', [SupplierController::class, 'index'])
+                    ->middleware('permission:supplier.view')
+                    ->name('index');
 
-                    Route::get('/findByPhone', [SupplierController::class, 'findByPhone'])
-                        ->middleware('permission:supplier.search')
-                        ->name('findByPhone');
+                Route::get('/findByPhone', [SupplierController::class, 'findByPhone'])
+                    ->middleware('permission:supplier.search')
+                    ->name('findByPhone');
 
-                    Route::get('/add/{company_id}', [SupplierController::class, 'add'])
-                        ->middleware('permission:supplier.create')
-                        ->name('add');
+                Route::get('/add/{company_id}', [SupplierController::class, 'add'])
+                    ->middleware('permission:supplier.create')
+                    ->name('add');
 
-                    Route::post('/store', [SupplierController::class, 'store'])
-                        ->middleware('permission:supplier.create')
-                        ->name('store');
+                Route::post('/store', [SupplierController::class, 'store'])
+                    ->middleware('permission:supplier.create')
+                    ->name('store');
 
-                    Route::get('detail/{id}', [SupplierController::class, 'edit'])
-                        ->middleware('permission:supplier.update')
-                        ->name('detail');
+                Route::get('detail/{id}', [SupplierController::class, 'edit'])
+                    ->middleware('permission:supplier.update')
+                    ->name('detail');
 
-                    Route::post('update/{id}', [SupplierController::class, 'update'])
-                        ->middleware('permission:supplier.update')
-                        ->name('update');
+                Route::post('update/{id}', [SupplierController::class, 'update'])
+                    ->middleware('permission:supplier.update')
+                    ->name('update');
 
-                    Route::delete('delete/{id}', [SupplierController::class, 'delete'])
-                        ->middleware('permission:supplier.delete')
-                        ->name('delete');
-                });
-            /*
+                Route::delete('delete/{id}', [SupplierController::class, 'delete'])
+                    ->middleware('permission:supplier.delete')
+                    ->name('delete');
+            });
+                        /*
             |--------------------------------------------------------------------------
             | ORDER
             |--------------------------------------------------------------------------
@@ -783,181 +783,175 @@ Route::middleware(['auth'])
                 ->middleware('permission:multiple.delete');
 
             // ============================
-            // ============================
-            // KHO
-            // ============================
-            Route::middleware(['role:4'])->group(function () {
+                    // ============================
+        // KHO
+        // ============================
+        Route::middleware(['role:4'])->group(function () {
 
-                /*
+            /*
             |--------------------------------------------------------------------------
             | INVENTORY CHECK
             |--------------------------------------------------------------------------
             */
 
-                Route::prefix('checkInventory')
-                    ->name('check.')
-                    ->group(function () {
+            Route::prefix('checkInventory')
+                ->name('check.')
+                ->group(function () {
 
-                        Route::get('/', [CheckInventoryController::class, 'index'])
-                            ->middleware('permission:inventory_check.view')
-                            ->name('index');
+                    Route::get('/', [CheckInventoryController::class, 'index'])
+                        ->middleware('permission:inventory_check.view')
+                        ->name('index');
 
-                        Route::get('/filter', [CheckInventoryController::class, 'filterCheck'])
-                            ->middleware('permission:inventory_check.filter')
-                            ->name('filter');
+                    Route::get('/filter', [CheckInventoryController::class, 'filterCheck'])
+                        ->middleware('permission:inventory_check.filter')
+                        ->name('filter');
 
-                        Route::get('/detail/{id}', [CheckInventoryController::class, 'detail'])
-                            ->middleware('permission:inventory_check.detail')
-                            ->name('detail');
-                    });
+                    Route::get('/detail/{id}', [CheckInventoryController::class, 'detail'])
+                        ->middleware('permission:inventory_check.detail')
+                        ->name('detail');
+                });
 
-                /*
+            /*
             |--------------------------------------------------------------------------
             | INVENTORY REPORT
             |--------------------------------------------------------------------------
             */
 
-                Route::prefix('inventory')
-                    ->name('inventory.')
-                    ->group(function () {
+            Route::prefix('inventory')
+                ->name('inventory.')
+                ->group(function () {
 
-                        Route::get('', [ReportController::class, 'index'])
-                            ->middleware('permission:report.inventory.view')
-                            ->name('index');
+                    Route::get('', [ReportController::class, 'index'])
+                        ->middleware('permission:report.inventory.view')
+                        ->name('index');
 
-                        Route::post('report', [ReportController::class, 'getReportByStorage'])
-                            ->middleware('permission:report.inventory.filter')
-                            ->name('getReportByStorage');
+                    Route::post('report', [ReportController::class, 'getReportByStorage'])
+                        ->middleware('permission:report.inventory.filter')
+                        ->name('getReportByStorage');
 
-                        Route::get('exportPdf', [ReportController::class, 'exportPdf'])
-                            ->middleware('permission:report.inventory.low_stock')
-                            ->name('exportPdf');
-                    });
+                    Route::get('exportPdf', [ReportController::class, 'exportPdf'])
+                        ->middleware('permission:report.inventory.low_stock')
+                        ->name('exportPdf');
+                });
 
-                /*
+            /*
             |--------------------------------------------------------------------------
             | IMPORT PRODUCT
             |--------------------------------------------------------------------------
             */
 
-                Route::prefix('importproduct')
-                    ->name('importproduct.')
-                    ->group(function () {
+            Route::prefix('importproduct')
+                ->name('importproduct.')
+                ->group(function () {
 
-                        Route::get('/', [ImportProductController::class, 'index'])
-                            ->middleware('permission:import_product.view')
-                            ->name('index');
+                    Route::get('/', [ImportProductController::class, 'index'])
+                        ->middleware('permission:import_product.view')
+                        ->name('index');
 
-                        Route::get('/add', [ImportProductController::class, 'add'])
-                            ->middleware('permission:import_product.create')
-                            ->name('add');
+                    Route::get('/add', [ImportProductController::class, 'add'])
+                        ->middleware('permission:import_product.create')
+                        ->name('add');
 
-                        Route::post('/bulk-delete', [ImportProductController::class, 'bulkDelete'])
-                            ->middleware('permission:import_product.delete')
-                            ->name('bulk-delete');
+                    Route::post('/bulk-delete', [ImportProductController::class, 'bulkDelete'])
+                        ->middleware('permission:import_product.delete')
+                        ->name('bulk-delete');
 
-                        Route::get('/import', [ImportProductController::class, 'listImport'])
-                            ->middleware('permission:import_product.import')
-                            ->name('import');
+                    Route::get('/import', [ImportProductController::class, 'listImport'])
+                        ->middleware('permission:import_product.import')
+                        ->name('import');
 
-                        Route::post('/import/add', [ImportProductController::class, 'importadd'])
-                            ->middleware('permission:import_product.import')
-                            ->name('import.add');
+                    Route::post('/import/add', [ImportProductController::class, 'importadd'])
+                        ->middleware('permission:import_product.import')
+                        ->name('import.add');
 
-                        Route::post('/import/update', [ImportProductController::class, 'importupdate'])
-                            ->middleware('permission:import_product.update')
-                            ->name('import.update');
+                    Route::post('/import/update', [ImportProductController::class, 'importupdate'])
+                        ->middleware('permission:import_product.update')
+                        ->name('import.update');
 
-                        Route::post('/import/update/price', [ImportProductController::class, 'importupdateprice'])
-                            ->middleware('permission:import_product.update')
-                            ->name('import.update.price');
+                    Route::post('/import/update/price', [ImportProductController::class, 'importupdateprice'])
+                        ->middleware('permission:import_product.update')
+                        ->name('import.update.price');
 
-                        Route::get('/import/delete', [ImportProductController::class, 'importdelete'])
-                            ->middleware('permission:import_product.delete')
-                            ->name('import.delete');
+                    Route::get('/import/delete', [ImportProductController::class, 'importdelete'])
+                        ->middleware('permission:import_product.delete')
+                        ->name('import.delete');
 
-                        Route::post('/import/addCategory', [ImportProductController::class, 'addCategory'])
-                            ->middleware('permission:import_product.create')
-                            ->name('import.addCategory');
+                    Route::post('/import/addCategory', [ImportProductController::class, 'addCategory'])
+                        ->middleware('permission:import_product.create')
+                        ->name('import.addCategory');
 
-                        /*
+                    /*
                     |--------------------------------------------------------------------------
                     | IMPORT COUPON
                     |--------------------------------------------------------------------------
                     */
 
-                        Route::post('/importCoupon', [ImportCouponController::class, 'add'])
-                            ->middleware('permission:import_coupon.create')
-                            ->name('importCoupon.add');
+                    Route::post('/importCoupon', [ImportCouponController::class, 'add'])
+                        ->middleware('permission:import_coupon.create')
+                        ->name('importCoupon.add');
 
-                        /*
+                    /*
                     |--------------------------------------------------------------------------
                     | IMPORT DETAIL
                     |--------------------------------------------------------------------------
                     */
 
-                        Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])
-                            ->middleware('permission:import_product.detail')
-                            ->name('importCoupon.detail');
+                    Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])
+                        ->middleware('permission:import_product.detail')
+                        ->name('importCoupon.detail');
 
-                        /*
+                    /*
                     |--------------------------------------------------------------------------
                     | IMPORT BARCODE
                     |--------------------------------------------------------------------------
                     */
 
-                        Route::get('/detail/{id}/barcodes', [ImportBarcodeController::class, 'index'])
-                            ->middleware('permission:import_barcode.view')
-                            ->name('barcodes.index');
+                    Route::get('/detail/{id}/barcodes', [ImportBarcodeController::class, 'index'])
+                        ->middleware('permission:import_barcode.view')
+                        ->name('barcodes.index');
 
-                        Route::post('/detail/{id}/barcodes/print', [ImportBarcodeController::class, 'print'])
-                            ->middleware('permission:import_barcode.print')
-                            ->name('barcodes.print');
-                    });
+                    Route::post('/detail/{id}/barcodes/print', [ImportBarcodeController::class, 'print'])
+                        ->middleware('permission:import_barcode.print')
+                        ->name('barcodes.print');
+                });
 
-                /*
+            /*
             |--------------------------------------------------------------------------
             | STORAGE
             |--------------------------------------------------------------------------
             */
 
-                Route::prefix('storage')
-                    ->controller(StorageController::class)
-                    ->name('storage.')
-                    ->group(function () {
+            Route::prefix('storage')
+                ->controller(StorageController::class)
+                ->name('storage.')
+                ->group(function () {
 
-                        Route::get('/', 'index')
-                            ->middleware('permission:storage.view')
-                            ->name('index');
+                    Route::get('/', 'index')
+                        ->middleware('permission:storage.view')
+                        ->name('index');
 
-                        Route::post('/', 'store')
-                            ->middleware('permission:storage.create')
-                            ->name('store');
+                    Route::post('/', 'store')
+                        ->middleware('permission:storage.create')
+                        ->name('store');
 
-                        Route::get('{id}', 'show')
-                            ->middleware('permission:storage.detail')
-                            ->name('show');
+                    Route::get('{id}', 'show')
+                        ->middleware('permission:storage.detail')
+                        ->name('show');
 
-                        Route::put('{id}', 'update')
-                            ->middleware('permission:storage.update')
-                            ->name('update');
+                    Route::put('{id}', 'update')
+                        ->middleware('permission:storage.update')
+                        ->name('update');
 
-                        Route::get('/products/{id}', 'detail')
-                            ->middleware('permission:storage.products')
-                            ->name('products');
+                    Route::get('/products/{id}', 'detail')
+                        ->middleware('permission:storage.products')
+                        ->name('products');
+                });
+        });
 
-                        Route::get(
-                            'storage/{storage}/products/{product}/imeis',
-                            [StorageController::class, 'productImeis'])
-                            ->name('products.imeis')
-                            ->middleware('permission:storage.products');
-                    });
-            });
-
-            // ============================
-            // END KHO
-            // ============================
-            /*
+        // ============================
+        // END KHO
+        // ============================
+                    /*
             |--------------------------------------------------------------------------
             | ROLE
             |--------------------------------------------------------------------------
@@ -1168,14 +1162,9 @@ Route::middleware(['auth'])
                     Route::get('/products/{id}', 'detail')
                         ->middleware('permission:storage.products')
                         ->name('products');
-
-                    Route::get(
-                        '/storage/{storage}/inventory',
-                        [StorageController::class, 'inventory']
-                    )->name('inventory');
                 });
         });
-        /*
+                /*
         |--------------------------------------------------------------------------
         | ACCOUNTING (ROLE 3)
         |--------------------------------------------------------------------------
@@ -1339,7 +1328,6 @@ Route::middleware(['auth'])
 
 // bán hàng
 Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staff.')->group(function () {
-    Route::post('storage/select', [StaffProductController::class, 'selectSaleStorage'])->name('storage.select');
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
     Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');
     Route::get('get-clients', [StaffProductController::class, 'getClients']);
@@ -1354,52 +1342,6 @@ Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staf
     Route::get('order', [StaffOrderController::class, 'index'])->name('order');
     Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])->name('orderFetch');
     Route::get('product', [StaffProductController::class, 'product'])->name('product.get');
-});
-Route::middleware([CheckLogin::class, 'role:3'])
-    ->prefix('ban-hang')
-    ->name('staff.')
-    ->group(function () {
-
-        Route::get('product/search', [StaffProductController::class, 'search'])
-            ->name('product.search');
-
-        Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])
-            ->name('barcode.resolve');
-
-        Route::get('get-clients', [StaffProductController::class, 'getClients']);
-
-        Route::get('', [StaffProductController::class, 'index'])
-            ->name('index');
-
-        Route::post('/cart/add', [StaffProductController::class, 'addToCart'])
-            ->name('cart.add');
-
-        Route::post('/cart/update', [StaffProductController::class, 'updateCart'])
-            ->name('cart.update');
-
-        Route::post('/cart/update_price', [StaffProductController::class, 'updatePriceCart'])
-            ->name('cart.update.price');
-
-        Route::post('/cart/remove', [StaffProductController::class, 'removeFromCart'])
-            ->name('cart.remove');
-
-        Route::post('clients/add', [StaffClientController::class, 'addClient'])
-            ->name('client.add');
-
-        Route::post('pay', [StaffClientController::class, 'pay'])
-            ->name('pay');
-
-        Route::get('cart', [StaffClientController::class, 'cart'])
-            ->name('cart.data');
-
-        Route::get('order', [StaffOrderController::class, 'index'])
-            ->name('order');
-
-        Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])
-            ->name('orderFetch');
-
-        Route::get('product', [StaffProductController::class, 'product'])
-            ->name('product.get');
 
         Route::get('checkInventory', [staffcheckController::class, 'index'])
             ->name('Inventory.get');

@@ -1,5 +1,7 @@
-<div class="table-responsive">
-    <table class="table table-hover table-striped table-bordered align-middle mt-3">
+<div class="client-table-hint">Vuốt ngang để xem đầy đủ bảng</div>
+
+<div class="table-responsive client-table-scroll">
+    <table class="table table-hover table-striped table-bordered align-middle mt-3 client-table">
         <thead>
             <tr>
                 <th style="width: 3%">
@@ -47,7 +49,7 @@
                     </td>
 
                     <td>
-                        <div class="d-flex gap-2 justify-content-center">
+                        <div class="d-flex gap-2 justify-content-center client-row-actions">
                             <a href="{{ route('admin.client.detail', ['id' => $client->id]) }}"
                                 class="btn btn-warning btn-sm" title="Sửa khách hàng">
                                 <i class="fa-solid fa-pen-to-square"></i>

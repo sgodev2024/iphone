@@ -1,7 +1,7 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <div class="page-inner">
+    <div class="page-inner cash-transaction-page">
 
         <x-breadcrumb :items="[['label' => 'Thu chi tiền mặt']]" />
 
@@ -23,8 +23,8 @@
         <div class="card">
             <div class="card-body">
                 <div class="filter-section">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div class="d-flex gap-2">
+                    <div class="d-flex align-items-center justify-content-between cash-toolbar">
+                        <div class="d-flex gap-2 cash-date-filter">
 
                             {{-- <div class="dropdown">
                                 <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
@@ -62,7 +62,7 @@
 
                             <input type="text" id="dateFilter" class="form-control" placeholder="Chọn khoảng ngày">
                         </div>
-                        <div class="row g-3 justify-content-end align-items-center">
+                        <div class="row g-3 justify-content-end align-items-center cash-create-action">
                             <a href="/admin/transactions/cash/save" class="btn btn-primary">
                                 <i class="fa-solid fa-plus"></i>
                                 Thêm mới
@@ -72,22 +72,28 @@
                 </div>
 
                 <!-- Data Table -->
-                <div class="table-responsive">
-                    <table class="table table-hover table-bordered mb-0">
+                <div class="cash-scroll-hint d-md-none">Vuốt ngang để xem đầy đủ giao dịch</div>
+                <div class="table-responsive cash-table-scroll">
+                    <table class="table table-hover table-bordered mb-0 cash-transactions-table">
                         <thead>
                             <tr>
-                                <th style="width: 40px;">
+                                <th class="cash-col-check" style="width: 40px;">
                                     <input type="checkbox" id="checked-all">
                                 </th>
-                                <th>ID | Ngày</th>
-                                <th>Tài khoản</th>
-                                <th>Tài khoản đối ứng</th>
-                                <th>Đối tượng</th>
-                                <th>Thu</th>
-                                <th>Chi</th>
-                                <th>Người tạo</th>
-                                <th>File chứng từ</th>
-                                <th class="text-center" style="width: 5%">
+                                <th class="cash-col-date">ID | Ngày</th>
+                                <th class="cash-col-account">Tài khoản</th>
+                                <th class="cash-col-contra">
+                                    <span class="cash-header-stack">
+                                        <span>Tài khoản</span>
+                                        <span>đối ứng</span>
+                                    </span>
+                                </th>
+                                <th class="cash-col-party">Đối tượng</th>
+                                <th class="cash-col-money text-end">Thu</th>
+                                <th class="cash-col-money text-end">Chi</th>
+                                <th class="cash-col-creator">Người tạo</th>
+                                <th class="cash-col-file">File chứng từ</th>
+                                <th class="cash-col-action text-center" style="width: 5%">
                                     <i class="fas fa-cog"></i>
                                 </th>
                             </tr>
@@ -364,10 +370,29 @@
         $(document).on('click', '.action-toggle-btn', function(e) {
 
             e.stopPropagation();
-            const $menu = $(this).siblings('.action-menu');
+            const $button = $(this);
+            const $menu = $button.siblings('.action-menu');
 
             $('.action-menu').not($menu).hide();
             $menu.toggle();
+
+            if ($menu.is(':visible') && window.matchMedia('(max-width: 767.98px)').matches) {
+                const rect = this.getBoundingClientRect();
+                const menuWidth = $menu.outerWidth() || 150;
+                const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+
+                $menu.css({
+                    top: `${rect.bottom + 6}px`,
+                    left: `${left}px`,
+                    right: 'auto'
+                });
+            } else {
+                $menu.css({
+                    top: '',
+                    left: '',
+                    right: ''
+                });
+            }
         });
 
         function loadCashTransactions() {
@@ -499,6 +524,181 @@
 
         .cursor-pointer {
             cursor: pointer;
+        }
+
+        @media (max-width: 767.98px) {
+            .cash-transaction-page {
+                max-width: 100%;
+                overflow-x: hidden;
+            }
+
+            .cash-transaction-page .card-body {
+                min-width: 0;
+                overflow-x: hidden;
+                padding: 12px;
+            }
+
+            .cash-transaction-page .filter-section {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+
+            .cash-transaction-page .cash-toolbar {
+                flex-wrap: nowrap;
+                gap: 8px;
+            }
+
+            .cash-transaction-page .cash-date-filter {
+                flex: 1 1 190px;
+                min-width: 0;
+            }
+
+            .cash-transaction-page #dateFilter {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .cash-transaction-page .cash-create-action {
+                flex: 0 0 auto;
+                margin-left: auto;
+                margin-right: 0;
+                --bs-gutter-x: 0;
+            }
+
+            .cash-transaction-page .cash-create-action .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                white-space: nowrap;
+            }
+
+            .cash-transaction-page .cash-scroll-hint {
+                color: #6c757d;
+                font-size: 12px;
+                margin: 0 0 8px;
+            }
+
+            .cash-transaction-page .cash-table-scroll {
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .cash-transaction-page .cash-transactions-table {
+                min-width: 1360px;
+            }
+
+            .cash-transaction-page .cash-transactions-table th,
+            .cash-transaction-page .cash-transactions-table td {
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .cash-transaction-page .cash-transactions-table th {
+                text-align: center;
+                vertical-align: middle;
+                white-space: nowrap;
+            }
+
+            .cash-transaction-page .cash-col-check {
+                min-width: 44px;
+                width: 44px;
+                text-align: center;
+            }
+
+            .cash-transaction-page .cash-col-date {
+                min-width: 140px;
+                width: 140px;
+            }
+
+            .cash-transaction-page .cash-col-account {
+                min-width: 145px;
+                width: 145px;
+            }
+
+            .cash-transaction-page .cash-col-contra {
+                min-width: 185px;
+                width: 185px;
+                white-space: normal;
+            }
+
+            .cash-transaction-page .cash-col-party {
+                min-width: 220px;
+                width: 220px;
+            }
+
+            .cash-transaction-page .cash-col-money {
+                min-width: 135px;
+                width: 135px;
+            }
+
+            .cash-transaction-page .cash-col-creator {
+                min-width: 145px;
+                width: 145px;
+            }
+
+            .cash-transaction-page .cash-col-file {
+                min-width: 155px;
+                width: 155px;
+            }
+
+            .cash-transaction-page .cash-col-action {
+                min-width: 76px;
+                width: 76px;
+            }
+
+            .cash-transaction-page .cash-header-stack > span,
+            .cash-transaction-page .cash-cell-line {
+                display: block;
+                white-space: nowrap;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .cash-transaction-page .cash-date-cell,
+            .cash-transaction-page .cash-money-cell,
+            .cash-transaction-page .cash-creator-cell,
+            .cash-transaction-page .cash-file-link {
+                white-space: nowrap;
+            }
+
+            .cash-transaction-page .cash-money-cell {
+                text-align: right;
+            }
+
+            .cash-transaction-page .action-toggle-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 38px;
+                height: 38px;
+                padding: 0;
+            }
+
+            .cash-transaction-page .action-menu {
+                position: fixed !important;
+                right: auto;
+                z-index: 2050 !important;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .cash-transaction-page .cash-toolbar {
+                flex-wrap: wrap;
+            }
+
+            .cash-transaction-page .cash-date-filter,
+            .cash-transaction-page .cash-create-action,
+            .cash-transaction-page .cash-create-action .btn {
+                width: 100%;
+            }
+
+            .cash-transaction-page .cash-create-action {
+                margin-left: 0;
+            }
         }
     </style>
 @endpush

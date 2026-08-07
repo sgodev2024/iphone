@@ -1,8 +1,8 @@
 @extends('admin.layout.index')
 
 @section('content')
-    <div class="page-inner">
-        <div class="page-header">
+    <div class="page-inner accounting-account-page">
+        <div class="page-header accounting-account-breadcrumb">
             <x-breadcrumb :items="[['label' => 'DANH SÁCH TÀI KHOẢN KẾ TOÁN']]" />
             {{-- <ul class="breadcrumbs mb-3">
                 <li class="nav-home">
@@ -19,17 +19,17 @@
             </ul> --}}
         </div>
 
-        <div class="card">
+        <div class="card accounting-account-card">
             <div class="card-header">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="d-flex align-items-center gap-2">
-                        <button type="button" class="btn btn-success btn-sm fs-6" data-bs-toggle="modal"
+                <div class="d-flex align-items-center justify-content-between accounting-account-toolbar">
+                    <div class="d-flex align-items-center gap-2 accounting-account-actions">
+                        <button type="button" class="btn btn-success btn-sm fs-6 accounting-account-add-btn" data-bs-toggle="modal"
                             data-bs-target="#addAccountModal">
                             <i class="ti ti-circle-plus"></i> Thêm mới
                         </button>
 
-                        <div class="dropdown">
-                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                        <div class="dropdown accounting-account-bulk-actions">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle accounting-account-bulk-btn" type="button"
                                 id="operationDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                 Thao tác
                             </button>
@@ -46,25 +46,25 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="w-25">
-                        <input type="text" class="form-control" id="searchInput" placeholder="Tìm kiếm mã hoặc tên...">
+                    <div class="w-25 accounting-account-search">
+                        <input type="text" class="form-control accounting-account-search-input" id="searchInput" placeholder="Tìm kiếm mã hoặc tên...">
                     </div>
                 </div>
             </div>
 
             <div class="card-body">
-                <div class="table-responsive">
-                    <table id="myTable" class="table table-hover table-striped">
+                <div class="table-responsive accounting-account-table-scroll">
+                    <table id="myTable" class="table table-hover table-striped accounting-account-table">
                         <thead>
                             <tr class="text-center">
-                                <th style="width:5%"><input type="checkbox" id="checked-all"></th>
-                                <th style="width:5%">#</th>
-                                <th style="width:15%">Code</th>
-                                <th>Tên</th>
-                                <th style="width:15%">Là tài khoản mặc định?</th>
-                                <th style="width:15%">Tình trạng</th>
-                                <th style="width:15%">Người tạo</th>
-                                <th style="width:5%"><i class="fas fa-cog"></i></th>
+                                <th class="account-col-check" style="width:5%"><input type="checkbox" id="checked-all"></th>
+                                <th class="account-col-index" style="width:5%">#</th>
+                                <th class="account-col-code" style="width:15%">Code</th>
+                                <th class="account-col-name">Tên</th>
+                                <th class="account-col-default" style="width:15%">Là tài khoản mặc định?</th>
+                                <th class="account-col-status" style="width:15%">Tình trạng</th>
+                                <th class="account-col-creator" style="width:15%">Người tạo</th>
+                                <th class="account-col-action" style="width:5%"><i class="fas fa-cog"></i></th>
                             </tr>
                         </thead>
 
@@ -394,11 +394,254 @@
 @endpush
 
 
-@push('styles')
+@push('style')
     <style>
-        #parent_results .list-group-item:hover {
+        .accounting-account-page #parent_results .list-group-item:hover {
             background-color: rgba(108, 122, 145);
             color: #ffffff !important
+        }
+
+        .accounting-account-page .accounting-account-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .accounting-account-page .account-code-wrap,
+        .accounting-account-page .account-name-wrap {
+            padding-left: calc(var(--account-level, 0) * 16px);
+        }
+
+        .accounting-account-page .account-action-dropdown .dropdown-menu {
+            z-index: 1060;
+        }
+
+        @media (max-width: 767.98px) {
+            .accounting-account-page {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                padding-right: 0 !important;
+                padding-left: 0 !important;
+                margin-right: auto;
+                margin-left: auto;
+                overflow-x: visible;
+            }
+
+            .accounting-account-page .accounting-account-breadcrumb,
+            .accounting-account-page .accounting-account-card {
+                width: calc(100% - 20px);
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+            }
+
+            .accounting-account-page .accounting-account-breadcrumb {
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            .accounting-account-page .accounting-account-breadcrumb > nav,
+            .accounting-account-page .accounting-account-breadcrumb .breadcrumb,
+            .accounting-account-page .accounting-account-breadcrumb .breadcrumbs {
+                width: 100%;
+                max-width: 100%;
+                margin-right: 0;
+                margin-left: 0;
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            .accounting-account-page .accounting-account-card,
+            .accounting-account-page .card-header,
+            .accounting-account-page .card-body,
+            .accounting-account-page .accounting-account-table-scroll {
+                min-width: 0;
+            }
+
+            .accounting-account-page .card-header {
+                padding: 12px;
+                overflow-x: visible;
+            }
+
+            .accounting-account-page .accounting-account-toolbar {
+                display: flex !important;
+                flex-wrap: wrap;
+                align-items: stretch !important;
+                gap: 8px;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .accounting-account-page .accounting-account-search {
+                order: 1;
+                flex: 0 0 100%;
+                width: 100% !important;
+                max-width: 100%;
+                min-width: 0;
+            }
+
+            .accounting-account-page .accounting-account-search-input {
+                width: 100%;
+                min-width: 0;
+                height: 40px;
+            }
+
+            .accounting-account-page .accounting-account-actions {
+                order: 2;
+                display: grid !important;
+                grid-template-columns: minmax(0, 1.55fr) minmax(118px, 1fr);
+                gap: 8px !important;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .accounting-account-page .accounting-account-add-btn,
+            .accounting-account-page .accounting-account-bulk-btn {
+                width: 100%;
+                min-width: 0;
+                height: 40px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding-right: 10px;
+                padding-left: 10px;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-bulk-actions {
+                min-width: 0;
+            }
+
+            .accounting-account-page .card-body {
+                padding: 12px;
+                overflow-x: visible;
+            }
+
+            .accounting-account-page .accounting-account-table {
+                min-width: 1026px;
+                margin-bottom: 0;
+                table-layout: auto;
+            }
+
+            .accounting-account-page .accounting-account-table th,
+            .accounting-account-page .accounting-account-table td {
+                vertical-align: middle;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-check {
+                width: 44px !important;
+                min-width: 44px;
+                max-width: 44px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-index {
+                width: 60px !important;
+                min-width: 60px;
+                max-width: 60px;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-code {
+                width: 110px !important;
+                min-width: 110px;
+                max-width: 110px;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-name {
+                width: 280px !important;
+                min-width: 280px;
+                max-width: 280px;
+                word-break: normal;
+                overflow-wrap: break-word;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-default {
+                width: 180px !important;
+                min-width: 180px;
+                max-width: 180px;
+                text-align: center;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-status {
+                width: 130px !important;
+                min-width: 130px;
+                max-width: 130px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-creator {
+                width: 150px !important;
+                min-width: 150px;
+                max-width: 150px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .accounting-account-table .account-col-action {
+                width: 72px !important;
+                min-width: 72px;
+                max-width: 72px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .account-code-wrap {
+                display: inline-block;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .account-name-wrap {
+                display: flex;
+                align-items: flex-start;
+                gap: 5px;
+                min-width: 0;
+            }
+
+            .accounting-account-page .account-name-text {
+                min-width: 0;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                overflow: hidden;
+                white-space: normal;
+                word-break: normal;
+                overflow-wrap: break-word;
+            }
+
+            .accounting-account-page .account-name-wrap > i {
+                flex: 0 0 auto;
+                margin-top: 2px;
+            }
+
+            .accounting-account-page .account-boolean-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 20px;
+                min-height: 20px;
+            }
+
+            .accounting-account-page .account-action-btn {
+                width: 38px;
+                height: 38px;
+                padding: 0;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+            }
+
+            .accounting-account-page .account-action-dropdown .dropdown-menu {
+                min-width: 190px;
+            }
         }
     </style>
 @endpush

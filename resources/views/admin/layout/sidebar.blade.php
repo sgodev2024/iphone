@@ -35,17 +35,23 @@
             <ul class="nav nav-secondary" id="adminSidebarMenu">
 
                 {{-- Dashboard --}}
-               
+                @can('dashboard.view')
                     <li class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
                         <a href="{{ route('admin.dashboard') }}">
                             <i class="fas fa-chart-bar"></i>
                             <p>Tổng quan</p>
                         </a>
                     </li>
-          
+                @endcan
 
                 {{-- Sản phẩm --}}
-            
+                @canany([
+                    'product.view',
+                    'product.imei.global_view',
+                    'category.view',
+                    'brand.view',
+                    'company.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.products.*',
@@ -85,52 +91,57 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                              
+                                @can('product.view')
                                     <li class="{{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.products.index') }}">
                                             <span class="sub-item">Quản lý sản phẩm</span>
                                         </a>
                                     </li>
-                          
+                                @endcan
 
-                         
+                                @can('product.imei.global_view')
                                     <li class="{{ request()->routeIs('admin.imeis.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.imeis.index') }}">
                                             <span class="sub-item">Quản lý IMEI</span>
                                         </a>
                                     </li>
-                           
+                                @endcan
 
-                            
+                                @can('category.view')
                                     <li class="{{ request()->routeIs('admin.category.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.category.index') }}">
                                             <span class="sub-item">Quản lý danh mục</span>
                                         </a>
                                     </li>
-                      
+                                @endcan
 
-                 
+                                @can('brand.view')
                                     <li class="{{ request()->routeIs('admin.brand.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.brand.index') }}">
                                             <span class="sub-item">Quản lý thương hiệu</span>
                                         </a>
                                     </li>
-                          
+                                @endcan
 
-                        
+                                @can('company.view')
                                     <li class="{{ request()->routeIs('admin.company.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.company.index') }}">
                                             <span class="sub-item">Quản lý nhà cung cấp</span>
                                         </a>
                                     </li>
-                        
+                                @endcan
                             </ul>
                         </div>
                     </li>
-  
+                @endcanany
 
                 {{-- Kho hàng --}}
-           
+                @canany([
+                    'storage.view',
+                    'import_product.view',
+                    'inventory_check.view',
+                    'report.inventory.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.storage.*',
@@ -167,44 +178,48 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                        
+                                @can('storage.view')
                                     <li class="{{ request()->routeIs('admin.storage.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.storage.index') }}">
                                             <span class="sub-item">Kho hàng</span>
                                         </a>
                                     </li>
-                   
+                                @endcan
 
-                            
+                                @can('import_product.view')
                                     <li class="{{ request()->routeIs('admin.importproduct.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.importproduct.index') }}">
                                             <span class="sub-item">Nhập hàng</span>
                                         </a>
                                     </li>
-                  
+                                @endcan
 
-                 
+                                @can('inventory_check.view')
                                     <li class="{{ request()->routeIs('admin.check.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.check.index') }}">
                                             <span class="sub-item">Phiếu kiểm kho</span>
                                         </a>
                                     </li>
-               
+                                @endcan
 
-          
+                                @can('report.inventory.view')
                                     <li class="{{ request()->routeIs('admin.inventory.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.inventory.index') }}">
                                             <span class="sub-item">Tồn kho</span>
                                         </a>
                                     </li>
-                   
+                                @endcan
                             </ul>
                         </div>
                     </li>
-               
+                @endcanany
 
                 {{-- Báo cáo --}}
-               
+                @canany([
+                    'order.view',
+                    'client.view',
+                    'report.profit.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.order.*',
@@ -238,35 +253,39 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                               
+                                @can('order.view')
                                     <li class="{{ request()->routeIs('admin.order.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.order.index') }}">
                                             <span class="sub-item">Đơn hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                          
+                                @can('client.view')
                                     <li class="{{ request()->routeIs('admin.client.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.client.index') }}">
                                             <span class="sub-item">Khách hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
+                                @can('report.profit.view')
                                     <li class="{{ request()->routeIs('admin.profit.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.profit.index') }}">
                                             <span class="sub-item">Lợi nhuận</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
                             </ul>
                         </div>
                     </li>
-               
+                @endcanany
 
                 {{-- Thống kê ngày --}}
-              
+                @canany([
+                    'report.order.view',
+                    'report.import.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.report.orders.*',
@@ -297,28 +316,36 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                      
+                                @can('report.order.view')
                                     <li class="{{ request()->routeIs('admin.report.orders.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.report.orders.getDailyOrder') }}">
                                             <span class="sub-item">Bán hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                 
+                                @can('report.import.view')
                                     <li class="{{ request()->routeIs('admin.report.imports.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.report.imports.getDailyImport') }}">
                                             <span class="sub-item">Nhập hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
                             </ul>
                         </div>
                     </li>
-               
+                @endcanany
 
                 {{-- Kế toán --}}
-               
+                @canany([
+                    'cash_transaction.view',
+                    'bank_transaction.view',
+                    'debt.customer.view',
+                    'debt.supplier.view',
+                    'debt.beginning.view',
+                    'account.view',
+                    'journal_entry.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.transactions.cash.*',
@@ -364,47 +391,47 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                                
+                                @can('cash_transaction.view')
                                     <li class="{{ request()->routeIs('admin.transactions.cash.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.transactions.cash.index') }}">
                                             <span class="sub-item">Thu chi tiền mặt</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                           
+                                @can('bank_transaction.view')
                                     <li class="{{ request()->routeIs('admin.transactions.bank.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.transactions.bank.index') }}">
                                             <span class="sub-item">Thu chi ngân hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                 
+                                @can('debt.customer.view')
                                     <li class="{{ request()->routeIs('admin.debts.customer*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.debts.customer') }}">
                                             <span class="sub-item">Công nợ khách hàng</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                     
+                                @can('debt.supplier.view')
                                     <li class="{{ request()->routeIs('admin.debts.supplier*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.debts.supplier') }}">
                                             <span class="sub-item">Công nợ nhà cung cấp</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                         
+                                @can('debt.beginning.view')
                                     <li class="{{ request()->routeIs('admin.debts.beginning*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.debts.beginning') }}">
                                             <span class="sub-item">Nhập công nợ đầu kỳ</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                             
+                                @can('account.view')
                                     <li class="{{ request()->routeIs('admin.accounts.index') ? 'active' : '' }}">
                                         <a href="{{ route('admin.accounts.index') }}">
                                             <span class="sub-item">Tài khoản kế toán</span>
@@ -416,22 +443,29 @@
                                             <span class="sub-item">Tổng hợp theo tài khoản</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                           
+                                @can('journal_entry.view')
                                     <li class="{{ request()->routeIs('admin.journal-entries.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.journal-entries.index') }}">
                                             <span class="sub-item">Bút toán</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
                             </ul>
                         </div>
                     </li>
-               
+                @endcanany
 
                 {{-- Cấu hình chung --}}
-               
+                @canany([
+                    'branch.view',
+                    'branch.create',
+                    'user.view',
+                    'employee.view',
+                    'role.view',
+                    'config.view',
+                ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.users.*',
@@ -469,42 +503,42 @@
                         >
                             <ul class="nav nav-collapse">
                                 @if (Auth::check() && (int) Auth::user()->role_id === 1)
-                                    
+                                    @canany(['branch.view', 'branch.create', 'user.view'])
                                         <li class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                                             <a href="{{ url('/admin/users') }}">
                                                 <span class="sub-item">Tạo chi nhánh cửa hàng</span>
                                             </a>
                                         </li>
-                                   
+                                    @endcanany
                                 @endif
 
-                              
+                                @can('employee.view')
                                     <li class="{{ request()->routeIs('admin.employees.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.employees.index') }}">
                                             <span class="sub-item">Quản lý nhân viên</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                               
+                                @can('role.view')
                                     <li class="{{ request()->routeIs('admin.role.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.role.index') }}">
                                             <span class="sub-item">Quản lý vai trò</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
 
-                                
+                                @can('config.view')
                                     <li class="{{ request()->routeIs('admin.config.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.config.form') }}">
                                             <span class="sub-item">Thông tin chung</span>
                                         </a>
                                     </li>
-                               
+                                @endcan
                             </ul>
                         </div>
                     </li>
-               
+                @endcanany
 
             </ul>
         </div>
