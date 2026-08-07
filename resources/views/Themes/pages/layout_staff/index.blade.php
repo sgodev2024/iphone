@@ -1361,7 +1361,13 @@
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
                     success: (product) => {
-                        addToCart(product);
+                        if (!addToCart(product)) {
+                            barcodeFeedback.classList.remove('text-muted', 'text-warning');
+                            barcodeFeedback.classList.add('text-danger');
+                            barcodeFeedback.textContent = 'Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.';
+                            return;
+                        }
+
                         productPopup.style.display = 'none';
                         barcodeFeedback.classList.remove('text-warning', 'text-danger');
                         barcodeFeedback.classList.add('text-muted');
@@ -1440,6 +1446,22 @@
                 }
             });
 
+            const productResultState = new Map();
+
+            productList.addEventListener('click', (event) => {
+                const row = event.target.closest('button.product-row[data-product-result-key]');
+
+                if (!row || !productList.contains(row)) {
+                    return;
+                }
+
+                const product = productResultState.get(row.dataset.productResultKey);
+
+                if (product) {
+                    handleProductResultSelection(product);
+                }
+            });
+
             function normalizeProductResponse(response) {
                 if (Array.isArray(response)) {
                     return response;
@@ -1452,9 +1474,90 @@
                 return [];
             }
 
+            function handleProductResultSelection(product) {
+                const trackingType = product.tracking_type || product.inventory_tracking || 'quantity';
+                const isImeiDevice = trackingType === 'imei' || product.result_type === 'imei_device';
+                const isImeiProduct = trackingType === 'imei_product';
+                const availableQuantity = Number(product.available_quantity ?? product.quantity ?? 0);
+
+                if (isImeiDevice) {
+                    verifyAndAddImeiDevice(product);
+                    return;
+                }
+
+                if (isImeiProduct) {
+                    Toast.fire({
+                        icon: "info",
+                        title: "Sản phẩm này quản lý theo IMEI. Hãy nhập IMEI của thiết bị hoặc quét Barcode."
+                    });
+                    productPopup.style.display = 'none';
+                    productSearch.value = '';
+                    focusBarcodeInput();
+                    return;
+                }
+
+                if (availableQuantity <= 0) {
+                    Toast.fire({
+                        icon: "error",
+                        title: "Số lượng tồn kho không đủ!"
+                    });
+                    return;
+                }
+
+                if (addToCart({
+                        ...product,
+                        tracking_type: 'quantity',
+                        quantity: availableQuantity,
+                        available_quantity: availableQuantity
+                    })) {
+                    productPopup.style.display = 'none';
+                    productSearch.value = '';
+                }
+            }
+
+            function verifyAndAddImeiDevice(product) {
+                const productId = Number(product?.product_id || product?.id || 0);
+                const productImeiId = Number(product?.product_imei_id || 0);
+                const storageId = Number(product?.storage_id || 0);
+                const imei = safeText(product?.imei);
+
+                if (!productId || !productImeiId || !storageId || !imei) {
+                    Toast.fire({
+                        icon: "error",
+                        title: "Dữ liệu IMEI không hợp lệ. Vui lòng tìm hoặc quét lại thiết bị."
+                    });
+                    return false;
+                }
+
+                const added = addToCart({
+                    ...product,
+                    id: productId,
+                    product_id: productId,
+                    product_imei_id: productImeiId,
+                    storage_id: storageId,
+                    tracking_type: 'imei',
+                    type: 'imei',
+                    imei,
+                    quantity: 1,
+                    available_quantity: 1
+                });
+
+                if (added) {
+                    productPopup.style.display = 'none';
+                    productSearch.value = '';
+                    Toast.fire({
+                        icon: "success",
+                        title: "Đã thêm thiết bị IMEI vào giỏ."
+                    });
+                }
+
+                return added;
+            }
+
             function renderProductResults(response) {
                 const products = normalizeProductResponse(response).filter(Boolean);
                 productList.innerHTML = '';
+                productResultState.clear();
 
                 if (products.length === 0) {
                     productList.innerHTML =
@@ -1462,8 +1565,9 @@
                     return;
                 }
 
-                products.forEach(product => {
+                products.forEach((product, index) => {
                     const p = product || {};
+                    const resultKey = String(index);
                     const trackingType = p.tracking_type || p.inventory_tracking || 'quantity';
                     const isImeiDevice = trackingType === 'imei' || p.result_type === 'imei_device';
                     const isImeiProduct = trackingType === 'imei_product';
@@ -1481,6 +1585,7 @@
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'list-group-item list-group-item-action product-row';
+                    row.dataset.productResultKey = resultKey;
                     row.innerHTML = `
                     <div class="d-flex align-items-center gap-3">
                         ${productThumbHtml(p)}
@@ -1500,40 +1605,7 @@
                         </div>
                     </div>`;
 
-                    row.addEventListener('click', () => {
-
-                        if (isImeiDevice) {
-                            verifyAndAddImeiDevice(p);
-                            productPopup.style.display = 'none';
-                            productSearch.value = '';
-                            return;
-                        }
-
-                        if (isImeiProduct) {
-                            Toast.fire({
-                                icon: "info",
-                                title: "Sản phẩm này quản lý theo IMEI. Hãy nhập IMEI của thết bị hoặc quét Barcode."
-                            });
-                            productPopup.style.display = 'none';
-                            productSearch.value = '';
-                            focusBarcodeInput();
-                            return;
-                        }
-
-                        if (availableQuantity <= 0) return Toast.fire({
-                            icon: "error",
-                            title: "Số lượng tồn kho không đủ!"
-                        })
-
-                        addToCart({
-                            ...p,
-                            tracking_type: 'quantity',
-                            quantity: availableQuantity,
-                            available_quantity: availableQuantity
-                        });
-                        productPopup.style.display = 'none';
-                        productSearch.value = '';
-                    });
+                    productResultState.set(resultKey, p);
                     productList.appendChild(row);
                 });
             }
@@ -1547,30 +1619,35 @@
                 const trackingType = product.tracking_type || product.type || 'quantity';
 
                 if (trackingType === 'imei') {
-                    if (!product.product_imei_id) {
+                    const productImeiId = Number(product.product_imei_id || 0);
+
+                    if (!productImeiId) {
                         Toast.fire({
                             icon: "error",
                             title: "Thiết bị IMEI không hợp lệ."
                         });
-                        return;
+                        return false;
                     }
 
-                    const key = `imei:${product.product_imei_id}`;
+                    const key = `imei:${productImeiId}`;
 
                     if (cart.has(key)) {
                         Toast.fire({
                             icon: "error",
                             title: "Thiết bị đã có trong giỏ."
                         });
-                        return;
+                        return false;
                     }
 
                     cart.set(key, {
-                        product: normalizeCartProduct(product, 'imei'),
+                        product: normalizeCartProduct({
+                            ...product,
+                            product_imei_id: productImeiId
+                        }, 'imei'),
                         qty: 1
                     });
                     renderCart();
-                    return;
+                    return true;
                 }
 
                 const normalized = normalizeCartProduct(product, 'quantity');
@@ -1586,12 +1663,13 @@
                         icon: "error",
                         title: "Số lượng yêu cầu vượt tồn kho."
                     });
-                    return;
+                    return false;
                 }
 
                 item.qty += 1;
                 cart.set(key, item);
                 renderCart();
+                return true;
             }
 
             function normalizeCartProduct(product, trackingType) {

@@ -148,7 +148,7 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseCount('import', 1);
     }
 
-    public function test_import_quantity_update_accepts_one_and_thirty_five_but_rejects_larger_values(): void
+    public function test_import_quantity_update_accepts_any_positive_quantity_for_imei_products(): void
     {
         $item = $this->createImportItem(quantity: 1);
         $item->update([
@@ -168,31 +168,22 @@ class ImportImeiWorkflowTest extends TestCase
         $this->actingAs($this->admin)
             ->postJson('/admin/importproduct/import/update', [
                 'dataId' => $item->id,
-                'value' => ProductImei::MAX_IMPORT_QUANTITY,
+                'value' => 50,
             ])
             ->assertOk()
-            ->assertJsonPath('import.0.quantity', ProductImei::MAX_IMPORT_QUANTITY)
-            ->assertJsonPath('total', 70000);
+            ->assertJsonPath('import.0.quantity', 50)
+            ->assertJsonPath('total', 100000);
 
-        foreach ([36, 73] as $quantity) {
-            $response = $this->actingAs($this->admin)
-                ->postJson('/admin/importproduct/import/update', [
-                    'dataId' => $item->id,
-                    'value' => $quantity,
-                ])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors(['value']);
+        $this->actingAs($this->admin)
+            ->postJson('/admin/importproduct/import/update', [
+                'dataId' => $item->id,
+                'value' => 100,
+            ])
+            ->assertOk()
+            ->assertJsonPath('import.0.quantity', 100)
+            ->assertJsonPath('total', 200000);
 
-            $this->assertSame(
-                'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
-                $response->json('errors.value.0')
-            );
-
-            $this->assertSame(
-                (string) ProductImei::MAX_IMPORT_QUANTITY,
-                (string) $item->fresh()->quantity
-            );
-        }
+        $this->assertSame('100', (string) $item->fresh()->quantity);
     }
 
     public function test_quantity_tracked_product_can_update_quantity_above_imei_limit(): void
@@ -210,14 +201,15 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertSame('50', (string) $item->fresh()->quantity);
     }
 
-    public function test_import_add_page_exposes_quantity_limit_to_frontend(): void
+    public function test_import_add_page_exposes_serial_length_rules_to_frontend(): void
     {
         $this->actingAs($this->admin)
             ->get('/admin/importproduct/add')
             ->assertOk()
-            ->assertSee('const MAX_IMPORT_QUANTITY = 35;', false)
-            ->assertSee('max="${MAX_IMPORT_QUANTITY}"', false)
-            ->assertSee('Mỗi lần chỉ được nhập tối đa 35 sản phẩm');
+            ->assertSee('const MAX_IMEI_LENGTH = 50;', false)
+            ->assertSee('minlength="1" maxlength="${MAX_IMEI_LENGTH}"', false)
+            ->assertSee('tối đa 50 ký tự', false)
+            ->assertDontSee('MAX_IMPORT_QUANTITY', false);
     }
 
     public function test_missing_or_invalid_product_query_opens_normal_form_without_preselection(): void
@@ -284,7 +276,7 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseCount('product_imeis', 0);
     }
 
-    public function test_confirmation_rejects_staged_quantity_above_thirty_five(): void
+    public function test_confirmation_accepts_staged_quantity_above_previous_imei_limit(): void
     {
         $item = $this->createImportItem(quantity: 36);
 
@@ -295,14 +287,12 @@ class ImportImeiWorkflowTest extends TestCase
                 $this->makeImeis(36)
             ));
 
-        $response->assertRedirect('/admin/importproduct/add')
-            ->assertSessionHasErrors([
-                "imeis.{$item->id}" => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
-            ]);
-        $this->assertDatabaseCount('import_coupon', 0);
-        $this->assertDatabaseCount('import_detail', 0);
-        $this->assertDatabaseCount('product_imeis', 0);
-        $this->assertDatabaseHas('import', ['id' => $item->id]);
+        $response->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertDatabaseCount('import_coupon', 1);
+        $this->assertDatabaseCount('import_detail', 1);
+        $this->assertDatabaseCount('product_imeis', 36);
+        $this->assertDatabaseCount('import', 0);
     }
 
     public function test_confirming_import_creates_exact_imeis_linked_to_detail_and_increases_stock(): void
@@ -359,6 +349,28 @@ class ImportImeiWorkflowTest extends TestCase
         ]);
         $this->assertSame('3', (string) $this->product->fresh()->quantity);
         $this->assertDatabaseCount('import', 0);
+    }
+
+    public function test_confirmation_accepts_imei_and_serial_values_from_one_to_fifty_characters(): void
+    {
+        $item = $this->createImportItem(quantity: 4);
+        $values = [
+            'A',
+            '123456789012345',
+            str_repeat('S', 50),
+            'SN-001_ABC',
+        ];
+
+        $this->actingAs($this->admin)
+            ->post('/admin/importproduct/importCoupon', $this->validPayload($item, $values))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        foreach ($values as $value) {
+            $this->assertDatabaseHas('product_imeis', [
+                'imei' => $value,
+            ]);
+        }
     }
 
     public function test_mixed_import_creates_imeis_only_for_imei_tracked_products(): void
@@ -474,9 +486,10 @@ class ImportImeiWorkflowTest extends TestCase
         $imeis = match ($case) {
             'missing' => ['123456789012345'],
             'excess' => ['123456789012345', '223456789012345', '323456789012345'],
-            'invalid' => ['12345678901234A', '223456789012345'],
+            'invalid' => [str_repeat('X', 51), '223456789012345'],
             'duplicate_in_receipt' => ['123456789012345', '123456789012345'],
             'duplicate_in_database' => ['888888888888888', '223456789012345'],
+            'whitespace_only' => ['   ', '223456789012345'],
         };
 
         $response = $this->actingAs($this->admin)
@@ -526,6 +539,7 @@ class ImportImeiWorkflowTest extends TestCase
             ->once()
             ->andThrow(new RuntimeException('Barcode failure'));
         $this->app->instance(InternalBarcodeService::class, $barcodeService);
+        $this->replaceImportCouponControllerDependency('internalBarcodeService', $barcodeService);
 
         $response = $this->actingAs($this->admin)
             ->from('/admin/importproduct/add')
@@ -548,9 +562,10 @@ class ImportImeiWorkflowTest extends TestCase
         return [
             'missing IMEI' => ['missing'],
             'excess IMEI' => ['excess'],
-            'invalid IMEI' => ['invalid'],
+            'invalid IMEI/Serial' => ['invalid'],
             'duplicate in receipt' => ['duplicate_in_receipt'],
             'duplicate in database' => ['duplicate_in_database'],
+            'whitespace-only IMEI/Serial' => ['whitespace_only'],
         ];
     }
 
@@ -562,6 +577,7 @@ class ImportImeiWorkflowTest extends TestCase
             ->once()
             ->andThrow(new RuntimeException('Late failure'));
         $this->app->instance(CompanyProductService::class, $companyProductService);
+        $this->replaceImportCouponControllerDependency('companyProductService', $companyProductService);
 
         $response = $this->actingAs($this->admin)
             ->from('/admin/importproduct/add')
@@ -682,6 +698,14 @@ class ImportImeiWorkflowTest extends TestCase
                 $item->id => $imeis,
             ],
         ];
+    }
+
+    private function replaceImportCouponControllerDependency(string $propertyName, object $dependency): void
+    {
+        $route = $this->app['router']->getRoutes()->getByName('admin.importproduct.importCoupon.add');
+        $controller = $route->getController();
+        $property = new \ReflectionProperty($controller, $propertyName);
+        $property->setValue($controller, $dependency);
     }
 
     private function makeImeis(int $quantity): array
@@ -817,7 +841,7 @@ class ImportImeiWorkflowTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
-            $table->string('imei', 15)->unique();
+            $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
             $table->timestamp('printed_at')->nullable();
