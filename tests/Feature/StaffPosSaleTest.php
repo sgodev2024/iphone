@@ -1549,6 +1549,7 @@ class StaffPosSaleTest extends TestCase
     private function createSchema(): void
     {
         Schema::dropAllTables();
+        $this->createAuthorizationTablesForTests();
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();

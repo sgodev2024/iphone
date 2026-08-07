@@ -47,7 +47,6 @@ use App\Http\Controllers\Staff\ProductController as StaffProductController;
 use App\Http\Controllers\Staff\WareHomeController;
 use App\Http\Controllers\SuperAdmin\StoreController;
 use App\Http\Controllers\SuperAdmin\SuperAdminController;
-use App\Http\Middleware\CheckLogin;
 use App\Http\Middleware\CheckLoginSuperAdmin;
 use Illuminate\Support\Facades\Route;
 
@@ -85,7 +84,7 @@ Route::middleware(['auth'])
             ->name('logout');
 
 
-        Route::middleware(['role:1'])->group(function () {
+        Route::middleware(['role:store'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -952,7 +951,7 @@ Route::middleware(['auth'])
         |--------------------------------------------------------------------------
         */
 
-        Route::middleware(['role:3'])->group(function () {
+        Route::middleware(['role:staff'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -1110,7 +1109,7 @@ Route::middleware(['auth'])
     });
 
 // bán hàng
-Route::middleware([CheckLogin::class, 'role:3'])->prefix('ban-hang')->name('staff.')->group(function () {
+Route::middleware('role:staff')->prefix('ban-hang')->name('staff.')->group(function () {
     Route::post('storage/select', [StaffProductController::class, 'selectSaleStorage'])->name('storage.select');
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
     Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');

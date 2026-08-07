@@ -4,34 +4,43 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
 {
     /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * Allow full-access roles through every role group. Other roles must
+     * match at least one route argument (ID or role name).
      */
-    public function handle(Request $request, Closure $next, ...$roles)
+    public function handle(Request $request, Closure $next, ...$roles): Response
     {
-        if (!auth()->check()) {
-            return redirect()->route('auth.login');
+        if (! auth()->check()) {
+            return redirect()->guest(route('auth.login'));
         }
 
         $user = auth()->user();
 
-        // Admin (role_id = 1) => đi được tất cả
-        if ($user->role_id == 1 || $user->role_id == 2) {
+        if ($user->hasFullAccess()) {
             return $next($request);
         }
 
-        // Nếu user có role nằm trong danh sách middleware cho phép
-        // if (in_array($user->role_id, $roles)) {
-        //     return $next($request);
-        // }
+        $hasRequiredRole = $user->role !== null
+            && collect($roles)->contains(fn ($role) => $user->matchesRoleRequirement($role));
 
-        // // Nếu không hợp lệ => 403
-        // abort(403, 'Không có quyền truy cập');
+        if ($hasRequiredRole) {
+            return $next($request);
+        }
+
+        Log::warning('Role denied', [
+            'user_id' => $user->getAuthIdentifier(),
+            'role_id' => $user->role_id,
+            'role_key' => $user->roleKey(),
+            'route' => $request->route()?->getName(),
+            'required_roles' => array_values($roles),
+            'reason' => $user->role ? 'role_not_allowed' : 'missing_role',
+        ]);
+
+        abort(Response::HTTP_FORBIDDEN, 'You do not have access to this area.');
     }
 }

@@ -128,7 +128,7 @@ class AdminEmployeeCreationTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data', '/ban-hang');
+            ->assertJsonPath('data', route('staff.index', absolute: false));
     }
 
     public function test_employee_storage_must_belong_to_current_admin(): void
@@ -657,6 +657,7 @@ class AdminEmployeeCreationTest extends TestCase
     private function createSchema(): void
     {
         Schema::dropAllTables();
+        $this->createAuthorizationTablesForTests();
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
