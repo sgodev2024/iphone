@@ -4,8 +4,8 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
 
 class PermissionMiddleware
 {
@@ -14,21 +14,24 @@ class PermissionMiddleware
         Closure $next,
         string $permission
     ): Response {
-        return $next($request);
-
         $user = Auth::user();
 
-        if (!$user) {
+        if (! $user) {
             abort(401);
         }
 
-        // $permissions = $user->role
-        //                     ->permissions
-        //                     ->pluck('permission_key');
+        $role = $user->role;
 
-        // if (!$permissions->contains($permission)) {
-        //     abort(403);
-        // }
+        if (! $role) {
+            abort(403);
+        }
+
+        $permissions = $role->permissions()
+            ->pluck('permission_key');
+
+        if (! $permissions->contains($permission)) {
+            abort(403);
+        }
 
         return $next($request);
     }

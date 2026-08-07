@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductStorage extends Model
 {
-    use HasFactory;
-
     protected $table = 'product_storage';
 
     protected $fillable = [
@@ -17,13 +15,17 @@ class ProductStorage extends Model
         'quantity',
     ];
 
-    public function product()
+    protected $casts = [
+        'quantity' => 'integer',
+    ];
+
+    public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class, 'product_id');
+        return $this->belongsTo(Product::class);
     }
 
-    public function storage()
+    public function storage(): BelongsTo
     {
-        return $this->belongsTo(Storage::class, 'storage_id');
+        return $this->belongsTo(Storage::class);
     }
 }
