@@ -25,6 +25,10 @@ class PermissionMiddleware
         if (! $role) {
             abort(403);
         }
+        //nếu là admin thì bypass
+        if ($user->role->name === 'admin') {
+            return $next($request);
+        }
 
         $permissions = $role->permissions()
             ->pluck('permission_key');
