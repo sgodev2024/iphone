@@ -28,7 +28,7 @@ class AuthServiceProvider extends ServiceProvider
             /*
              * Chỉ role 1 là Super Admin.
              */
-            if ((int) $user->role_id === 1) {
+            if ( $user->role->name === 'admin' ) {
                 return true;
             }
 
