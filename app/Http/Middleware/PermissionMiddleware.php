@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class PermissionMiddleware
@@ -17,24 +18,24 @@ class PermissionMiddleware
         $user = Auth::user();
 
         if (! $user) {
-            abort(401);
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
+            }
+
+            return redirect()->guest(route('auth.login'));
         }
 
-        $role = $user->role;
+        if (! $user->hasPermission($permission)) {
+            Log::warning('Permission denied', [
+                'user_id' => $user->getAuthIdentifier(),
+                'role_id' => $user->role_id,
+                'role_key' => $user->roleKey(),
+                'route' => $request->route()?->getName(),
+                'permission' => $permission,
+                'reason' => $user->role ? 'missing_permission' : 'missing_role',
+            ]);
 
-        if (! $role) {
-            abort(403);
-        }
-        if ($user->role->name === 'admin') {
-            return $next($request);
-        }
-
-
-        $permissions = $role->permissions()
-            ->pluck('permission_key');
-
-        if (! $permissions->contains($permission)) {
-            abort(403);
+            abort(Response::HTTP_FORBIDDEN, 'You do not have permission to access this resource.');
         }
 
         return $next($request);
