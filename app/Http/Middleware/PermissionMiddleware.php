@@ -14,21 +14,21 @@ class PermissionMiddleware
         Closure $next,
         string $permission
     ): Response {
-       
+
         $user = Auth::user();
 
         if (!$user) {
             abort(401);
         }
 
-         // bypass Admin luôn có toàn quyền
-    if ($user->role_id == 2) {
-        return $next($request);
-    }
+        // bypass Admin luôn có toàn quyền
+        if ($user->role->name === 'admin') {
+            return $next($request);
+        }
 
         $permissions = $user->role
-                            ->permissions
-                            ->pluck('permission_key');
+            ->permissions
+            ->pluck('permission_key');
 
         if (!$permissions->contains($permission)) {
             abort(403);
