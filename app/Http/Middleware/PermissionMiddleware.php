@@ -14,12 +14,15 @@ class PermissionMiddleware
         Closure $next,
         string $permission
     ): Response {
-        return $next($request);
 
         $user = Auth::user();
 
         if (!$user) {
             abort(401);
+        }
+        //bypass cho admin 
+        if ($user->role_id == 2) {
+            return $next($request);
         }
 
         $permissions = $user->role

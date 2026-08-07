@@ -30,7 +30,7 @@ class RoleMiddleware
         if (in_array($user->role_id, $roles)) {
             return $next($request);
         }
-
+            
         // Nếu không hợp lệ => 403
         abort(403, 'Không có quyền truy cập');
     }
