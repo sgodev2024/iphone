@@ -928,7 +928,10 @@
                 <div class="modal-body">
                     <form id="addCustomerForm">
                         <div class="mb-3">
-                            <label class="form-label">Họ tên</label>
+                            <label class="form-label">
+                                Họ tên
+                                <span class="text-danger fst-italic">(*) Không được để trống</span>
+                            </label>
                             <input type="text" class="form-control" name="name" required>
                         </div>
                         <div class="mb-3">
@@ -936,7 +939,10 @@
                             <input type="email" class="form-control" name="email">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Số điện thoại</label>
+                            <label class="form-label">
+                                Số điện thoại
+                                <span class="text-danger fst-italic">(*) Không được để trống</span>
+                            </label>
                             <input type="tel" class="form-control" name="phone" required>
                         </div>
                         <div class="mb-3">
