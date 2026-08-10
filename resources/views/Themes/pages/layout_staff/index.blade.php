@@ -935,15 +935,15 @@
                             <input type="text" class="form-control" name="name" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control" name="email">
-                        </div>
-                        <div class="mb-3">
                             <label class="form-label">
                                 Số điện thoại
                                 <span class="text-danger fst-italic">(*) Không được để trống</span>
                             </label>
                             <input type="tel" class="form-control" name="phone" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Địa chỉ</label>
@@ -973,7 +973,10 @@
                         <!-- Header -->
                         <div class="text-center invoice-header mb-4">
                             <h2 class="fw-bold text-uppercase">HÓA ĐƠN THANH TOÁN</h2>
-                            <h5 class="mt-2">Siêu Thị Thực Phẩm - CH01</h5>
+                            <h5 class="mt-2">Công ty: {{ $config->user->company_name }} </h5>
+                            <h5 class="mt-2">Cửa hàng: {{ $config->user->store_name }} </h5>
+                            <h5 class="mt-2">Địa chỉ: {{ $config->user->address }} </h5>
+                            <h5 class="mt-2">Điện thoại: {{ $config->user->phone }} &emsp;&emsp;Email: {{ $config->user->email }}</h5>
                         </div>
 
                         <hr>
