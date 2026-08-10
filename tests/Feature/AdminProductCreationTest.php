@@ -459,7 +459,7 @@ class AdminProductCreationTest extends TestCase
         Schema::create('product_imeis', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('product_id');
-            $table->string('imei', 15)->unique();
+            $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
             $table->timestamp('printed_at')->nullable();

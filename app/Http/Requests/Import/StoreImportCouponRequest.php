@@ -50,6 +50,8 @@ class StoreImportCouponRequest extends FormRequest
             'totalncc' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['required', 'string', 'in:cash,bank_transfer,debt'],
             'imeis' => ['nullable', 'array'],
+            'imeis.*' => ['array'],
+            'imeis.*.*' => ['required', 'string', 'min:1', 'max:' . ProductImei::IMEI_MAX_LENGTH],
         ];
     }
 
@@ -63,6 +65,10 @@ class StoreImportCouponRequest extends FormRequest
             'totalncc.numeric' => 'Số tiền trả nhà cung cấp không hợp lệ.',
             'totalncc.min' => 'Số tiền trả nhà cung cấp không được âm.',
             'imeis.array' => 'Danh sách IMEI không hợp lệ.',
+            'imeis.*.array' => 'Danh sách IMEI/Serial không hợp lệ.',
+            'imeis.*.*.string' => 'IMEI/Serial phải là chuỗi ký tự.',
+            'imeis.*.*.min' => 'IMEI/Serial không được để trống.',
+            'imeis.*.*.max' => 'IMEI/Serial phải có tối đa 50 ký tự.',
         ];
     }
 
@@ -115,8 +121,9 @@ class StoreImportCouponRequest extends FormRequest
                 $quantity = (int) $import->quantity;
                 $rowImeis = $submitted[$import->id] ?? $submitted[(string) $import->id] ?? [];
                 $rowImeis = is_array($rowImeis) ? array_values($rowImeis) : [];
-                $hasSubmittedImeis = array_key_exists($import->id, $submitted)
-                    || array_key_exists((string) $import->id, $submitted);
+                $normalizedRowImeis = collect($rowImeis)
+                    ->map(fn($imei) => trim((string) $imei))
+                    ->values();
 
                 if (! in_array($tracking, Product::INVENTORY_TRACKING_OPTIONS, true)) {
                     $validator->errors()->add(
@@ -128,21 +135,12 @@ class StoreImportCouponRequest extends FormRequest
                 }
 
                 if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
-                    if ($hasSubmittedImeis) {
+                    if ($normalizedRowImeis->filter(fn(string $imei) => $imei !== '')->isNotEmpty()) {
                         $validator->errors()->add(
                             "imeis.{$import->id}",
                             "Sản phẩm {$productName} là sản phẩm thường nên không được gửi danh sách IMEI."
                         );
                     }
-
-                    continue;
-                }
-
-                if ($quantity > ProductImei::MAX_IMPORT_QUANTITY) {
-                    $validator->errors()->add(
-                        "imeis.{$import->id}",
-                        'Mỗi lần chỉ được nhập tối đa 35 sản phẩm'
-                    );
 
                     continue;
                 }
@@ -172,16 +170,16 @@ class StoreImportCouponRequest extends FormRequest
                     if ($imei === '') {
                         $validator->errors()->add(
                             $path,
-                            "Vui lòng nhập IMEI cho máy số {$position} của sản phẩm {$productName}."
+                            "IMEI/Serial máy số {$position} của sản phẩm {$productName} không được để trống."
                         );
 
                         continue;
                     }
 
-                    if (preg_match('/^\d{15}$/D', $imei) !== 1) {
+                    if (mb_strlen($imei) > ProductImei::IMEI_MAX_LENGTH) {
                         $validator->errors()->add(
                             $path,
-                            "IMEI máy số {$position} của sản phẩm {$productName} phải gồm đúng 15 chữ số."
+                            "IMEI/Serial máy số {$position} của sản phẩm {$productName} phải có tối đa 50 ký tự."
                         );
 
                         continue;
@@ -190,7 +188,7 @@ class StoreImportCouponRequest extends FormRequest
                     if (isset($seen[$imei])) {
                         $validator->errors()->add(
                             $path,
-                            "IMEI {$imei} của sản phẩm {$productName} bị trùng trong cùng phiếu nhập."
+                        "Mã IMEI/Serial {$imei} của sản phẩm {$productName} bị trùng trong cùng phiếu nhập."
                         );
                     } else {
                         $seen[$imei] = $path;
@@ -208,6 +206,7 @@ class StoreImportCouponRequest extends FormRequest
             }
 
             $existingImeis = ProductImei::query()
+                ->withTrashed()
                 ->whereIn('imei', collect($candidates)->pluck('imei')->all())
                 ->pluck('imei')
                 ->flip();
@@ -216,7 +215,7 @@ class StoreImportCouponRequest extends FormRequest
                 if ($existingImeis->has($candidate['imei'])) {
                     $validator->errors()->add(
                         $path,
-                        "IMEI {$candidate['imei']} của sản phẩm {$candidate['product_name']} đã tồn tại trong hệ thống."
+                        "Mã IMEI/Serial {$candidate['imei']} của sản phẩm {$candidate['product_name']} đã tồn tại trong kho."
                     );
                 }
             }

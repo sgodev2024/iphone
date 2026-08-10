@@ -360,7 +360,7 @@ class ImportBarcodePrintTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
-            $table->string('imei', 15)->unique();
+            $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
             $table->timestamp('printed_at')->nullable();
