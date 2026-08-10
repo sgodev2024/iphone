@@ -67,27 +67,18 @@ class ClientController extends Controller
 
         $data = Validator::make($request->all(), [
             'name' => ['required', 'max:255'],
-            'email' => [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('clients', 'email')->where(fn ($query) => $query->where('user_id', $userId)),
-            ],
             'phone' => [
                 'required',
                 'max:11',
                 'min:10',
                 Rule::unique('clients', 'phone')->where(fn ($query) => $query->where('user_id', $userId)),
             ],
-            'address' => ['nullable', 'max:255'],
             'gender' => ['nullable', 'in:Male,Female'],
             'dob' => ['nullable', 'date'],
             'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],
         ], __('request.messages'), [
             'name' => 'Tên khách hàng',
-            'phone' => 'Số điện thoại',
-            'email' => 'Email',
-            'address' => 'Địa chỉ'
+            'phone' => 'Số điện thoại'
         ]);
 
         if ($data->fails()) {
