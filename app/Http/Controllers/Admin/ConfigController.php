@@ -43,7 +43,7 @@ class ConfigController extends Controller
             $bank = Bank::findOrFail($credentials['bank_id']);
             $bankAccount = $credentials['bank_account'];
 
-            $user->store_name = $credentials['company_name'];
+            $user->store_name = $request->input('store_name');
             $user->company_name = $credentials['company_name'];
             $user->email = $credentials['email'];
             $user->phone = $credentials['phone'];

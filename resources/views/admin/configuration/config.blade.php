@@ -16,10 +16,16 @@
                         <div class="card-body">
                             <div class="row gy-4">
                                 <div class="col-md-12">
-                                    <label for="company_name" class="form-label mb-1 fw-bold">Tên cửa hàng</label>
+                                    <label for="company_name" class="form-label mb-1 fw-bold">Tên công ty</label>
                                     <input type="text" class="form-control" name="company_name"
-                                        value="{{ optional($configUser)->store_name ?? optional($configUser)->company_name }}"
+                                        value="{{ optional($configUser)->company_name ?? optional($configUser)->company_name }}"
                                         placeholder="Nhập tên cửa hàng">
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label for="store_name" class="form-label mb-1 fw-bold">Tên cửa hàng</label>
+                                    <input type="text" class="form-control" name="store_name"
+                                        value="{{ optional($configUser)->store_name }}" placeholder="Nhập tên cửa hàng">
                                 </div>
 
                                 <div class="col-md-6">
