@@ -1,5 +1,203 @@
 @extends('admin.layout.index')
 
+@push('style')
+    <style>
+        .storage-page .storage-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .storage-page .storage-mobile-hint {
+            display: none;
+        }
+
+        @media (max-width: 767.98px) {
+            .storage-page {
+                width: 100%;
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+                padding-right: 10px !important;
+                padding-left: 10px !important;
+                overflow-x: visible;
+            }
+
+            .storage-page .breadcrumb {
+                margin-right: 0;
+                margin-left: 0;
+            }
+
+            .storage-page .row {
+                --bs-gutter-x: 0;
+                margin-right: 0;
+                margin-left: 0;
+            }
+
+            .storage-page .row > * {
+                padding-right: 0;
+                padding-left: 0;
+            }
+
+            .storage-page .storage-card {
+                width: 100%;
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+                overflow: visible;
+            }
+
+            .storage-page .storage-toolbar {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) max-content;
+                gap: 8px;
+                align-items: center !important;
+                padding: 10px;
+            }
+
+            .storage-page .storage-toolbar-main {
+                display: contents !important;
+            }
+
+            .storage-page .storage-search-actions {
+                grid-column: 1 / -1;
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) 40px;
+                gap: 8px;
+                order: 1;
+                width: 100%;
+            }
+
+            .storage-page .storage-search-input {
+                width: 100% !important;
+                min-width: 0;
+                height: 40px;
+                margin-right: 0 !important;
+            }
+
+            .storage-page .storage-reset-btn,
+            .storage-page .storage-bulk-actions .btn,
+            .storage-page .storage-add-btn {
+                height: 40px;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-reset-btn {
+                width: 40px;
+                min-width: 40px;
+                padding: 0;
+            }
+
+            .storage-page .storage-bulk-actions {
+                grid-column: 1 / 2;
+                order: 2;
+                min-width: 0;
+            }
+
+            .storage-page .storage-bulk-actions .btn {
+                width: 100%;
+                padding-right: 10px;
+                padding-left: 10px;
+            }
+
+            .storage-page .storage-add-btn {
+                grid-column: 2 / 3;
+                order: 3;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 118px;
+                padding-right: 10px;
+                padding-left: 10px;
+                gap: 4px;
+            }
+
+            .storage-page .storage-card-body {
+                max-width: 100%;
+                padding: 10px;
+                overflow: visible;
+            }
+
+            .storage-page .storage-mobile-hint {
+                display: block;
+                margin-bottom: 6px;
+                color: #6c757d;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+
+            .storage-page .storage-table-region,
+            .storage-page .storage-table-scroll {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            .storage-page .storage-table {
+                min-width: 840px;
+                margin-top: 0.5rem !important;
+            }
+
+            .storage-page .storage-table th,
+            .storage-page .storage-table td {
+                vertical-align: middle;
+            }
+
+            .storage-page .storage-table .storage-col-check {
+                width: 46px !important;
+                min-width: 46px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-table .storage-col-id {
+                width: 70px !important;
+                min-width: 70px;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-table .storage-col-date {
+                width: 120px !important;
+                min-width: 120px;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-table .storage-col-name {
+                width: 190px;
+                min-width: 190px;
+            }
+
+            .storage-page .storage-table .storage-col-location {
+                width: 280px;
+                min-width: 280px;
+            }
+
+            .storage-page .storage-table .storage-col-action {
+                width: 118px !important;
+                min-width: 118px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-actions {
+                flex-wrap: nowrap !important;
+                gap: 6px !important;
+                white-space: nowrap;
+            }
+
+            .storage-page .storage-actions .btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                min-width: 36px;
+                height: 36px;
+                padding: 0;
+            }
+        }
+    </style>
+@endpush
 @section('content')
 <div class="page-inner">
     <x-breadcrumb :items="[['label' => 'Kho hàng']]" />

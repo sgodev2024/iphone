@@ -111,7 +111,7 @@ class OrderController extends Controller
                     $query->where('payment_method', $paymentMethod);
                 }
             )
-
+            ->where('branch_id', auth()->user()->branch_id)
             ->latest('created_at')
             ->paginate(10)
             ->withQueryString();

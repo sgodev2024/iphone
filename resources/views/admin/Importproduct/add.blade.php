@@ -222,6 +222,9 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(210px, 260px));
             gap: 8px 12px;
+            max-height: min(60vh, 720px);
+            overflow-y: auto;
+            padding-right: 4px;
         }
 
         .imei-counter.is-incomplete {
@@ -597,844 +600,923 @@
             </div>
         </div>
     </div>
-    <script>
-        const MAX_IMPORT_QUANTITY = @json(\App\Models\ProductImei::MAX_IMPORT_QUANTITY);
-        const MAX_IMPORT_QUANTITY_MESSAGE = 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm';
-        const initialImeiValues = @json(old('imeis', []));
-        const imeiValidationErrors = @json($errors->toArray());
+    @push('script')
+        <script>
+            const MAX_IMEI_LENGTH = @json(\App\Models\ProductImei::IMEI_MAX_LENGTH);
+            const initialImeiValues = @json(old('imeis', []));
+            const imeiValidationErrors = @json($errors->toArray());
 
-        var validateorder = {
-            'supplier': {
-                'element': document.getElementById('supplier'),
-                'error': document.getElementById('supplier_error'),
-                'validations': [{
-                    'func': function(value) {
-                        return checkRequired(value);
-                    }
-                }, ]
-            },
-        }
-
-        function checkRequired(value) {
-            return value !== null && value.trim() !== "";
-        }
-
-        function validateAllFields(fields) {
-            let isValid = true;
-
-            for (let key in fields) {
-                let field = fields[key];
-                let value = field.element.value.trim();
-
-                field.validations.forEach(rule => {
-                    if (!rule.func(value)) {
-                        field.error.innerText = "Trường này bắt buộc!";
-                        isValid = false;
-                    } else {
-                        field.error.innerText = "";
-                    }
-                });
-            }
-
-            return isValid;
-        }
-
-        function submitadd(event) {
-            event.preventDefault();
-
-            const firstMissingImei = Array.from(document.querySelectorAll('.imei-input'))
-                .find(input => input.value.trim() === '');
-            if (firstMissingImei) {
-                firstMissingImei.focus();
-                alert('Vui lòng nhập đầy đủ IMEI trước khi lưu phiếu nhập.');
-                return;
-            }
-
-            if (!normalizePaymentBeforeSubmit()) {
-                return;
-            }
-
-            if (validateAllFields(validateorder)) {
-                document.getElementById('addimport').submit();
-            }
-        }
-    </script>
-
-    <script>
-        var $j = jQuery.noConflict();
-
-        function parseMoneyValue(value) {
-            if (value === null || value === undefined) {
-                return 0;
-            }
-
-            const text = String(value).trim();
-            if (text === '') {
-                return 0;
-            }
-
-            if (text.includes('₫') || /^\d{1,3}(\.\d{3})+/.test(text)) {
-                return Number(text.replace(/\D/g, '')) || 0;
-            }
-
-            return Number(text.replace(/,/g, '')) || 0;
-        }
-
-        function formatMoneyValue(value) {
-            const amount = Math.round(parseMoneyValue(value));
-
-            return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`;
-        }
-
-        $j(document).ready(function() {
-            const imeiValues = {};
-            Object.entries(initialImeiValues || {}).forEach(([importId, values]) => {
-                imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
-            });
-
-            $j(document)
-                .off('click.importContinue', '#tieptuc')
-                .on('click.importContinue', '#tieptuc', function(event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-
-                    captureImeiValues();
-
-                    const firstMissingImei = Array.from(
-                        document.querySelectorAll('.imei-input')
-                    ).find(function(input) {
-                        return input.value.trim() === '';
-                    });
-
-                    if (firstMissingImei) {
-                        alert('Vui lòng nhập đầy đủ IMEI trước khi tiếp tục.');
-
-                        setTimeout(function() {
-                            firstMissingImei.focus();
-                        }, 100);
-
-                        return false;
-                    }
-
-                    const modalElement = document.getElementById('exampleModal');
-
-                    if (
-                        !modalElement ||
-                        typeof bootstrap === 'undefined' ||
-                        !bootstrap.Modal
-                    ) {
-                        console.error('Không tìm thấy Bootstrap Modal hoặc #exampleModal.');
-                        alert('Không thể mở form xác nhận. Vui lòng tải lại trang.');
-                        return false;
-                    }
-
-                    bootstrap.Modal
-                        .getOrCreateInstance(modalElement)
-                        .show();
-
-                    return false;
-                });
-
-            var appliedCategoryIds = [];
-
-            function filterProducts() {
-                var query = $j('#search').val().toLowerCase().trim();
-                var visibleCount = 0;
-
-                $j('#results li.product_inventory').each(function() {
-                    var $li = $j(this);
-                    var catId = String($li.attr('data-category-id') || $li.data('category-id') || '')
-                        .trim();
-                    var text = $li.text().toLowerCase();
-
-                    var matchCat = (appliedCategoryIds.length === 0) || appliedCategoryIds.includes(catId);
-                    var matchQuery = (query.length === 0) || text.includes(query);
-
-                    if (matchCat && matchQuery) {
-                        $li.show();
-                        visibleCount++;
-                    } else {
-                        $li.hide();
-                    }
-                });
-
-                if (visibleCount > 0) {
-                    $j('.no-results').hide();
-                } else {
-                    $j('.no-results').show();
-                }
-            }
-
-            function syncModalCheckboxes() {
-                var total = $j('#checkboxForm_category .category-checkbox').length;
-                if (appliedCategoryIds.length === 0 || appliedCategoryIds.length === total) {
-                    $j('#selectAll').prop('checked', true);
-                    $j('#checkboxForm_category .category-checkbox').prop('checked', true);
-                } else {
-                    $j('#selectAll').prop('checked', false);
-                    $j('#checkboxForm_category .category-checkbox').each(function() {
-                        var val = String($j(this).val());
-                        $j(this).prop('checked', appliedCategoryIds.includes(val));
-                    });
-                }
-            }
-
-            $j.ajax({
-                url: '{{ route('admin.importproduct.import') }}',
-                type: 'GET',
-                success: function(data) {
-                    updateimport(data.import, data.total);
-                    var category = $j('#checkboxForm_category');
-                    category.empty();
-                    updateReceiptTotal(data.total);
-                    var list_category = data.category || [];
-                    list_category.forEach(function(item, index) {
-                        var categoryHtml = `
-                        <div class="form-check category-item" style='margin:0px; padding-top:4px; padding-bottom:4px;'>
-                            <input class="form-check-input category-checkbox" type="checkbox" value="${item.id}" id="${'checkbox_' + item.id}">
-                            <label class="form-check-label" for="${'checkbox_' + item.id}">
-                               ${escapeHtml(item.name)}
-                            </label>
-                        </div>
-                    `;
-                        category.append(categoryHtml);
-                    });
-                    syncModalCheckboxes();
+            var validateorder = {
+                'supplier': {
+                    'element': document.getElementById('supplier'),
+                    'error': document.getElementById('supplier_error'),
+                    'validations': [{
+                        'func': function(value) {
+                            return checkRequired(value);
+                        }
+                    }, ]
                 },
-                error: function(xhr, status, error) {
-                    alert('Không thể tải danh sách sản phẩm đang nhập. Vui lòng thử lại.');
+            }
+
+            function checkRequired(value) {
+                return value !== null && value.trim() !== "";
+            }
+
+            function validateAllFields(fields) {
+                let isValid = true;
+
+                for (let key in fields) {
+                    let field = fields[key];
+                    let value = field.element.value.trim();
+
+                    field.validations.forEach(rule => {
+                        if (!rule.func(value)) {
+                            field.error.innerText = "Trường này bắt buộc!";
+                            isValid = false;
+                        } else {
+                            field.error.innerText = "";
+                        }
+                    });
                 }
-            });
 
-            $j(document).on('click', '.product_inventory', function(e) {
-                e.preventDefault();
-                var product = $j(this).data('id');
-                var existingRow = $j(`#import-data-product tr[data-product="${product}"]`);
+                return isValid;
+            }
 
-                if (existingRow.length) {
-                    existingRow.addClass('table-warning');
-                    existingRow.find('.numberInput').focus();
-                    setTimeout(function() {
-                        existingRow.removeClass('table-warning');
-                    }, 1200);
+            function submitadd(event) {
+                event.preventDefault();
 
-                    $j('#search').val('');
-                    $j('#results').hide();
+                const imeiValidation = validateImeiInputs();
+                if (!imeiValidation.isValid) {
+                    imeiValidation.firstInvalidInput?.focus();
                     return;
                 }
 
+                if (!normalizePaymentBeforeSubmit()) {
+                    return;
+                }
+
+                if (validateAllFields(validateorder)) {
+                    document.getElementById('addimport').submit();
+                }
+            }
+        </script>
+    @endpush
+
+    @push('script')
+        <script>
+            var $j = window.jQuery;
+
+            function parseMoneyValue(value) {
+                if (value === null || value === undefined) {
+                    return 0;
+                }
+
+                const text = String(value).trim();
+                if (text === '') {
+                    return 0;
+                }
+
+                if (text.includes('₫') || /^\d{1,3}(\.\d{3})+/.test(text)) {
+                    return Number(text.replace(/\D/g, '')) || 0;
+                }
+
+                return Number(text.replace(/,/g, '')) || 0;
+            }
+
+            function formatMoneyValue(value) {
+                const amount = Math.round(parseMoneyValue(value));
+
+                return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`;
+            }
+
+            $j(document).ready(function() {
+                const imeiValues = {};
+                Object.entries(initialImeiValues || {}).forEach(([importId, values]) => {
+                    imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
+                });
+
+                $j(document)
+                    .off('click.importContinue', '#tieptuc')
+                    .on('click.importContinue', '#tieptuc', function(event) {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        captureImeiValues();
+
+                        const imeiValidation = validateImeiInputs();
+                        if (!imeiValidation.isValid) {
+                            setTimeout(function() {
+                                imeiValidation.firstInvalidInput?.focus();
+                            }, 100);
+                            return false;
+                        }
+
+                        const modalElement = document.getElementById('exampleModal');
+
+                        if (
+                            !modalElement ||
+                            typeof bootstrap === 'undefined' ||
+                            !bootstrap.Modal
+                        ) {
+                            console.error('Không tìm thấy Bootstrap Modal hoặc #exampleModal.');
+                            alert('Không thể mở form xác nhận. Vui lòng tải lại trang.');
+                            return false;
+                        }
+
+                        bootstrap.Modal
+                            .getOrCreateInstance(modalElement)
+                            .show();
+
+                        return false;
+                    });
+
+                var categorySelection = {
+                    allIds: new Set(),
+                    draftIds: new Set(),
+                    appliedIds: new Set(),
+                };
+
+                function getCategoryCheckboxes() {
+                    return $j('#checkboxForm_category .category-checkbox');
+                }
+
+                function getCategoryIdsFromDom() {
+                    var ids = new Set();
+
+                    getCategoryCheckboxes().each(function() {
+                        ids.add(String($j(this).val()).trim());
+                    });
+
+                    return ids;
+                }
+
+                function getAllCategoryIds() {
+                    if (categorySelection.allIds.size === 0) {
+                        categorySelection.allIds = getCategoryIdsFromDom();
+                    }
+
+                    return new Set(categorySelection.allIds);
+                }
+
+                function updateSelectAllState() {
+                    var $checkboxes = getCategoryCheckboxes();
+                    var total = $checkboxes.length;
+                    var checked = $checkboxes.filter(':checked').length;
+                    var allChecked = total > 0 && checked === total;
+                    var isIndeterminate = checked > 0 && checked < total;
+
+                    $j('#selectAll')
+                        .prop('checked', allChecked)
+                        .prop('indeterminate', isIndeterminate);
+                }
+
+                function syncDraftIdsFromDom() {
+                    categorySelection.draftIds = new Set();
+
+                    getCategoryCheckboxes().filter(':checked').each(function() {
+                        categorySelection.draftIds.add(String($j(this).val()).trim());
+                    });
+
+                    updateSelectAllState();
+                }
+
+                function renderDraftSelection() {
+                    getCategoryCheckboxes().each(function() {
+                        var categoryId = String($j(this).val()).trim();
+                        $j(this).prop('checked', categorySelection.draftIds.has(categoryId));
+                    });
+
+                    updateSelectAllState();
+                }
+
+                function resetDraftSelection() {
+                    categorySelection.draftIds = new Set(categorySelection.appliedIds);
+                    renderDraftSelection();
+                }
+
+                function filterProducts() {
+                    var query = $j('#search').val().toLowerCase().trim();
+                    var visibleCount = 0;
+
+                    $j('#results li.product_inventory').each(function() {
+                        var $li = $j(this);
+                        var catId = String($li.attr('data-category-id') || $li.data('category-id') || '')
+                            .trim();
+                        var text = $li.text().toLowerCase();
+
+                        var hasNoCategoryFilter = categorySelection.appliedIds.size === 0 ||
+                            categorySelection.appliedIds.size === categorySelection.allIds.size;
+                        var matchCat = hasNoCategoryFilter || categorySelection.appliedIds.has(catId);
+                        var matchQuery = (query.length === 0) || text.includes(query);
+
+                        if (matchCat && matchQuery) {
+                            $li.show();
+                            visibleCount++;
+                        } else {
+                            $li.hide();
+                        }
+                    });
+
+                    if (visibleCount > 0) {
+                        $j('.no-results').hide();
+                    } else {
+                        $j('.no-results').show();
+                    }
+                }
+
+                function syncModalCheckboxes() {
+                    resetDraftSelection();
+                }
+
                 $j.ajax({
-                    url: '{{ route('admin.importproduct.import.add') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        product: product,
-                    },
+                    url: '{{ route('admin.importproduct.import') }}',
+                    type: 'GET',
                     success: function(data) {
+                        updateimport(data.import, data.total);
+                        var category = $j('#checkboxForm_category');
+                        category.empty();
+                        updateReceiptTotal(data.total);
+                        var list_category = data.category || [];
+                        categorySelection.allIds = new Set(list_category.map(function(item) {
+                            return String(item.id).trim();
+                        }));
+                        categorySelection.appliedIds = new Set(categorySelection.allIds);
+                        categorySelection.draftIds = new Set(categorySelection.appliedIds);
+
+                        list_category.forEach(function(item, index) {
+                            var categoryHtml = `
+                    <div class="form-check category-item" style='margin:0px; padding-top:4px; padding-bottom:4px;'>
+                        <input class="form-check-input category-checkbox" type="checkbox" value="${item.id}" id="${'checkbox_' + item.id}">
+                        <label class="form-check-label" for="${'checkbox_' + item.id}">
+                           ${escapeHtml(item.name)}
+                        </label>
+                    </div>
+                `;
+                            category.append(categoryHtml);
+                        });
+                        syncModalCheckboxes();
+                    },
+                    error: function(xhr, status, error) {
+                        alert('Không thể tải danh sách sản phẩm đang nhập. Vui lòng thử lại.');
+                    }
+                });
+
+                $j(document).on('click', '.product_inventory', function(e) {
+                    e.preventDefault();
+                    var product = $j(this).data('id');
+                    var existingRow = $j(`#import-data-product tr[data-product="${product}"]`);
+
+                    if (existingRow.length) {
+                        existingRow.addClass('table-warning');
+                        existingRow.find('.numberInput').focus();
+                        setTimeout(function() {
+                            existingRow.removeClass('table-warning');
+                        }, 1200);
+
                         $j('#search').val('');
                         $j('#results').hide();
-                        updateimport(data.import, data.total);
-                        updateReceiptTotal(data.total);
-                    },
-                    error: function(xhr) {
-                        alert(xhr.responseJSON.error);
-                    }
-                });
-            });
-
-            $j(document).on('change', '.numberInput', function(e) {
-                e.preventDefault();
-                captureImeiValues();
-
-                var input = $j(this);
-                var value = parseInt(input.val(), 10);
-                var tr = $j(this).closest('tr');
-                var dataId = tr.data('id');
-                var isImeiProduct = tr.data('tracking') === 'imei';
-                var previousQuantity = parseInt(input.data('previous-quantity'), 10) || 1;
-                var currentValues = imeiValues[dataId] || [];
-
-                if (!Number.isInteger(value) || value < 1) {
-                    input.val(previousQuantity);
-                    alert('Số lượng nhập phải lớn hơn 0.');
-                    return;
-                }
-
-                if (isImeiProduct && value > MAX_IMPORT_QUANTITY) {
-                    value = MAX_IMPORT_QUANTITY;
-                    input.val(value);
-                    alert(MAX_IMPORT_QUANTITY_MESSAGE);
-                }
-
-                var removedValues = isImeiProduct ? currentValues.slice(value).filter(imei => imei
-                    .trim() !== '') : [];
-
-                if (isImeiProduct && value < previousQuantity && removedValues.length > 0) {
-                    var shouldReduce = confirm(
-                        'Giảm số lượng sẽ xóa các ô IMEI đã có dữ liệu. Bạn có chắc chắn muốn tiếp tục?'
-                    );
-
-                    if (!shouldReduce) {
-                        input.val(previousQuantity);
                         return;
                     }
-                }
 
-                if (isImeiProduct) {
-                    imeiValues[dataId] = currentValues.slice(0, value);
-                }
+                    $j.ajax({
+                        url: '{{ route('admin.importproduct.import.add') }}',
+                        method: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            product: product,
+                        },
+                        success: function(data) {
+                            $j('#search').val('');
+                            $j('#results').hide();
+                            updateimport(data.import, data.total);
+                            updateReceiptTotal(data.total);
+                        },
+                        error: function(xhr) {
+                            alert(xhr.responseJSON.error);
+                        }
+                    });
+                });
 
-                $j.ajax({
-                    url: '{{ route('admin.importproduct.import.update') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        value: value,
-                        dataId: dataId
-                    },
-                    success: function(data) {
-                        updateimport(data.import, data.total);
-                        updateReceiptTotal(data.total);
+                $j(document).on('change', '.numberInput', function(e) {
+                    e.preventDefault();
+                    captureImeiValues();
 
-                    },
-                    error: function(xhr) {
-                        const errors = xhr.responseJSON?.errors || {};
-                        const firstError = Object.values(errors).reduce((message,
-                            fieldErrors) => {
-                            return message || (Array.isArray(fieldErrors) ? fieldErrors[
-                                0] : fieldErrors);
-                        }, '');
+                    var input = $j(this);
+                    var value = parseInt(input.val(), 10);
+                    var tr = $j(this).closest('tr');
+                    var dataId = tr.data('id');
+                    var isImeiProduct = tr.data('tracking') === 'imei';
+                    var previousQuantity = parseInt(input.data('previous-quantity'), 10) || 1;
+                    var currentValues = imeiValues[dataId] || [];
 
+                    if (!Number.isInteger(value) || value < 1) {
                         input.val(previousQuantity);
-                        alert(firstError || xhr.responseJSON?.message ||
-                            'Không thể cập nhật số lượng. Vui lòng thử lại.');
-                    },
-                });
-
-            });
-
-            $j(document).on('input', '.imei-input', function() {
-                this.value = this.value.replace(/\D/g, '');
-                captureImeiValues();
-                updateImeiCounter($j(this).data('import-id'));
-            });
-
-            $j("#search").on("keyup input focus", function() {
-                filterProducts();
-                $j("#results").show();
-            });
-
-            $j(document).on('click', function(e) {
-                if (!$j(e.target).closest('#search, #results, .list-icon, #listcategory').length) {
-                    $j('#results').hide();
-                }
-            });
-
-            $j(document).on('change', '#selectAll', function() {
-                var isChecked = $j(this).is(':checked');
-                $j('#checkboxForm_category .category-checkbox').prop('checked', isChecked);
-            });
-
-            $j(document).on('change', '#checkboxForm_category .category-checkbox', function() {
-                var total = $j('#checkboxForm_category .category-checkbox').length;
-                var checked = $j('#checkboxForm_category .category-checkbox:checked').length;
-                $j('#selectAll').prop('checked', total > 0 && total === checked);
-            });
-
-            $j(document).on('keyup input', '#search_category_input', function() {
-                var q = $j(this).val().toLowerCase().trim();
-                $j('#checkboxForm_category .category-item').each(function() {
-                    var labelText = $j(this).text().toLowerCase();
-                    if (!q || labelText.includes(q)) {
-                        $j(this).show();
-                    } else {
-                        $j(this).hide();
+                        alert('Số lượng nhập phải lớn hơn 0.');
+                        return;
                     }
-                });
-            });
 
-            $j(document).on('click', '.btn-delete-product, .delete-btn, .delete', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
+                    var removedValues = isImeiProduct ? currentValues.slice(value).filter(imei => imei
+                        .trim() !== '') : [];
 
-                var btn = $j(this).hasClass('btn-delete-product') ? $j(this) : $j(this).closest('tr').find(
-                    '.btn-delete-product');
-                var tr = $j(this).closest('tr');
-                var id = btn.length && btn.data('id') ? btn.data('id') : tr.data('id');
-                var productId = btn.length && btn.data('product-id') ? btn.data('product-id') : tr.data(
-                    'product');
-                var productName = btn.length ? btn.data('product-name') : '';
-                var productCode = btn.length ? btn.data('product-code') : '';
-
-                if (!id) {
-                    return;
-                }
-
-                var displayLabel = productName ? (productName + (productCode ? ' (' + productCode + ')' :
-                    '')) : ('#' + (productCode || productId));
-                var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm " + displayLabel +
-                    " khỏi phiếu nhập không?");
-                if (!confirmDelete) {
-                    return;
-                }
-
-                delete imeiValues[id];
-
-                $j.ajax({
-                    url: '{{ route('admin.importproduct.import.delete') }}',
-                    method: 'GET',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        id: id,
-                    },
-                    success: function(data) {
-                        updateimport(data.import, data.total);
-                        updateReceiptTotal(data.total);
-                    },
-                    error: function(xhr) {
-                        alert(xhr.responseJSON?.error ||
-                            'Không thể xóa sản phẩm. Vui lòng thử lại.');
-                    }
-                });
-            });
-
-            // chọn danh sách sản phẩm theo loại
-            $j(document).on('click', '.submit_hang', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const checked = $j(
-                    '#checkboxForm_category .category-checkbox:checked'
-                );
-
-                const total = $j(
-                    '#checkboxForm_category .category-checkbox'
-                );
-
-                appliedCategoryIds = [];
-
-                // Chọn riêng một hoặc nhiều nhóm
-                if (checked.length > 0 && checked.length < total.length) {
-                    checked.each(function() {
-                        appliedCategoryIds.push(
-                            String($j(this).val()).trim()
+                    if (isImeiProduct && value < previousQuantity && removedValues.length > 0) {
+                        var shouldReduce = confirm(
+                            'Giảm số lượng sẽ xóa các ô IMEI đã có dữ liệu. Bạn có chắc chắn muốn tiếp tục?'
                         );
+
+                        if (!shouldReduce) {
+                            input.val(previousQuantity);
+                            return;
+                        }
+                    }
+
+                    if (isImeiProduct) {
+                        imeiValues[dataId] = currentValues.slice(0, value);
+                    }
+
+                    $j.ajax({
+                        url: '{{ route('admin.importproduct.import.update') }}',
+                        method: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            value: value,
+                            dataId: dataId
+                        },
+                        success: function(data) {
+                            const updatedItem = (data.import || []).find(function(item) {
+                                return String(item.id) === String(dataId);
+                            });
+
+                            if (updatedItem) {
+                                updateImportQuantityRow(updatedItem);
+                            } else {
+                                updateimport(data.import, data.total);
+                            }
+                            updateReceiptTotal(data.total);
+
+                        },
+                        error: function(xhr) {
+                            const errors = xhr.responseJSON?.errors || {};
+                            const firstError = Object.values(errors).reduce((message,
+                                fieldErrors) => {
+                                return message || (Array.isArray(fieldErrors) ? fieldErrors[
+                                    0] : fieldErrors);
+                            }, '');
+
+                            input.val(previousQuantity);
+                            if (isImeiProduct) {
+                                imeiValues[dataId] = currentValues;
+                            }
+                            alert(firstError || xhr.responseJSON?.message ||
+                                'Không thể cập nhật số lượng. Vui lòng thử lại.');
+                        },
                     });
-                }
 
-                console.log('Danh mục đã chọn:', appliedCategoryIds);
-
-                // Phải lọc trước khi đóng modal
-                filterProducts();
-                $j('#results').show();
-
-                // Đóng modal bằng Bootstrap 5
-                const modalElement = document.getElementById('listcategory');
-
-                if (
-                    modalElement &&
-                    typeof bootstrap !== 'undefined' &&
-                    bootstrap.Modal
-                ) {
-                    bootstrap.Modal
-                        .getOrCreateInstance(modalElement)
-                        .hide();
-                } else {
-                    console.error('Bootstrap 5 JavaScript chưa được tải.');
-                }
-            });
-
-            $j('#listcategory').on('show.bs.modal', function() {
-                syncModalCheckboxes();
-            });
-
-            $j('.miss_model').on('click', function() {
-                syncModalCheckboxes();
-            });
-
-            $j(document).on('focus', '.giaban', function() {
-                $j(this).val(String(Math.round(parseMoneyValue($j(this).data('raw-value')))));
-            });
-
-            $j(document).on('input', '.giaban', function() {
-                this.value = this.value.replace(/\D/g, '');
-            });
-
-            $j(document).on('change', '.giaban', function() {
-                var input = $j(this);
-                var dataId = input.closest('tr').data('id');
-                var value = Math.max(Math.round(parseMoneyValue(input.val())), 0);
-
-                input.data('raw-value', value);
-                input.val(formatMoneyValue(value));
-                $j.ajax({
-                    url: '{{ route('admin.importproduct.import.update.price') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        value: value,
-                        dataId: dataId
-                    },
-                    success: function(data) {
-                        updateimport(data.import, data.total);
-                        updateReceiptTotal(data.total);
-
-                    },
                 });
 
-            });
+                $j(document).on('input', '.imei-input', function() {
+                    captureImeiValues();
+                    updateImeiCounter($j(this).data('import-id'));
+                });
 
-            $j(document).on('change', '#payment_method', function() {
-                syncPaymentAmount(true);
-            });
+                $j("#search").on("keyup input focus", function() {
+                    filterProducts();
+                    $j("#results").show();
+                });
 
-            function updateReceiptTotal(total) {
-                const rawTotal = Math.round(parseMoneyValue(total));
-                $j('#total_input').val(rawTotal);
-                $j('.cantra').text(formatMoneyValue(rawTotal));
-                syncPaymentAmount();
-            }
-
-            function updateimport(importproduct, total) {
-                captureImeiValues();
-                var importhtml = $j('#import-data-product');
-                var tieptuc = $j('#tieptuc');
-                updateReceiptTotal(total || 0);
-
-                const validIds = new Set((importproduct || []).map(item => String(item.id)));
-                Object.keys(imeiValues).forEach(id => {
-                    if (!validIds.has(String(id))) {
-                        delete imeiValues[id];
+                $j(document).on('click', function(e) {
+                    if (!$j(e.target).closest('#search, #results, .list-icon, #listcategory').length) {
+                        $j('#results').hide();
                     }
                 });
 
-                if (parseMoneyValue(total) <= 0 || !importproduct || importproduct.length === 0) {
-                    tieptuc.css('display', 'none');
-                } else {
-                    tieptuc.css('display', 'block');
-                }
-                importhtml.empty();
+                $j(document)
+                    .off('change.importCategorySelection', '#selectAll')
+                    .on('change.importCategorySelection', '#selectAll', function() {
+                        var isChecked = $j(this).is(':checked');
+                        categorySelection.draftIds = isChecked ?
+                            getAllCategoryIds() :
+                            new Set();
 
-                if (!importproduct || importproduct.length === 0) {
-                    importhtml.html(`
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
-                                Chưa có sản phẩm nào trong phiếu nhập. Vui lòng tìm kiếm sản phẩm để thêm vào.
-                            </td>
-                        </tr>
-                    `);
-                } else {
-                    $j.each(importproduct, function(index, item) {
-                        const product = item.product || {};
-                        const productCode = product.code || item.code || '';
-                        const productName = product.name || '';
-                        const tracking = getInventoryTracking(item);
-                        const price = parseMoneyValue(item.price);
-                        const rowTotal = parseMoneyValue(item.total);
-                        var productHtml = `
-                <tr data-id='${item.id}' data-product='${item.product_id ?? ""}' data-tracking="${tracking}">
-                    <td class='text-center align-middle'>
-                        <input type="hidden" form="addimport" name="items[${item.id}][product_id]" value="${item.product_id ?? ''}">
-                        <input type="hidden" form="addimport" name="items[${item.id}][quantity]" value="${item.quantity ?? ''}">
-                        <input type="hidden" form="addimport" name="items[${item.id}][import_price]" value="${price}">
-                        <button type="button" class="btn btn-link text-danger p-0 border-0 btn-delete-product"
-                            data-id="${item.id}"
-                            data-product-id="${item.product_id ?? ''}"
-                            data-product-code="${escapeHtml(productCode)}"
-                            data-product-name="${escapeHtml(productName)}"
-                            title="Xóa sản phẩm">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                    <td>${ index + 1 }</td>
-                    <td>${escapeHtml(productCode)}</td>
-                    <td>${escapeHtml(productName)} ${trackingBadge(tracking)}</td>
-                    <td>
-                        <input style='text-align: center;' type="number" min="1" ${tracking === 'imei' ? `max="${MAX_IMPORT_QUANTITY}"` : ''}
-                            class="numberInput"
-                            name="quantity"
-                            data-previous-quantity="${item.quantity}"
-                            value='${item.quantity !== null ? item.quantity : ""}'
-                            oninput="this.value = this.value.replace(/[^0-9]/g, '');">
-                    </td>
-                    <td>
-                        <input type="text" class="form-control form-control-sm money-input giaban"
-                            data-raw-value="${price}" value="${formatMoneyValue(price)}">
-                    </td>
-                    <td class="total" data-raw-value="${rowTotal}">${formatMoneyValue(rowTotal)}</td>
-                </tr>
-                ${buildImeiPanel(item)}
-            `;
-                        importhtml.append(productHtml);
-                        updateImeiCounter(item.id);
+                        renderDraftSelection();
+                    });
+
+                $j(document)
+                    .off('change.importCategorySelection', '#checkboxForm_category .category-checkbox')
+                    .on('change.importCategorySelection', '#checkboxForm_category .category-checkbox', function() {
+                        syncDraftIdsFromDom();
+                    });
+
+                $j(document)
+                    .off('keyup.importCategorySearch input.importCategorySearch', '#search_category_input')
+                    .on('keyup.importCategorySearch input.importCategorySearch', '#search_category_input', function() {
+                        var q = $j(this).val().toLowerCase().trim();
+                        $j('#checkboxForm_category .category-item').each(function() {
+                            var labelText = $j(this).text().toLowerCase();
+                            if (!q || labelText.includes(q)) {
+                                $j(this).show();
+                            } else {
+                                $j(this).hide();
+                            }
+                        });
+                    });
+
+                $j(document).on('click', '.btn-delete-product, .delete-btn, .delete', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var btn = $j(this).hasClass('btn-delete-product') ? $j(this) : $j(this).closest('tr').find(
+                        '.btn-delete-product');
+                    var tr = $j(this).closest('tr');
+                    var id = btn.length && btn.data('id') ? btn.data('id') : tr.data('id');
+                    var productId = btn.length && btn.data('product-id') ? btn.data('product-id') : tr.data(
+                        'product');
+                    var productName = btn.length ? btn.data('product-name') : '';
+                    var productCode = btn.length ? btn.data('product-code') : '';
+
+                    if (!id) {
+                        return;
+                    }
+
+                    var displayLabel = productName ? (productName + (productCode ? ' (' + productCode + ')' :
+                        '')) : ('#' + (productCode || productId));
+                    var confirmDelete = confirm("Bạn có chắc chắn muốn xóa sản phẩm " + displayLabel +
+                        " khỏi phiếu nhập không?");
+                    if (!confirmDelete) {
+                        return;
+                    }
+
+                    delete imeiValues[id];
+
+                    $j.ajax({
+                        url: '{{ route('admin.importproduct.import.delete') }}',
+                        method: 'GET',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            id: id,
+                        },
+                        success: function(data) {
+                            updateimport(data.import, data.total);
+                            updateReceiptTotal(data.total);
+                        },
+                        error: function(xhr) {
+                            alert(xhr.responseJSON?.error ||
+                                'Không thể xóa sản phẩm. Vui lòng thử lại.');
+                        }
+                    });
+                });
+
+                // chọn danh sách sản phẩm theo loại
+                $j(document)
+                    .off('click.importCategorySelection', '.submit_hang')
+                    .on('click.importCategorySelection', '.submit_hang', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        syncDraftIdsFromDom();
+                        categorySelection.appliedIds = new Set(categorySelection.draftIds);
+
+                        // Phải lọc trước khi đóng modal
+                        filterProducts();
+                        $j('#results').show();
+
+                        // Đóng modal bằng Bootstrap 5
+                        const modalElement = document.getElementById('listcategory');
+
+                        if (
+                            modalElement &&
+                            typeof bootstrap !== 'undefined' &&
+                            bootstrap.Modal
+                        ) {
+                            bootstrap.Modal
+                                .getOrCreateInstance(modalElement)
+                                .hide();
+                        } else {
+                            console.error('Bootstrap 5 JavaScript chưa được tải.');
+                        }
+                    });
+
+                $j('#listcategory')
+                    .off('show.bs.modal')
+                    .on('show.bs.modal', function() {
+                        syncModalCheckboxes();
+                    })
+                    .off('hidden.bs.modal')
+                    .on('hidden.bs.modal', function() {
+                        resetDraftSelection();
+                    });
+
+                $j(document).on('focus', '.giaban', function() {
+                    $j(this).val(String(Math.round(parseMoneyValue($j(this).data('raw-value')))));
+                });
+
+                $j(document).on('input', '.giaban', function() {
+                    this.value = this.value.replace(/\D/g, '');
+                });
+
+                $j(document).on('change', '.giaban', function() {
+                    var input = $j(this);
+                    var dataId = input.closest('tr').data('id');
+                    var value = Math.max(Math.round(parseMoneyValue(input.val())), 0);
+
+                    input.data('raw-value', value);
+                    input.val(formatMoneyValue(value));
+                    $j.ajax({
+                        url: '{{ route('admin.importproduct.import.update.price') }}',
+                        method: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}',
+                            value: value,
+                            dataId: dataId
+                        },
+                        success: function(data) {
+                            updateimport(data.import, data.total);
+                            updateReceiptTotal(data.total);
+
+                        },
+                    });
+
+                });
+
+                $j(document).on('change', '#payment_method', function() {
+                    syncPaymentAmount(true);
+                });
+
+                function updateReceiptTotal(total) {
+                    const rawTotal = Math.round(parseMoneyValue(total));
+                    $j('#total_input').val(rawTotal);
+                    $j('.cantra').text(formatMoneyValue(rawTotal));
+                    syncPaymentAmount();
+                }
+
+                function updateimport(importproduct, total) {
+                    captureImeiValues();
+                    var importhtml = $j('#import-data-product');
+                    var tieptuc = $j('#tieptuc');
+                    updateReceiptTotal(total || 0);
+
+                    const validIds = new Set((importproduct || []).map(item => String(item.id)));
+                    Object.keys(imeiValues).forEach(id => {
+                        if (!validIds.has(String(id))) {
+                            delete imeiValues[id];
+                        }
+                    });
+
+                    if (parseMoneyValue(total) <= 0 || !importproduct || importproduct.length === 0) {
+                        tieptuc.css('display', 'none');
+                    } else {
+                        tieptuc.css('display', 'block');
+                    }
+                    importhtml.empty();
+
+                    if (!importproduct || importproduct.length === 0) {
+                        importhtml.html(`
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            Chưa có sản phẩm nào trong phiếu nhập. Vui lòng tìm kiếm sản phẩm để thêm vào.
+                        </td>
+                    </tr>
+                `);
+                    } else {
+                        $j.each(importproduct, function(index, item) {
+                            const product = item.product || {};
+                            const productCode = product.code || item.code || '';
+                            const productName = product.name || '';
+                            const tracking = getInventoryTracking(item);
+                            const price = parseMoneyValue(item.price);
+                            const rowTotal = parseMoneyValue(item.total);
+                            var productHtml = `
+            <tr data-id='${item.id}' data-product='${item.product_id ?? ""}' data-tracking="${tracking}">
+                <td class='text-center align-middle'>
+                    <input type="hidden" form="addimport" name="items[${item.id}][product_id]" value="${item.product_id ?? ''}">
+                    <input type="hidden" form="addimport" name="items[${item.id}][quantity]" value="${item.quantity ?? ''}">
+                    <input type="hidden" form="addimport" name="items[${item.id}][import_price]" value="${price}">
+                    <button type="button" class="btn btn-link text-danger p-0 border-0 btn-delete-product"
+                        data-id="${item.id}"
+                        data-product-id="${item.product_id ?? ''}"
+                        data-product-code="${escapeHtml(productCode)}"
+                        data-product-name="${escapeHtml(productName)}"
+                        title="Xóa sản phẩm">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+                <td>${ index + 1 }</td>
+                <td>${escapeHtml(productCode)}</td>
+                <td>${escapeHtml(productName)} ${trackingBadge(tracking)}</td>
+                <td>
+                    <input style='text-align: center;' type="number" min="1"
+                        class="numberInput"
+                        name="quantity"
+                        data-previous-quantity="${item.quantity}"
+                        value='${item.quantity !== null ? item.quantity : ""}'
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm money-input giaban"
+                        data-raw-value="${price}" value="${formatMoneyValue(price)}">
+                </td>
+                <td class="total" data-raw-value="${rowTotal}">${formatMoneyValue(rowTotal)}</td>
+            </tr>
+            ${buildImeiPanel(item)}
+        `;
+                            importhtml.append(productHtml);
+                            updateImeiCounter(item.id);
+                        });
+                    }
+                }
+
+                function buildImeiPanel(item) {
+                    const tracking = getInventoryTracking(item);
+
+                    if (tracking !== 'imei') {
+                        return '';
+                    }
+
+                    const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
+                    const values = imeiValues[item.id] || [];
+                    const product = item.product || {};
+                    const productName = product.name || `#${item.product_id || ''}`;
+                    const productCode = product.code || '';
+                    const productUnit = product.product_unit || '';
+                    const fields = [];
+
+                    for (let index = 0; index < quantity; index++) {
+                        const value = values[index] || '';
+                        const errorKey = `imeis.${item.id}.${index}`;
+                        const error = imeiValidationErrors[errorKey]?.[0] || '';
+
+                        fields.push(`
+                    <div>
+                        <label class="form-label mb-1">Máy ${index + 1} – IMEI/Serial</label>
+                        <input type="text" inputmode="text" minlength="1" maxlength="${MAX_IMEI_LENGTH}" autocomplete="off"
+                            form="addimport" name="imeis[${item.id}][]"
+                            data-import-id="${item.id}"
+                            class="form-control imei-input ${error ? 'is-invalid' : ''}"
+                            value="${escapeHtml(value)}"
+                            placeholder="Nhập IMEI hoặc Serial (tối đa 50 ký tự)">
+                        ${error ? `<div class="invalid-feedback">${escapeHtml(error)}</div>` : ''}
+                    </div>
+                `);
+                    }
+
+                    return `
+<tr class="imei-detail-row" data-import-id="${item.id}">
+    <td></td>
+    <td colspan="6">
+        <div class="imei-entry-panel">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>Danh sách IMEI/Serial - ${escapeHtml(productName)}</strong>
+                <span class="imei-counter" data-import-id="${item.id}">
+                    Đã nhập 0/${quantity} IMEI/Serial
+                </span>
+            </div>
+
+            <div class="imei-entry-meta text-muted mb-2">
+                <span>
+                    Sản phẩm:
+                    <strong class="text-dark">
+                        ${escapeHtml(productName)}
+                    </strong>
+                </span>
+
+                ${productCode ? `
+                                                                                        <span>
+                                                                                            Mã sản phẩm:
+                                                                                            <strong class="text-dark">
+                                                                                                ${escapeHtml(productCode)}
+                                                                                            </strong>
+                                                                                        </span>
+                                                                                    ` : ''}
+
+                <span>
+                    Số lượng:
+                    <strong class="text-dark">
+                        ${quantity}${productUnit ? ` ${escapeHtml(productUnit)}` : ''}
+                    </strong>
+                </span>
+            </div>
+
+            <div class="imei-entry-grid">
+                ${fields.join('')}
+            </div>
+
+            <div class="mt-2 text-muted small">
+                <i class="fa fa-barcode me-1"></i>
+                Barcode nội bộ sẽ được tự động tạo sau khi xác nhận nhập kho.
+            </div>
+        </div>
+    </td>
+</tr>
+`;
+                }
+
+                function getInventoryTracking(item) {
+                    return item.product?.inventory_tracking || item.inventory_tracking || 'quantity';
+                }
+
+                function trackingBadge(tracking) {
+                    if (tracking === 'imei') {
+                        return '<span class="badge bg-info ms-1">Quản lý IMEI</span>';
+                    }
+
+                    return '<span class="badge bg-secondary ms-1">Sản phẩm thường</span>';
+                }
+
+                function captureImeiValues() {
+                    $j('.imei-input').each(function() {
+                        const importId = String($j(this).data('import-id'));
+                        const inputs = $j(`.imei-input[data-import-id="${importId}"]`);
+                        imeiValues[importId] = inputs.map((index, input) => input.value).get();
                     });
                 }
-            }
 
-            function buildImeiPanel(item) {
-                const tracking = getInventoryTracking(item);
-
-                if (tracking !== 'imei') {
-                    return '';
-                }
-
-                const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
-                const values = imeiValues[item.id] || [];
-                const product = item.product || {};
-                const productName = product.name || `#${item.product_id || ''}`;
-                const productCode = product.code || '';
-                const productUnit = product.product_unit || '';
-                const fields = [];
-
-                for (let index = 0; index < quantity; index++) {
-                    const value = values[index] || '';
-                    const errorKey = `imeis.${item.id}.${index}`;
-                    const error = imeiValidationErrors[errorKey]?.[0] || '';
-
-                    fields.push(`
-                        <div>
-                            <label class="form-label mb-1">Máy ${index + 1} – IMEI</label>
-                            <input type="text" inputmode="numeric" maxlength="15" autocomplete="off"
-                                form="addimport" name="imeis[${item.id}][]"
-                                data-import-id="${item.id}"
-                                class="form-control imei-input ${error ? 'is-invalid' : ''}"
-                                value="${escapeHtml(value)}"
-                                placeholder="Nhập IMEI gồm 15 chữ số">
-                            ${error ? `<div class="invalid-feedback">${escapeHtml(error)}</div>` : ''}
-                        </div>
-                    `);
-                }
-
-                return `
-    <tr class="imei-detail-row" data-import-id="${item.id}">
-        <td></td>
-        <td colspan="6">
-            <div class="imei-entry-panel">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>Danh sách IMEI - ${escapeHtml(productName)}</strong>
-                    <span class="imei-counter" data-import-id="${item.id}">
-                        Đã nhập 0/${quantity} IMEI
-                    </span>
-                </div>
-
-                <div class="imei-entry-meta text-muted mb-2">
-                    <span>
-                        Sản phẩm:
-                        <strong class="text-dark">
-                            ${escapeHtml(productName)}
-                        </strong>
-                    </span>
-
-                    ${productCode ? `
-                                    <span>
-                                        Mã sản phẩm:
-                                        <strong class="text-dark">
-                                            ${escapeHtml(productCode)}
-                                        </strong>
-                                    </span>
-                                ` : ''}
-
-                    <span>
-                        Số lượng:
-                        <strong class="text-dark">
-                            ${quantity}${productUnit ? ` ${escapeHtml(productUnit)}` : ''}
-                        </strong>
-                    </span>
-                </div>
-
-                <div class="imei-entry-grid">
-                    ${fields.join('')}
-                </div>
-
-                <div class="mt-2 text-muted small">
-                    <i class="fa fa-barcode me-1"></i>
-                    Barcode nội bộ sẽ được tự động tạo sau khi xác nhận nhập kho.
-                </div>
-            </div>
-        </td>
-    </tr>
-`;
-            }
-
-            function getInventoryTracking(item) {
-                return item.product?.inventory_tracking || item.inventory_tracking || 'quantity';
-            }
-
-            function trackingBadge(tracking) {
-                if (tracking === 'imei') {
-                    return '<span class="badge bg-info ms-1">Quản lý IMEI</span>';
-                }
-
-                return '<span class="badge bg-secondary ms-1">Sản phẩm thường</span>';
-            }
-
-            function captureImeiValues() {
-                $j('.imei-input').each(function() {
-                    const importId = String($j(this).data('import-id'));
+                function updateImeiCounter(importId) {
                     const inputs = $j(`.imei-input[data-import-id="${importId}"]`);
-                    imeiValues[importId] = inputs.map((index, input) => input.value).get();
-                });
+                    const entered = inputs.filter((index, input) => input.value.trim() !== '').length;
+                    const counter = $j(`.imei-counter[data-import-id="${importId}"]`);
+
+                    counter.text(`Đã nhập ${entered}/${inputs.length} IMEI/Serial`);
+                    counter.toggleClass('is-incomplete', entered !== inputs.length);
+                }
+
+                function updateImportQuantityRow(item) {
+                    const row = $j(`#import-data-product tr[data-id="${item.id}"]`).first();
+
+                    if (!row.length) {
+                        return;
+                    }
+
+                    row.find('input[type="hidden"][name$="[quantity]"]')
+                        .val(item.quantity);
+                    row.find('.numberInput')
+                        .attr('data-previous-quantity', item.quantity)
+                        .val(item.quantity);
+
+                    const detailRow = row.next('.imei-detail-row');
+                    if (getInventoryTracking(item) === 'imei') {
+                        const imeiPanel = buildImeiPanel(item);
+
+                        if (detailRow.length) {
+                            detailRow.replaceWith(imeiPanel);
+                        } else {
+                            row.after(imeiPanel);
+                        }
+
+                        updateImeiCounter(item.id);
+                    } else if (detailRow.length) {
+                        detailRow.remove();
+                    }
+                }
+
+                function escapeHtml(value) {
+                    return String(value)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                }
+            });
+        </script>
+    @endpush
+
+    @push('script')
+        <script>
+            function getImportPaymentTotal() {
+                return Math.max(Math.round(parseMoneyValue(document.getElementById('total_input')?.value || 0)), 0);
             }
 
-            function updateImeiCounter(importId) {
-                const inputs = $j(`.imei-input[data-import-id="${importId}"]`);
-                const entered = inputs.filter((index, input) => input.value.trim() !== '').length;
-                const counter = $j(`.imei-counter[data-import-id="${importId}"]`);
-
-                counter.text(`Đã nhập ${entered}/${inputs.length} IMEI`);
-                counter.toggleClass('is-incomplete', entered !== inputs.length);
+            function getSelectedImportPaymentMethod() {
+                return document.getElementById('payment_method')?.value || 'cash';
             }
 
-            function escapeHtml(value) {
-                return String(value)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-            }
-        });
-    </script>
+            function setImportPaidAmount(amount) {
+                const total = getImportPaymentTotal();
+                const paidAmount = Math.min(Math.max(Math.round(parseMoneyValue(amount)), 0), total);
+                const paymentInput = document.getElementById('payment');
+                const paidElement = document.getElementById('tientra');
 
-    <script>
-        function getImportPaymentTotal() {
-            return Math.max(Math.round(parseMoneyValue(document.getElementById('total_input')?.value || 0)), 0);
-        }
+                if (paymentInput) {
+                    paymentInput.value = paidAmount;
+                }
 
-        function getSelectedImportPaymentMethod() {
-            return document.getElementById('payment_method')?.value || 'cash';
-        }
+                if (paidElement) {
+                    paidElement.innerText = formatMoneyValue(paidAmount);
+                }
 
-        function setImportPaidAmount(amount) {
-            const total = getImportPaymentTotal();
-            const paidAmount = Math.min(Math.max(Math.round(parseMoneyValue(amount)), 0), total);
-            const paymentInput = document.getElementById('payment');
-            const paidElement = document.getElementById('tientra');
-
-            if (paymentInput) {
-                paymentInput.value = paidAmount;
+                return paidAmount;
             }
 
-            if (paidElement) {
-                paidElement.innerText = formatMoneyValue(paidAmount);
+            function syncPaymentAmount(resetAmount = false) {
+                const method = getSelectedImportPaymentMethod();
+                const total = getImportPaymentTotal();
+                const paidElement = document.getElementById('tientra');
+                const currentPaidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
+                const shouldPayFull = method === 'cash' || method === 'bank_transfer';
+                const paidAmount = shouldPayFull ? total : (resetAmount ? 0 : Math.min(currentPaidAmount, total));
+
+                if (paidElement) {
+                    paidElement.setAttribute('contenteditable', shouldPayFull ? 'false' : 'true');
+                    paidElement.classList.toggle('text-muted', shouldPayFull);
+                    paidElement.title = shouldPayFull ?
+                        'Tiền mặt/chuyển khoản mặc định thanh toán đủ phiếu nhập' :
+                        'Công nợ cho phép nhập 0 hoặc một phần';
+                }
+
+                setImportPaidAmount(paidAmount);
             }
 
-            return paidAmount;
-        }
+            function normalizePaymentBeforeSubmit() {
+                const total = getImportPaymentTotal();
+                const method = getSelectedImportPaymentMethod();
+                let paidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
 
-        function syncPaymentAmount(resetAmount = false) {
-            const method = getSelectedImportPaymentMethod();
-            const total = getImportPaymentTotal();
-            const paidElement = document.getElementById('tientra');
-            const currentPaidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
-            const shouldPayFull = method === 'cash' || method === 'bank_transfer';
-            const paidAmount = shouldPayFull ? total : (resetAmount ? 0 : Math.min(currentPaidAmount, total));
+                if (method === 'cash' || method === 'bank_transfer') {
+                    paidAmount = total;
+                }
 
-            if (paidElement) {
-                paidElement.setAttribute('contenteditable', shouldPayFull ? 'false' : 'true');
-                paidElement.classList.toggle('text-muted', shouldPayFull);
-                paidElement.title = shouldPayFull ?
-                    'Tiền mặt/chuyển khoản mặc định thanh toán đủ phiếu nhập' :
-                    'Công nợ cho phép nhập 0 hoặc một phần';
+                if (paidAmount < 0 || paidAmount > total) {
+                    alert('Số tiền trả nhà cung cấp phải nằm trong khoảng từ 0 đến tổng tiền phiếu nhập.');
+                    return false;
+                }
+
+                setImportPaidAmount(paidAmount);
+
+                return true;
             }
 
-            setImportPaidAmount(paidAmount);
-        }
+            const paidSupplierElement = document.getElementById('tientra');
 
-        function normalizePaymentBeforeSubmit() {
-            const total = getImportPaymentTotal();
-            const method = getSelectedImportPaymentMethod();
-            let paidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
+            paidSupplierElement?.addEventListener('focus', function() {
+                if (getSelectedImportPaymentMethod() !== 'debt') {
+                    return;
+                }
 
-            if (method === 'cash' || method === 'bank_transfer') {
-                paidAmount = total;
+                this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
+            });
+
+            paidSupplierElement?.addEventListener('input', function() {
+                if (getSelectedImportPaymentMethod() !== 'debt') {
+                    syncPaymentAmount();
+                    return;
+                }
+
+                this.innerText = this.innerText.replace(/\D/g, '');
+                document.getElementById('payment').value = Math.min(
+                    Math.round(parseMoneyValue(this.innerText)),
+                    getImportPaymentTotal()
+                );
+            });
+
+            paidSupplierElement?.addEventListener('blur', function() {
+                normalizePaymentBeforeSubmit();
+            });
+        </script>
+    @endpush
+
+    @push('script')
+        <script>
+            function normalizeImei(value) {
+                return String(value ?? '').trim();
             }
 
-            if (paidAmount < 0 || paidAmount > total) {
-                alert('Số tiền trả nhà cung cấp phải nằm trong khoảng từ 0 đến tổng tiền phiếu nhập.');
-                return false;
+            function getImeiLength(value) {
+                return Array.from(normalizeImei(value)).length;
             }
 
-            setImportPaidAmount(paidAmount);
+            function showImeiError(input, message) {
+                input.classList.add('is-invalid');
 
-            return true;
-        }
-
-        const paidSupplierElement = document.getElementById('tientra');
-
-        paidSupplierElement?.addEventListener('focus', function() {
-            if (getSelectedImportPaymentMethod() !== 'debt') {
-                return;
-            }
-
-            this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
-        });
-
-        paidSupplierElement?.addEventListener('input', function() {
-            if (getSelectedImportPaymentMethod() !== 'debt') {
-                syncPaymentAmount();
-                return;
-            }
-
-            this.innerText = this.innerText.replace(/\D/g, '');
-            document.getElementById('payment').value = Math.min(
-                Math.round(parseMoneyValue(this.innerText)),
-                getImportPaymentTotal()
-            );
-        });
-
-        paidSupplierElement?.addEventListener('blur', function() {
-            normalizePaymentBeforeSubmit();
-        });
-    </script>
-    <script>
-        function normalizeImei(value) {
-            return String(value ?? '').trim();
-        }
-
-        function isValidImei(value) {
-            return /^\d{15}$/.test(normalizeImei(value));
-        }
-
-        function showImeiError(input, message) {
-            input.classList.add('is-invalid');
-
-            let feedback = input.parentElement.querySelector(
-                '.imei-invalid-feedback'
-            );
-
-            if (!feedback) {
-                feedback = document.createElement('div');
-                feedback.className =
-                    'invalid-feedback imei-invalid-feedback';
-                input.parentElement.appendChild(feedback);
-            }
-
-            feedback.textContent = message;
-        }
-
-        function clearImeiError(input) {
-            input.classList.remove('is-invalid');
-
-            const feedback = input.parentElement.querySelector(
-                '.imei-invalid-feedback'
-            );
-
-            if (feedback) {
-                feedback.remove();
-            }
-        }
-
-        const importForm = document.getElementById('addimport');
-
-        if (importForm) {
-            importForm.addEventListener('submit', function(event) {
-                const imeiInputs = Array.from(
-                    importForm.querySelectorAll(
-                        'input[name^="imeis["][name$="][]"]'
-                    )
+                let feedback = input.parentElement.querySelector(
+                    '.imei-invalid-feedback'
                 );
 
+                if (!feedback) {
+                    feedback = document.createElement('div');
+                    feedback.className =
+                        'invalid-feedback imei-invalid-feedback';
+                    input.parentElement.appendChild(feedback);
+                }
+
+                feedback.textContent = message;
+            }
+
+            function clearImeiError(input) {
+                input.classList.remove('is-invalid');
+
+                const feedback = input.parentElement.querySelector(
+                    '.imei-invalid-feedback'
+                );
+
+                if (feedback) {
+                    feedback.remove();
+                }
+            }
+
+            function validateImeiInputs() {
+                const importForm = document.getElementById('addimport');
+                const imeiInputs = Array.from(
+                    importForm?.querySelectorAll('input[name^="imeis["][name$="][]"]') || []
+                );
                 const usedImeis = new Set();
                 let firstInvalidInput = null;
                 let hasError = false;
@@ -1443,56 +1525,59 @@
                     clearImeiError(input);
 
                     const imei = normalizeImei(input.value);
-
-                    // Gán lại giá trị đã được trim.
                     input.value = imei;
 
-                    if (!isValidImei(imei)) {
-                        showImeiError(
-                            input,
-                            'IMEI phải gồm đúng 15 chữ số.'
-                        );
-
-                        firstInvalidInput ??= input;
-                        hasError = true;
-
-                        return;
+                    let errorMessage = '';
+                    if (getImeiLength(imei) === 0) {
+                        errorMessage = 'IMEI/Serial không được để trống.';
+                    } else if (getImeiLength(imei) > MAX_IMEI_LENGTH) {
+                        errorMessage = 'IMEI/Serial phải có tối đa 50 ký tự.';
+                    } else if (usedImeis.has(imei)) {
+                        errorMessage = 'Mã IMEI/Serial này đang bị nhập trùng trong phiếu.';
                     }
 
-                    if (usedImeis.has(imei)) {
-                        showImeiError(
-                            input,
-                            'IMEI này đang bị nhập trùng trong phiếu.'
-                        );
-
+                    if (errorMessage) {
+                        showImeiError(input, errorMessage);
                         firstInvalidInput ??= input;
                         hasError = true;
-
                         return;
                     }
 
                     usedImeis.add(imei);
                 });
 
-                if (hasError) {
-                    event.preventDefault();
-                    event.stopPropagation();
+                return {
+                    isValid: !hasError,
+                    firstInvalidInput
+                };
+            }
 
-                    firstInvalidInput?.focus();
+            const importForm = document.getElementById('addimport');
 
-                    return false;
-                }
-            });
+            if (importForm) {
+                importForm.addEventListener('submit', function(event) {
+                    const imeiValidation = validateImeiInputs();
 
-            importForm.addEventListener('input', function(event) {
-                if (
-                    event.target.matches(
-                        'input[name^="imeis["][name$="][]"]'
-                    )
-                ) {
-                    clearImeiError(event.target);
-                }
-            });
-        }
-    </script>
+                    if (!imeiValidation.isValid) {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        imeiValidation.firstInvalidInput?.focus();
+
+                        return false;
+                    }
+                });
+
+                importForm.addEventListener('input', function(event) {
+                    if (
+                        event.target.matches(
+                            'input[name^="imeis["][name$="][]"]'
+                        )
+                    ) {
+                        clearImeiError(event.target);
+                    }
+                });
+            }
+        </script>
+    @endpush
 @endsection

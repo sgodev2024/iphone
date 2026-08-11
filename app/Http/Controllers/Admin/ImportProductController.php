@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Import;
 use App\Models\Product;
-use App\Models\ProductImei;
 use App\Services\CategoryService;
 use App\Services\CompanyService;
 use App\Services\ImportProductService;
@@ -15,7 +14,6 @@ use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -183,12 +181,6 @@ class ImportProductController extends Controller
             ->whereKey($validated['dataId'])
             ->firstOrFail();
 
-        if ($import->product?->isImeiTracked() && (int) $validated['value'] > ProductImei::MAX_IMPORT_QUANTITY) {
-            throw ValidationException::withMessages([
-                'value' => 'Mỗi lần chỉ được nhập tối đa 35 sản phẩm',
-            ]);
-        }
-
         $import->update([
             'quantity' => $validated['value'],
             'total' => $import->price * $validated['value'],
@@ -282,18 +274,6 @@ class ImportProductController extends Controller
 
     private function currentImportPayload(): array
     {
-        $imports = $this->stagingImportQuery()->get();
-        $imports->each(function (Import $import) {
-            if (! $import->product?->isImeiTracked() || (int) $import->quantity <= ProductImei::MAX_IMPORT_QUANTITY) {
-                return;
-            }
-
-            $import->update([
-                'quantity' => ProductImei::MAX_IMPORT_QUANTITY,
-                'total' => $import->price * ProductImei::MAX_IMPORT_QUANTITY,
-            ]);
-        });
-
         $imports = $this->stagingImportQuery()->get();
 
         return [

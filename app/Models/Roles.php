@@ -9,6 +9,15 @@ class Roles extends Model
 {
     use HasFactory;
 
+    /**
+     * Full-access roles defined by DatabaseSeeder. Authorization uses names,
+     * not auto-increment IDs, so it remains stable across environments.
+     */
+    public const FULL_ACCESS_ROLE_NAMES = [
+        'store',
+        'admin',
+    ];
+
     protected $table = 'roles';
 
     protected $fillable = [
@@ -38,4 +47,21 @@ class Roles extends Model
             'role_id',
             'permission_id'
         );}
+
+    public function normalizedName(): string
+    {
+        return strtolower(trim((string) $this->name));
+    }
+
+    public function grantsAllPermissions(): bool
+    {
+        return in_array($this->normalizedName(), self::FULL_ACCESS_ROLE_NAMES, true);
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return $this->permissions()
+            ->where('permission_key', $permission)
+            ->exists();
+    }
 }

@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
-class importCouponController extends Controller
+class ImportCouponController extends Controller
 {
     public function __construct(
         protected ImportProductService $importProductService,
@@ -144,8 +144,9 @@ class importCouponController extends Controller
 
             $normalizedImeis = collect($rawImeis)
                 ->map(fn($imei) => trim((string) $imei))
-                ->filter(fn(string $imei) => $imei !== '')
                 ->values();
+
+            $nonEmptyImeis = $normalizedImeis->filter(fn(string $imei) => $imei !== '');
 
             /*
     |--------------------------------------------------------------------------
@@ -153,7 +154,7 @@ class importCouponController extends Controller
     |--------------------------------------------------------------------------
     */
             if ($tracking === Product::INVENTORY_TRACKING_QUANTITY) {
-                if ($normalizedImeis->isNotEmpty()) {
+                if ($nonEmptyImeis->isNotEmpty()) {
                     throw ValidationException::withMessages([
                         "imeis.{$import->id}" =>
                         "Sản phẩm {$productName} quản lý theo số lượng nên không được nhập IMEI.",
@@ -172,13 +173,6 @@ class importCouponController extends Controller
     */
             $expectedQuantity = (int) $import->quantity;
 
-            if ($expectedQuantity > ProductImei::MAX_IMPORT_QUANTITY) {
-                throw ValidationException::withMessages([
-                    "imeis.{$import->id}" =>
-                    'Mỗi lần chỉ được nhập tối đa ' . ProductImei::MAX_IMPORT_QUANTITY . ' thiết bị.',
-                ]);
-            }
-
             if ($normalizedImeis->count() !== $expectedQuantity) {
                 throw ValidationException::withMessages([
                     "imeis.{$import->id}" =>
@@ -187,19 +181,23 @@ class importCouponController extends Controller
                 ]);
             }
 
-            /*
-    |--------------------------------------------------------------------------
-    | Kiểm tra đúng 15 chữ số
-    |--------------------------------------------------------------------------
-    */
-            $invalidImei = $normalizedImeis->first(
-                fn(string $imei) => ! preg_match('/^\d{15}$/', $imei)
-            );
+            $invalidImei = $normalizedImeis->first(fn(string $imei) => $imei === '');
 
             if ($invalidImei !== null) {
                 throw ValidationException::withMessages([
                     "imeis.{$import->id}" =>
-                    "IMEI {$invalidImei} của sản phẩm {$productName} phải gồm đúng 15 chữ số.",
+                    'IMEI/Serial không được để trống.',
+                ]);
+            }
+
+            $tooLongImei = $normalizedImeis->first(
+                fn(string $imei) => mb_strlen($imei) > ProductImei::IMEI_MAX_LENGTH
+            );
+
+            if ($tooLongImei !== null) {
+                throw ValidationException::withMessages([
+                    "imeis.{$import->id}" =>
+                    'IMEI/Serial phải có tối đa 50 ký tự.',
                 ]);
             }
 
@@ -223,7 +221,7 @@ class importCouponController extends Controller
         if ($duplicatedImeis->isNotEmpty()) {
             throw ValidationException::withMessages([
                 'imeis' =>
-                'IMEI bị nhập trùng trong phiếu: ' . $duplicatedImeis->implode(', '),
+                'Mã IMEI/Serial bị nhập trùng trong phiếu: ' . $duplicatedImeis->implode(', '),
             ]);
         }
 
@@ -244,7 +242,7 @@ class importCouponController extends Controller
         if ($existingImeis->isNotEmpty()) {
             throw ValidationException::withMessages([
                 'imeis' =>
-                'IMEI đã tồn tại trong hệ thống: ' . $existingImeis->implode(', '),
+                'Mã IMEI/Serial đã tồn tại trong kho: ' . $existingImeis->implode(', '),
             ]);
         }
 

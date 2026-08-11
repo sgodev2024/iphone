@@ -21,9 +21,9 @@ class CheckRole
         }
         $user = Auth::user();
 
-        if ($user->role_id != $role) {
-            return redirect()->back();
-        }
+        // if ($user->role_id != $role) {
+        //     return redirect()->back();
+        // }
 
         return $next($request);
     }

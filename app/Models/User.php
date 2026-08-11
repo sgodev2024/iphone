@@ -21,6 +21,7 @@ class User extends Authenticatable
         'password',
         'status',
         'role_id',
+        'branch_id',
         'address',
         'company_name',
         'tax_code',
@@ -84,9 +85,73 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Storage::class);
     }
-   public function role()
+    public function role()
     {
         return $this->belongsTo(Roles::class, 'role_id');
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function owner(): User
+    {
+        if ($this->manager_id === null) {
+            return $this;
+        }
+    
+        return $this->manager()->first() ?? $this;
+    }
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_id');
+    }
+    public function employees()
+    {
+        return $this->hasMany(User::class, 'manager_id');
+    }
+    public function ownerId(): int
+    {
+        return $this->owner()->id;
+    }
+
+    public function roleKey(): ?string
+    {
+        return $this->role?->normalizedName();
+    }
+
+    public function hasFullAccess(): bool
+    {
+        return $this->role?->grantsAllPermissions() ?? false;
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->hasFullAccess()) {
+            return true;
+        }
+
+        return $this->role?->hasPermission($permission) ?? false;
+    }
+
+    public function matchesRoleRequirement(string|int $requiredRole): bool
+    {
+        if ($this->hasFullAccess()) {
+            return true;
+        }
+
+        $requiredRole = trim((string) $requiredRole);
+
+        if ($requiredRole === '') {
+            return false;
+        }
+
+        if (ctype_digit($requiredRole)) {
+            return (int) $this->role_id === (int) $requiredRole;
+        }
+
+        return $this->roleKey() === strtolower($requiredRole);
     }
     public function transaction()
     {

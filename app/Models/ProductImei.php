@@ -17,7 +17,7 @@ class ProductImei extends Model
 
     public const STATUS_SOLD = 'sold';
 
-    public const MAX_IMPORT_QUANTITY = 35;
+    public const IMEI_MAX_LENGTH = 50;
 
     protected $fillable = [
         'product_id',

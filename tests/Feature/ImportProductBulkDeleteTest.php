@@ -230,6 +230,7 @@ class ImportProductBulkDeleteTest extends TestCase
     private function createSchema(): void
     {
         Schema::dropAllTables();
+        $this->createAuthorizationTablesForTests();
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
@@ -323,7 +324,7 @@ class ImportProductBulkDeleteTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
-            $table->string('imei', 15)->unique();
+            $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default('in_stock');
             $table->timestamp('printed_at')->nullable();

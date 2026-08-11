@@ -143,7 +143,7 @@
                     <h2 style="margin: 0px">HÓA ĐƠN THANH TOÁN</h2>
                 </div>
                 <div class="receipt-header">
-                    <h3 style="font-size: 20px ; margin: 0px; padding: 10px 0px">{{ $storeName }}</h3>
+                    <h3 style="font-size: 20px ; margin: 0px; padding: 10px 0px">{{ $storeName }} storename</h3>
                     <table style="width: 60%; margin: 0px auto" id="thongtinnhahang">
                         <tr>
                             <td style="

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Storage extends Model
 {
@@ -30,7 +31,17 @@ class Storage extends Model
     }
 
     public function productImeis(): HasMany
-{
-    return $this->hasMany(ProductImei::class);
-}
+    {
+        return $this->hasMany(ProductImei::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function scopeOfBranch(Builder $query, int $branchId): Builder
+    {
+        return $query->where('branch_id', $branchId);
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Staff;
 
+use App\Models\ProductImei;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -47,7 +48,7 @@ class StoreOrderRequest extends FormRequest
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.tracking_type' => ['nullable', 'in:imei,quantity'],
             'items.*.product_imei_id' => ['nullable', 'integer', 'exists:product_imeis,id'],
-            'items.*.imei' => ['nullable', 'string', 'max:15'],
+            'items.*.imei' => ['nullable', 'string', 'max:' . ProductImei::IMEI_MAX_LENGTH],
             'items.*.barcode' => ['nullable', 'string', 'max:50'],
 
             'subtotal' => ['required', 'numeric', 'min:0'],

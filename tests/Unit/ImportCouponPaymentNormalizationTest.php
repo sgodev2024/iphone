@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Http\Controllers\Admin\importCouponController;
+use App\Http\Controllers\Admin\ImportCouponController;
 use App\Models\ImportCoupon;
 use ReflectionClass;
 use Tests\TestCase;
@@ -75,7 +75,7 @@ class ImportCouponPaymentNormalizationTest extends TestCase
 
     private function normalizePayment(string $paymentMethod, int $paidAmount, int $total): array
     {
-        $reflection = new ReflectionClass(importCouponController::class);
+        $reflection = new ReflectionClass(ImportCouponController::class);
         $controller = $reflection->newInstanceWithoutConstructor();
         $method = $reflection->getMethod('normalizePaymentData');
         $method->setAccessible(true);

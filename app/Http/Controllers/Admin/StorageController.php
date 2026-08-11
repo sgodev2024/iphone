@@ -46,8 +46,9 @@ class StorageController extends Controller
             Gate::authorize('storage.products');
     
             $storage = $this->storageQuery()
+                ->ofBranch(auth()->user()->branch_id)
                 ->findOrFail($storageId);
-    
+
                 $products = $storage->products()
                 ->with([
                     'brand',
@@ -92,6 +93,7 @@ class StorageController extends Controller
         |--------------------------------------------------------------------------
         */
         $storages = $this->storageQuery()
+            ->ofBranch(auth()->user()->branch_id)
             ->when($searchText !== '', function (Builder $query) use ($searchText) {
                 $query->where(function (Builder $query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%")

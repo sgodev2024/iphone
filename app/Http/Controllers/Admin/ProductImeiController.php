@@ -276,17 +276,11 @@ class ProductImeiController extends Controller
     ): void {
         if ($filters['imei'] !== '') {
             $imei = $filters['imei'];
-            $isExactImei = preg_match('/^\d{15}$/', $imei) === 1;
-
-            if ($isExactImei) {
-                $query->where('imei', $imei);
-            } else {
-                $query->where(
-                    'imei',
-                    'like',
-                    "%{$imei}%"
-                );
-            }
+            $query->where(function (Builder $imeiQuery) use ($imei) {
+                $imeiQuery
+                    ->where('imei', $imei)
+                    ->orWhere('imei', 'like', "%{$imei}%");
+            });
         }
 
         if ($filters['product'] !== '') {
