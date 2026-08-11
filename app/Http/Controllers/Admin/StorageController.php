@@ -36,7 +36,7 @@ class StorageController extends Controller
     
         $searchText = trim((string) $request->query('s'));
         $storageId = $request->integer('inventory');
-    
+        $branchId = auth()->user()->branchScopeId();
         /*
         |--------------------------------------------------------------------------
         | Danh sách sản phẩm tồn kho
@@ -46,7 +46,7 @@ class StorageController extends Controller
             Gate::authorize('storage.products');
     
             $storage = $this->storageQuery()
-                ->ofBranch(auth()->user()->branch_id)
+                ->ofBranch($branchId)
                 ->findOrFail($storageId);
 
                 $products = $storage->products()
@@ -92,8 +92,9 @@ class StorageController extends Controller
         | Danh sách kho
         |--------------------------------------------------------------------------
         */
+
         $storages = $this->storageQuery()
-            ->ofBranch(auth()->user()->branch_id)
+            ->ofBranch($branchId)
             ->when($searchText !== '', function (Builder $query) use ($searchText) {
                 $query->where(function (Builder $query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%")
