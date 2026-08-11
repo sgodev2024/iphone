@@ -40,8 +40,11 @@ class Storage extends Model
         return $this->belongsTo(Branch::class);
     }
 
-    public function scopeOfBranch(Builder $query, int $branchId): Builder
+    public function scopeOfBranch(Builder $query, ?int $branchId): Builder
     {
+        if ($branchId === null) {
+            return $query;
+        }
         return $query->where('branch_id', $branchId);
     }
 }

@@ -157,4 +157,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(Transaction::class, 'user_id');
     }
+
+    public function isAdmin(): bool
+{
+    return $this->role?->normalizedName() === 'admin';
+}
+
+public function branchScopeId(): ?int
+{
+    return $this->branch_id;
+}
 }
