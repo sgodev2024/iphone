@@ -89,6 +89,7 @@ class EmployeeController extends Controller
                 $credentials['role_id'] = self::EMPLOYEE_ROLE_ID;
                 $credentials['manager_id'] = Auth::id();
                 $credentials['password'] = Hash::make($credentials['password']);
+                $credentials['branch_id'] = Auth::user()->branch_id;
 
                 return User::create($credentials);
             });
