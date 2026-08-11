@@ -17,9 +17,9 @@ use App\Models\Receipts;
 use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\SaleService;
 use App\Services\DailyReportService;
 use App\Services\ProfitService;
+use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -313,6 +313,24 @@ class StaffPosSaleTest extends TestCase
         ]], 0);
         $this->actingAs($staff)->postJson('/ban-hang/order', $negativePrice)->assertUnprocessable();
 
+        $zeroPrice = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 1,
+            'unit_price' => 0,
+        ]], 0);
+        $this->actingAs($staff)->postJson('/ban-hang/order', $zeroPrice)
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Giá bán phải lớn hơn 0.']);
+
+        $invalidPrice = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 1,
+            'unit_price' => 'NaN',
+        ]], 0);
+        $this->actingAs($staff)->postJson('/ban-hang/order', $invalidPrice)
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Giá bán phải lớn hơn 0.']);
+
         $tampered = $this->orderPayload([[
             'id' => $product->id,
             'qty' => 1,
@@ -341,6 +359,81 @@ class StaffPosSaleTest extends TestCase
             ->assertJsonFragment(['message' => 'Giảm giá phần trăm không được lớn hơn 100%.']);
 
         $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_checkout_rejects_the_entire_cart_when_any_item_has_a_zero_unit_price(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $validProduct = $this->createProduct(['name' => 'Sản phẩm hợp lệ', 'price' => 600000, 'quantity' => 2]);
+        $zeroPriceProduct = $this->createProduct(['name' => 'Sản phẩm giá 0', 'price' => 0, 'quantity' => 2]);
+        ProductStorage::create(['product_id' => $validProduct->id, 'storage_id' => $storage->id, 'quantity' => 2]);
+        ProductStorage::create(['product_id' => $zeroPriceProduct->id, 'storage_id' => $storage->id, 'quantity' => 2]);
+
+        $response = $this->actingAs($staff)->postJson('/ban-hang/order', $this->orderPayload([
+            ['id' => $validProduct->id, 'qty' => 1, 'unit_price' => 600000],
+            ['id' => $zeroPriceProduct->id, 'qty' => 1, 'unit_price' => 0],
+        ], 600000));
+
+        $response->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Giá bán phải lớn hơn 0.']);
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('order_details', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertDatabaseCount('transaction_entries', 0);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $validProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $zeroPriceProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+    }
+
+    public function test_sale_service_defensively_rejects_non_positive_unit_price_without_side_effects(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'quantity' => 1,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, '123456789012399');
+
+        $this->actingAs($staff);
+
+        try {
+            app(SaleService::class)->createPosOrder($staff, [
+                'items' => [[
+                    'product_id' => $product->id,
+                    'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                    'product_imei_id' => $imei->id,
+                    'quantity' => 1,
+                    'unit_price' => 0,
+                ]],
+                'subtotal' => 0,
+                'discountType' => 'amount',
+                'discountInput' => 0,
+                'grand' => 0,
+                'customer' => ['payment' => 'cash'],
+            ], $storage->id);
+            $this->fail('SaleService must reject a non-positive unit price.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame('Giá bán phải lớn hơn 0.', $exception->errors()['items'][0]);
+        }
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('order_details', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
     }
 
     public function test_debt_checkout_uses_custom_unit_price_and_net_total_without_cash_transaction(): void

@@ -15,7 +15,7 @@ class StoreOrderRequest extends FormRequest
     {
         $items = collect($this->input('items', []))
             ->map(function ($item) {
-                if (!is_array($item)) {
+                if (! is_array($item)) {
                     return $item;
                 }
 
@@ -45,12 +45,12 @@ class StoreOrderRequest extends FormRequest
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.name' => ['nullable', 'string', 'max:255'],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
-            'items.*.unit_price' => ['required', 'integer', 'min:0'],
+            'items.*.unit_price' => ['required', 'integer', 'min:1'],
             'items.*.qty' => ['nullable', 'integer', 'min:1'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'items.*.tracking_type' => ['nullable', 'in:imei,quantity'],
             'items.*.product_imei_id' => ['nullable', 'integer', 'exists:product_imeis,id'],
-            'items.*.imei' => ['nullable', 'string', 'max:' . ProductImei::IMEI_MAX_LENGTH],
+            'items.*.imei' => ['nullable', 'string', 'max:'.ProductImei::IMEI_MAX_LENGTH],
             'items.*.barcode' => ['nullable', 'string', 'max:50'],
 
             'subtotal' => ['required', 'numeric', 'min:0'],
@@ -70,6 +70,15 @@ class StoreOrderRequest extends FormRequest
             'customer.address' => ['nullable', 'string', 'max:500'],
             'customer.payment' => ['required', 'in:cash,bank_transfer,debt'],
             'customer.note' => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'items.*.unit_price.required' => 'Giá bán phải lớn hơn 0.',
+            'items.*.unit_price.integer' => 'Giá bán phải lớn hơn 0.',
+            'items.*.unit_price.min' => 'Giá bán phải lớn hơn 0.',
         ];
     }
 

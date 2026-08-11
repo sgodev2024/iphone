@@ -214,6 +214,7 @@ class SaleService
         $seenImeiIds = [];
 
         foreach ($items as $item) {
+            $unitPrice = $this->validatedUnitPrice($item['unit_price'] ?? null);
             $trackingType = $item['tracking_type'] ?? null;
             $productImeiId = (int) ($item['product_imei_id'] ?? 0);
 
@@ -236,7 +237,7 @@ class SaleService
                     'product_imei_id' => $productImeiId,
                     'product_id' => (int) ($item['product_id'] ?? 0),
                     'quantity' => 1,
-                    'unit_price' => (int) $item['unit_price'],
+                    'unit_price' => $unitPrice,
                 ]);
 
                 continue;
@@ -248,8 +249,6 @@ class SaleService
             if ($productId <= 0 || $quantity <= 0) {
                 continue;
             }
-
-            $unitPrice = (int) $item['unit_price'];
 
             if (isset($quantityByProduct[$productId])
                 && $quantityByProduct[$productId]['unit_price'] !== $unitPrice
@@ -276,6 +275,19 @@ class SaleService
         }
 
         return $normalized;
+    }
+
+    private function validatedUnitPrice(mixed $unitPrice): int
+    {
+        $validatedUnitPrice = filter_var($unitPrice, FILTER_VALIDATE_INT);
+
+        if ($validatedUnitPrice === false || $validatedUnitPrice <= 0) {
+            throw ValidationException::withMessages([
+                'items' => 'Giá bán phải lớn hơn 0.',
+            ]);
+        }
+
+        return $validatedUnitPrice;
     }
 
     private function lockedImeis(Collection $imeiIds): Collection

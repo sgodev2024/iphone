@@ -1808,7 +1808,17 @@
             }
 
             function parseMoneyInput(value) {
-                const digits = String(value ?? '').replace(/[^0-9]/g, '');
+                const rawValue = String(value ?? '').trim();
+
+                if (rawValue.includes('-')) {
+                    return null;
+                }
+
+                if (rawValue !== '' && !/^[\d\s.,]+$/.test(rawValue)) {
+                    return null;
+                }
+
+                const digits = rawValue.replace(/[^0-9]/g, '');
 
                 if (digits === '') {
                     return 0;
@@ -1818,21 +1828,56 @@
                 return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
             }
 
+            function isValidUnitPrice(value) {
+                const unitPrice = Number(value);
+                return Number.isFinite(unitPrice) && unitPrice > 0;
+            }
+
+            function validateCartUnitPrices() {
+                const invalidEntry = [...cart.entries()].find(([, {
+                    product
+                }]) => !isValidUnitPrice(product.unit_price));
+
+                if (!invalidEntry) {
+                    return true;
+                }
+
+                const [key, {
+                    product
+                }] = invalidEntry;
+                const productName = safeText(product.name);
+                const message = productName ?
+                    `Giá bán của sản phẩm '${productName}' phải lớn hơn 0 VND.` :
+                    'Giá bán phải lớn hơn 0 VND.';
+                const priceInput = Array.from(document.querySelectorAll('.cart-row'))
+                    .find((row) => row.dataset.rowId === key)
+                    ?.querySelector('.unit-price-input');
+
+                priceInput?.classList.add('is-invalid');
+                priceInput?.focus();
+                priceInput?.select();
+                Toast.fire({
+                    icon: 'warning',
+                    title: message
+                });
+
+                return false;
+            }
+
             function updateUnitPrice(key, input) {
                 const item = cart.get(key);
                 if (!item) return;
 
                 const unitPrice = parseMoneyInput(input.value);
-                if (unitPrice === null) {
-                    input.setCustomValidity('Giá bán không hợp lệ.');
-                    return;
-                }
-
-                input.setCustomValidity('');
                 item.product.unit_price = unitPrice;
                 item.product.price = unitPrice;
                 cart.set(key, item);
-                input.value = money(unitPrice);
+                const isValid = isValidUnitPrice(unitPrice);
+                input.classList.toggle('is-invalid', !isValid);
+                input.setCustomValidity(isValid ? '' : 'Giá bán phải lớn hơn 0.');
+                if (unitPrice !== null) {
+                    input.value = money(unitPrice);
+                }
                 renderCartTotals();
             }
 
@@ -1853,6 +1898,7 @@
                         const productBarcode = escapeHtml(safeText(product.barcode));
                         const stockText = isImei ? `IMEI: ${escapeHtml(safeText(product.imei))}` :
                             `Tồn kho: ${Number(product.available_quantity || 0)}`;
+                        const invalidUnitPrice = !isValidUnitPrice(product.unit_price);
                         const quantityControl = isImei ?
                             '<span class="badge bg-secondary imei-quantity">1</span>' :
                             `<input type="number" min="1" max="${product.available_quantity}" value="${qty}"
@@ -1872,7 +1918,7 @@
                             <div class="cart-field">
                             <label class="cart-field-label">Giá bán</label>
                             <input type="text" inputmode="numeric" autocomplete="off"
-                                class="form-control form-control-sm unit-price-input"
+                                class="form-control form-control-sm unit-price-input ${invalidUnitPrice ? 'is-invalid' : ''}"
                                 value="${money(product.unit_price)}" aria-label="Giá bán ${productName}" />
                             </div>
                             <div class="cart-field cart-quantity-field">
@@ -2014,6 +2060,10 @@
                         icon: "error",
                         title: "Giỏ hàng đang trống! Vui lòng thêm ít nhất 1 sản phẩm!"
                     });
+                    return;
+                }
+
+                if (!validateCartUnitPrices()) {
                     return;
                 }
 
@@ -2235,6 +2285,10 @@
                 if (orderSaved) return;
 
                 const payButton = $(this);
+                if (!validateCartUnitPrices()) {
+                    return;
+                }
+
                 payButton.prop('disabled', true);
                 const paymentMethod = selectedPaymentMethod();
                 const order = {
