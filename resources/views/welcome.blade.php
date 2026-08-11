@@ -371,14 +371,13 @@
                     firstDay: 1
                 },
                 ranges: {
-                    'Hôm nay': [moment(), moment()],
-                    'Ngày mai': [moment().add(1, 'days'), moment().add(1, 'days')],
+                    'Hôm nay': [moment().startOf('day'), moment().endOf('day')],
+                    'Hôm qua': [
+                        moment().subtract(1, 'days').startOf('day'),
+                        moment().subtract(1, 'days').endOf('day')
+                    ],
                     'Tuần này': [moment().startOf('week'), moment().endOf('week')],
-                    'Tuần sau': [moment().add(1, 'week').startOf('week'), moment().add(1, 'week').endOf(
-                        'week')],
-                    'Tháng này': [moment().startOf('month'), moment().endOf('month')],
-                    'Tháng sau': [moment().add(1, 'month').startOf('month'), moment().add(1, 'month').endOf(
-                        'month')]
+                    'Tháng này': [moment().startOf('month'), moment().endOf('month')]
                 }
             });
 
