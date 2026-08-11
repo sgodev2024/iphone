@@ -100,7 +100,7 @@ class User extends Authenticatable
         if ($this->manager_id === null) {
             return $this;
         }
-    
+
         return $this->manager()->first() ?? $this;
     }
     public function manager()
@@ -159,12 +159,12 @@ class User extends Authenticatable
     }
 
     public function isAdmin(): bool
-{
-    return $this->role?->normalizedName() === 'admin';
-}
+    {
+        return $this->role?->normalizedName() === 'admin';
+    }
 
-public function branchScopeId(): ?int
-{
-    return $this->branch_id;
-}
+    public function branchScopeId(): ?int
+    {
+        return $this->branch_id;
+    }
 }

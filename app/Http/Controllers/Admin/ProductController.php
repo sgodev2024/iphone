@@ -25,15 +25,14 @@ class ProductController extends Controller
         if ($request->ajax()) {
             $searchText = $request->input('s');
             $userId = auth()->user()->ownerId();
-            $branchId = auth()->user()->branch_id;
+            $branchId = auth()->user()->branchScopeId();
             $products = Product::query()
                 ->select('products.*')
                 ->selectSub(
                     ProductStorage::query()
                         ->ofBranch($branchId)
                         ->selectRaw('COALESCE(SUM(quantity), 0)')
-                        ->whereColumn('product_storage.product_id', 'products.id')
-                        ->where('storages.branch_id', $branchId),
+                        ->whereColumn('product_storage.product_id', 'products.id'),
                     'storage_stock_quantity'
                 )
                 ->selectSub(

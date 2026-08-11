@@ -30,10 +30,14 @@ class ProductStorage extends Model
         return $this->belongsTo(Storage::class);
     }
 
-    public function scopeOfBranch(Builder $query, int $branchId): Builder
+    public function scopeOfBranch(Builder $query, ?int $branchId): Builder
     {
-        return $query
-            ->join('storages', 'storages.id', '=', 'product_storage.storage_id')
-            ->where('storages.branch_id', $branchId);
+        if ($branchId === null) {
+            return $query;
+        }
+    
+        return $query->whereHas('storage', function (Builder $query) use ($branchId) {
+            $query->where('branch_id', $branchId);
+        });
     }
 }
