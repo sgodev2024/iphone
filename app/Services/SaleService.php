@@ -24,7 +24,7 @@ class SaleService
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = $data['customer']['payment'];
             $client = null;
-
+            $branchId = auth()->user()->branch_id;
             if (! empty($data['customer']['id'])) {
                 $client = Client::query()->find($data['customer']['id']);
 
@@ -129,6 +129,7 @@ class SaleService
             $orderData = [
                 'client_id' => $client?->id,
                 'user_id' => $ownerId,
+                'branch_id' => $branchId,
                 'code' => generateCode('orders', 'ODR'),
                 'name' => $client?->name ?? ($data['customer']['name'] ?? null),
                 'phone' => $client?->phone ?? ($data['customer']['phone'] ?? null),

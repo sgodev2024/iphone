@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductStorage extends Model
 {
@@ -27,5 +28,12 @@ class ProductStorage extends Model
     public function storage(): BelongsTo
     {
         return $this->belongsTo(Storage::class);
+    }
+
+    public function scopeOfBranch(Builder $query, int $branchId): Builder
+    {
+        return $query
+            ->join('storages', 'storages.id', '=', 'product_storage.storage_id')
+            ->where('storages.branch_id', $branchId);
     }
 }

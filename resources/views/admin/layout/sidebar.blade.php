@@ -502,11 +502,11 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                                @if (Auth::check() && (int) Auth::user()->role_id === 1)
+                                @if (Auth::check() && (int) Auth::user()->role_id === 1 )
                                     @canany(['branch.view', 'branch.create', 'user.view'])
                                         <li class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                                            <a href="{{ url('/admin/users') }}">
-                                                <span class="sub-item">Tạo chi nhánh cửa hàng</span>
+                                            <a href="{{ route('admin.branchs.index') }}">
+                                                <span class="sub-item">Cửa Hàng / Chi Nhánh</span>
                                             </a>
                                         </li>
                                     @endcanany

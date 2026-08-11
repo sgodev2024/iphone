@@ -22,4 +22,14 @@ class Branch extends Model
     {
         return Attribute::get(fn() => $this->status == 1 ? 'Hoạt động' : 'Không hoạt động');
     }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function storages()
+{
+    return $this->hasMany(Storage::class);
+}
 }
