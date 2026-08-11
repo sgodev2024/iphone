@@ -102,9 +102,52 @@
         }
 
         .cart-actions {
-            display: flex;
-            align-items: center;
+            display: contents;
+        }
+
+        .cart-controls {
+            display: grid;
+            grid-template-columns: minmax(140px, 1fr) 80px 32px;
+            align-items: end;
             gap: 8px;
+            flex: 0 0 300px;
+            min-width: 0;
+        }
+
+        .cart-field {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .cart-field-label {
+            color: #6b7280;
+            font-size: .75rem;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .unit-price-input,
+        .cart-controls .qty-input,
+        .cart-controls .imei-quantity {
+            height: 32px;
+        }
+
+        .unit-price-input {
+            text-align: right;
+        }
+
+        .cart-controls .qty-input {
+            width: 80px !important;
+            text-align: center;
+        }
+
+        .cart-controls .imei-quantity {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
         }
 
         .cart-subtotal {
@@ -402,6 +445,17 @@
             font-weight: 700;
         }
 
+        /* Ẩn mũi tên tăng/giảm trong ô Khuyến mãi */
+        #discountInput::-webkit-outer-spin-button,
+        #discountInput::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        #discountInput {
+            -moz-appearance: textfield;
+        }
+
         @media (max-width: 767.98px) {
             body {
                 overflow-x: hidden;
@@ -565,20 +619,30 @@
 
             .cart-actions {
                 grid-column: 3;
+                grid-row: 2;
                 align-self: center;
                 width: auto;
                 min-width: 0;
                 justify-content: flex-end;
-                gap: 8px;
                 padding-left: 0;
             }
 
-            .cart-actions .qty-input {
-                flex: 0 0 60px;
+            .cart-controls {
+                grid-column: 2 / 4;
+                grid-row: 2;
+                grid-template-columns: minmax(0, 1fr) 60px 32px;
+                align-items: end;
+                min-width: 0;
+                width: 100%;
+                flex-basis: auto;
+                gap: 6px;
+            }
+
+            .cart-controls .qty-input,
+            .cart-controls .imei-quantity {
                 width: 60px !important;
                 max-width: 60px;
                 min-width: 55px;
-                height: 32px;
                 padding-left: .25rem;
                 padding-right: .25rem;
             }
@@ -973,10 +1037,11 @@
                         <!-- Header -->
                         <div class="text-center invoice-header mb-4">
                             <h2 class="fw-bold text-uppercase">HÓA ĐƠN THANH TOÁN</h2>
-                            <h5 class="mt-2">Công ty: {{ $config->user->company_name }} </h5>
-                            <h5 class="mt-2">Cửa hàng: {{ $config->user->store_name }} </h5>
-                            <h5 class="mt-2">Địa chỉ: {{ $config->user->address }} </h5>
-                            <h5 class="mt-2">Điện thoại: {{ $config->user->phone }} &emsp;&emsp;Email: {{ $config->user->email }}</h5>
+                            <h5 class="mt-2">Công ty: {{ $config?->user?->company_name ?? '' }} </h5>
+                            <h5 class="mt-2">Cửa hàng: {{ $config?->user?->store_name ?? '' }} </h5>
+                            <h5 class="mt-2">Địa chỉ: {{ $config?->user?->address ?? '' }} </h5>
+                            <h5 class="mt-2">Điện thoại: {{ $config?->user?->phone ?? '' }} &emsp;&emsp;Email:
+                                {{ $config?->user?->email ?? '' }}</h5>
                         </div>
 
                         <hr>
@@ -1102,6 +1167,7 @@
             const bankCode = @json($bankCode);
             const bankAccount = @json($bankAccountForQr);
             let currentInvoiceGrand = 0;
+            let orderSaved = false;
             let hasSaleStorage = @json((bool) $saleStorage);
             const saleStorageMessage = qs('#saleStorageMessage');
 
@@ -1236,6 +1302,31 @@
                 } else {
                     $('#qr-code').attr('alt', 'Chưa cấu hình QR chuyển khoản');
                 }
+            }
+
+            function renderSavedInvoice(order) {
+                const rows = (order.items || []).map((item, index) => {
+                    const imei = item.imei ?
+                        `<div class="small text-muted">IMEI: ${escapeHtml(item.imei)}</div>` : '';
+
+                    return `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td class="text-start">${escapeHtml(item.name || '')}${imei}</td>
+                            <td>${Number(item.quantity || 0)}</td>
+                            <td>${money(item.unit_price)}</td>
+                            <td>${money(item.line_total)}</td>
+                        </tr>`;
+                }).join('');
+
+                currentInvoiceGrand = Number(order.total || 0);
+                $('#invoice-body').html(rows);
+                $('#invoice-subtotal').html(money(order.subtotal) + ' VND');
+                $('#invoice-discount').html('-' + money(order.discount) + ' VND');
+                $('#invoice-total').html(money(order.total) + ' VND');
+                $('#total-text').html(convertNumberToWords(order.total));
+                $('#invoice-note').text(order.note || '');
+                renderInvoicePayment(order.payment_method, currentInvoiceGrand);
             }
 
             function productThumbHtml(product, className = 'product-thumb') {
@@ -1373,7 +1464,8 @@
                         if (!addToCart(product)) {
                             barcodeFeedback.classList.remove('text-muted', 'text-warning');
                             barcodeFeedback.classList.add('text-danger');
-                            barcodeFeedback.textContent = 'Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.';
+                            barcodeFeedback.textContent =
+                                'Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.';
                             return;
                         }
 
@@ -1600,7 +1692,7 @@
                         ${productThumbHtml(p)}
                         <div class="flex-grow-1">
                         <div class="fw-semibold">${escapeHtml(productName)}</div>
-                        <div class="small text-muted">${money(p.price_buy)}</div>
+                        <div class="small text-muted">${money(p.price)} VND</div>
                         ${isImeiDevice ? `<div class="small text-muted">IMEI: ${escapeHtml(productImei)}</div>` : ''}
                         <div class="small text-muted">
                             ${productCode ? `Mã: ${escapeHtml(productCode)}` : ''}
@@ -1683,6 +1775,7 @@
 
             function normalizeCartProduct(product, trackingType) {
                 const productId = Number(product.product_id || product.id);
+                const unitPrice = Number(product.unit_price ?? product.price ?? 0);
 
                 return {
                     ...product,
@@ -1691,8 +1784,9 @@
                     tracking_type: trackingType,
                     quantity: Number(product.available_quantity || product.quantity || 1),
                     available_quantity: Number(product.available_quantity || product.quantity || 1),
-                    price_buy: Number(product.price_buy || product.price || 0),
-                    price: Number(product.price || product.price_buy || 0),
+                    price_buy: Number(product.price_buy || 0),
+                    price: unitPrice,
+                    unit_price: unitPrice,
                 };
             }
 
@@ -1710,6 +1804,35 @@
                 const q = Math.max(1, Math.min(Number(qty) || 1, item.product.available_quantity));
                 item.qty = q;
                 cart.set(key, item);
+                renderCartTotals();
+            }
+
+            function parseMoneyInput(value) {
+                const digits = String(value ?? '').replace(/[^0-9]/g, '');
+
+                if (digits === '') {
+                    return 0;
+                }
+
+                const parsed = Number(digits);
+                return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+            }
+
+            function updateUnitPrice(key, input) {
+                const item = cart.get(key);
+                if (!item) return;
+
+                const unitPrice = parseMoneyInput(input.value);
+                if (unitPrice === null) {
+                    input.setCustomValidity('Giá bán không hợp lệ.');
+                    return;
+                }
+
+                input.setCustomValidity('');
+                item.product.unit_price = unitPrice;
+                item.product.price = unitPrice;
+                cart.set(key, item);
+                input.value = money(unitPrice);
                 renderCartTotals();
             }
 
@@ -1731,9 +1854,9 @@
                         const stockText = isImei ? `IMEI: ${escapeHtml(safeText(product.imei))}` :
                             `Tồn kho: ${Number(product.available_quantity || 0)}`;
                         const quantityControl = isImei ?
-                            '<span class="badge bg-secondary">1</span>' :
+                            '<span class="badge bg-secondary imei-quantity">1</span>' :
                             `<input type="number" min="1" max="${product.available_quantity}" value="${qty}"
-                                class="form-control form-control-sm text-center qty-input" style="width: 80px" />`;
+                                class="form-control form-control-sm text-center qty-input" />`;
 
                         const row = document.createElement('div');
                         row.className = 'cart-row';
@@ -1742,19 +1865,34 @@
                         ${productThumbHtml(product, 'cart-thumb')}
                         <div class="cart-info">
                         <div class="fw-semibold">${productName}</div>
-                        <div class="small text-muted">Giá: ${money(product.price_buy)}</div>
                         <div class="small text-muted">${stockText}</div>
                         ${isImei && productBarcode ? `<div class="small text-muted">Barcode: ${productBarcode}</div>` : ''}
                         </div>
-                        <div class="cart-actions">
-                        ${quantityControl}
-                        <button class="btn btn-sm btn-outline-danger remove-btn">&times;</button>
-                        </div>
+                        <div class="cart-controls">
+                            <div class="cart-field">
+                            <label class="cart-field-label">Giá bán</label>
+                            <input type="text" inputmode="numeric" autocomplete="off"
+                                class="form-control form-control-sm unit-price-input"
+                                value="${money(product.unit_price)}" aria-label="Giá bán ${productName}" />
+                            </div>
+                            <div class="cart-field cart-quantity-field">
+                            <label class="cart-field-label">Số lượng</label>
+                            ${quantityControl}
+                            </div>
+                            <div class="cart-actions">
+                            <button class="btn btn-sm btn-outline-danger remove-btn" aria-label="Xóa ${productName}">&times;</button>
+                            </div>
+                    </div>
                     `;
                         const qtyInput = qs('.qty-input', row);
                         if (qtyInput) {
                             qtyInput.addEventListener('input', (e) => updateQty(key, e.target.value));
                         }
+                        const unitPriceInput = qs('.unit-price-input', row);
+                        unitPriceInput.addEventListener('input', () => updateUnitPrice(
+                            key,
+                            unitPriceInput
+                        ));
                         qs('.remove-btn', row).addEventListener('click', () => removeFromCart(key));
                         cartBody.appendChild(row);
                     }
@@ -1781,7 +1919,7 @@
                     }
                     of cart.values()) {
 
-                    sum += product.price_buy * qty;
+                    sum += product.unit_price * qty;
                 }
                 return sum;
             }
@@ -1895,8 +2033,8 @@
                             <td>${index + 1}</td>
                             <td class="text-start">${itemName}</td>
                             <td>${qty}</td>
-                            <td> ${ money(product.price_buy) }</td>
-                            <td>${ money(product.price_buy * qty) }</td>
+                            <td> ${ money(product.unit_price) }</td>
+                            <td>${ money(product.unit_price * qty) }</td>
                         </tr>`;
                 })
 
@@ -1935,7 +2073,7 @@
                         imei: product.imei || null,
                         barcode: product.barcode || null,
                         name: product.name,
-                        price: product.price,
+                        unit_price: product.unit_price,
                         qty,
                         quantity: qty
                     })),
@@ -2086,9 +2224,18 @@
                 }
             });
 
-            $('#invoiceModal').on('hidden.bs.modal', resetBankTransferInfo);
+            $('#invoiceModal').on('hidden.bs.modal', function() {
+                resetBankTransferInfo();
+                if (orderSaved) {
+                    window.location.reload();
+                }
+            });
 
             $('#pay-button').on('click', function() {
+                if (orderSaved) return;
+
+                const payButton = $(this);
+                payButton.prop('disabled', true);
                 const paymentMethod = selectedPaymentMethod();
                 const order = {
                     items: [...cart.values()].map(({
@@ -2102,7 +2249,7 @@
                         imei: product.imei || null,
                         barcode: product.barcode || null,
                         name: product.name,
-                        price: product.price_buy,
+                        unit_price: product.unit_price,
                         qty,
                         quantity: qty
                     })),
@@ -2138,17 +2285,17 @@
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
                     success: (res) => {
-
+                        orderSaved = true;
+                        renderSavedInvoice(res.order);
+                        payButton.text('Đã lưu đơn');
                         Toast.fire({
                             icon: "success",
                             title: res.message
                         });
 
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
                     },
                     error: (xhr) => {
+                        payButton.prop('disabled', false);
                         Toast.fire({
                             icon: "error",
                             title: xhr.responseJSON.message ||

@@ -313,24 +313,8 @@ class ReportController extends Controller
     public function getProfitReport()
     {
         try {
-            $listorderdetail = OrderDetail::with('product')->get();
-
-            $listprofit = [];
-            foreach ($listorderdetail as $orderDetail) {
-                $productId = $orderDetail->product_id;
-
-                if (!isset($listprofit[$productId])) {
-                    $listprofit[$productId] = [
-                        'product' => $orderDetail->product,
-                        'quantity' => 0,
-                    ];
-                }
-                $listprofit[$productId]['quantity'] += $orderDetail->quantity;
-            }
-
-            $listprofitArray = array_values($listprofit);
             return response()->json([
-                'product' => $listprofitArray
+                'product' => $this->aggregateProfitByProduct($this->profitDetailsQuery()->get()),
             ]);
         } catch (Exception $e) {
             Log::error('Failed to get Profit Report: ' . $e->getMessage());
@@ -341,89 +325,11 @@ class ReportController extends Controller
 
     public function getProfitReportByFilterNew(Request $request)
     {
-        log::info(1);
         try {
-            $storage_id = $request->input('storage_id');
-            $filter = $request->input('filter');
-            $listorderdetail = [];
-            switch ($filter) {
-                case '1':
-                    $today = Carbon::today();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)->whereDate('created_at', $today)->with('product')->get();
-
-                    break;
-                case '2':
-                    $startOfWeek = Carbon::now()->startOfWeek();
-                    $endOfWeek = Carbon::now()->endOfWeek();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                        ->with('product')
-                        ->get();
-
-                    break;
-                case '3':
-                    $startOfMonth = Carbon::now()->startOfMonth();
-                    $endOfMonth = Carbon::now()->endOfMonth();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                        ->with('product')
-                        ->get();
-
-                    break;
-                case '4':
-                    $startOfQuarter = Carbon::now()->startOfQuarter();
-                    $endOfQuarter = Carbon::now()->endOfQuarter();
-
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfQuarter, $endOfQuarter])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                case '5':
-                    $startDate = Carbon::now()->startOfYear();
-                    $endDate = Carbon::now()->endOfYear();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                case '6':
-                    $startDate = $request->startDate;
-                    $endDate = $request->endDate;
-
-                    $startDate = Carbon::parse($startDate)->startOfDay();
-                    $endDate = Carbon::parse($endDate)->endOfDay();
-
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                default:
-            }
-            // $listorderdetail = OrderDetail::where('storage_id', $storage_id)->with('product')->get();
-            $listprofit = [];
-            foreach ($listorderdetail as $key => $orderDetail) {
-                $productId = $orderDetail->product_id;
-
-                if (!isset($listprofit[$productId])) {
-                    $listprofit[$productId] = [
-                        'product' => $orderDetail->product,
-                        'quantity' => 0,
-                    ];
-                }
-                $listprofit[$productId]['quantity'] += $orderDetail->quantity;
-            }
-            $listprofitArray = array_values($listprofit);
             return response()->json([
-
-                'product' => $listprofitArray
+                'product' => $this->aggregateProfitByProduct(
+                    $this->filteredProfitDetails($request)
+                ),
             ]);
         } catch (Exception $e) {
             Log::error('Failed to get Profit Report: ' . $e->getMessage());
@@ -434,114 +340,90 @@ class ReportController extends Controller
     public function getProfitReportByFilterPDF(Request $request)
     {
         try {
-            $storage_id = $request->input('storage_id');
-            $filter = $request->input('filter');
-            $listorderdetail = [];
-            switch ($filter) {
-                case '1':
-                    $today = Carbon::today();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)->whereDate('created_at', $today)->with('product')->get();
+            $storage = Storage::findOrFail($request->input('storage_id'));
+            $filter = (string) $request->input('filter');
+            $pdf = PDF::loadView('admin.profit.myPDF', [
+                'listprofit' => $this->aggregateProfitByProduct($this->filteredProfitDetails($request)),
+                'startDate' => $request->startDate,
+                'endDate' => $request->endDate,
+                'storage' => $storage->name,
+                'filter' => $filter,
+            ]);
 
-                    break;
-                case '2':
-                    $startOfWeek = Carbon::now()->startOfWeek();
-                    $endOfWeek = Carbon::now()->endOfWeek();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                        ->with('product')
-                        ->get();
-
-                    break;
-                case '3':
-                    $startOfMonth = Carbon::now()->startOfMonth();
-                    $endOfMonth = Carbon::now()->endOfMonth();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-                        ->with('product')
-                        ->get();
-
-                    break;
-                case '4':
-                    $startOfQuarter = Carbon::now()->startOfQuarter();
-                    $endOfQuarter = Carbon::now()->endOfQuarter();
-
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startOfQuarter, $endOfQuarter])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                case '5':
-                    $startDate = Carbon::now()->startOfYear();
-                    $endDate = Carbon::now()->endOfYear();
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                case '6':
-                    $startDate = $request->startDate;
-                    $endDate = $request->endDate;
-
-                    $startDate = Carbon::parse($startDate)->startOfDay();
-                    $endDate = Carbon::parse($endDate)->endOfDay();
-
-                    $listorderdetail = OrderDetail::where('storage_id', $storage_id)
-                        ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with('product')
-                        ->get();
-
-                    break;
-
-                default:
-            }
-            // $listorderdetail = OrderDetail::where('storage_id', $storage_id)->with('product')->get();
-            $listprofit = [];
-            foreach ($listorderdetail as $key => $orderDetail) {
-                $productId = $orderDetail->product_id;
-
-                if (!isset($listprofit[$productId])) {
-                    $listprofit[$productId] = [
-                        'product' => $orderDetail->product,
-                        'quantity' => 0,
-                    ];
-                }
-                $listprofit[$productId]['quantity'] += $orderDetail->quantity;
-            }
-            $listprofitArray = array_values($listprofit);
-
-            $storage = Storage::find($storage_id);
-            if ($filter == 6) {
-                $startDate = $request->startDate;
-                $endDate = $request->endDate;
-
-                $pdf = PDF::loadView('admin.profit.myPDF', [
-                    'listprofit' => $listprofit,
-                    'startDate' => $startDate,
-                    'endDate' => $endDate,
-                    'storage' => $storage->name,
-                    'filter' => $filter
-                ]);
-            } else {
-                $startDate = $request->startDate;
-                $endDate = $request->endDate;
-
-                $pdf = PDF::loadView('admin.profit.myPDF', [
-                    'listprofit' => $listprofit,
-                    'storage' => $storage->name,
-                    'filter' => $filter,
-                ]);
-            }
-
-
-            // Trả về file PDF
             return $pdf->download('profit_report.pdf');
         } catch (Exception $e) {
             Log::error('Failed to get Profit Report: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to get Profit report'], 500);
         }
+    }
+
+    private function filteredProfitDetails(Request $request): Collection
+    {
+        $query = $this->profitDetailsQuery()
+            ->where('storage_id', $request->input('storage_id'));
+
+        match ((string) $request->input('filter')) {
+            '1' => $query->whereDate('created_at', Carbon::today()),
+            '2' => $query->whereBetween('created_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]),
+            '3' => $query->whereBetween('created_at', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()]),
+            '4' => $query->whereBetween('created_at', [Carbon::now()->startOfQuarter(), Carbon::now()->endOfQuarter()]),
+            '5' => $query->whereBetween('created_at', [Carbon::now()->startOfYear(), Carbon::now()->endOfYear()]),
+            '6' => $query->whereBetween('created_at', [
+                Carbon::parse($request->startDate)->startOfDay(),
+                Carbon::parse($request->endDate)->endOfDay(),
+            ]),
+            default => null,
+        };
+
+        return $query->get();
+    }
+
+    private function profitDetailsQuery()
+    {
+        return OrderDetail::query()
+            ->whereHas('order', fn ($query) => $query->where('status', 1))
+            ->with(['product', 'productImei.importDetail', 'order.orderDetails']);
+    }
+
+    private function aggregateProfitByProduct(Collection $details): array
+    {
+        return $details
+            ->groupBy('product_id')
+            ->map(function (Collection $productDetails): array {
+                $product = $productDetails->first()->product;
+                $quantity = 0;
+                $revenue = 0.0;
+                $cost = 0.0;
+
+                foreach ($productDetails as $detail) {
+                    $lineQuantity = (int) $detail->quantity;
+                    $lineGross = (float) $detail->price * $lineQuantity;
+                    $orderSubtotal = (float) $detail->order?->orderDetails->sum(
+                        fn ($orderDetail) => (float) $orderDetail->price * (int) $orderDetail->quantity
+                    );
+                    $unitCost = $detail->productImei?->importDetail?->price
+                        ?? $detail->product?->price_buy
+                        ?? 0;
+
+                    $quantity += $lineQuantity;
+                    $revenue += $orderSubtotal > 0
+                        ? (float) $detail->order->total_money * ($lineGross / $orderSubtotal)
+                        : 0;
+                    $cost += (float) $unitCost * $lineQuantity;
+                }
+
+                $profit = $revenue - $cost;
+
+                return [
+                    'product' => $product,
+                    'quantity' => $quantity,
+                    'revenue' => $revenue,
+                    'cost' => $cost,
+                    'profit' => $profit,
+                    'rate' => $revenue > 0 ? ($profit / $revenue) * 100 : 0,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

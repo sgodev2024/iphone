@@ -688,10 +688,10 @@
                         <td>${item.product.code}</td>
                         <td>${item.product.name}</td>
                         <td>${item.quantity}</td>
-                        <td>${item.product.price_buy * item.quantity}</td>
-                        <td>${item.product.price * item.quantity}</td>
-                        <td>${item.product.price_buy * item.quantity - item.product.price * item.quantity }</td>
-                        <td>${(100 * (item.product.price_buy * item.quantity - item.product.price * item.quantity) / (item.product.price_buy * item.quantity)).toFixed(2)}%</td>
+                        <td>${Number(item.revenue).toLocaleString('vi-VN')}</td>
+                        <td>${Number(item.cost).toLocaleString('vi-VN')}</td>
+                        <td>${Number(item.profit).toLocaleString('vi-VN')}</td>
+                        <td>${Number(item.rate).toFixed(2)}%</td>
                     </tr>`;
                     tableBody.append(newRow);
                 });

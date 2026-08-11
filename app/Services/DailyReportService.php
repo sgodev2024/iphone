@@ -26,6 +26,7 @@ class DailyReportService
         try {
             // Paginate orders
             $orders = $this->order
+                ->where('status', 1)
                 ->whereDate('created_at', now()->toDateString())
                 ->with(['user', 'client'])
                 ->latest('created_at')
@@ -33,8 +34,9 @@ class DailyReportService
 
             // Retrieve all order details for today
             $orderDetails = OrderDetail::whereHas('order', function ($query) {
-                $query->whereDate('created_at', now()->toDateString());
-            })->with('product')->get();
+                $query->where('status', 1)
+                    ->whereDate('created_at', now()->toDateString());
+            })->with(['product', 'order.orderDetails'])->get();
 
             // Calculate product sales
             $productSales = [];
@@ -45,8 +47,13 @@ class DailyReportService
 
                 $productId = $orderDetail->product_id;
                 $quantity = $orderDetail->quantity;
-                $price = $orderDetail->product->price_buy;
-                $total = $price * $quantity;
+                $lineTotal = (float) $orderDetail->price * $quantity;
+                $orderSubtotal = (float) $orderDetail->order?->orderDetails->sum(
+                    fn ($detail) => (float) $detail->price * (int) $detail->quantity
+                );
+                $total = $orderSubtotal > 0
+                    ? (float) $orderDetail->order->total_money * ($lineTotal / $orderSubtotal)
+                    : 0;
 
                 if (!isset($productSales[$productId])) {
                     $productSales[$productId] = [

@@ -125,6 +125,7 @@ class ProductController extends Controller
                 'products.code',
                 'products.barcode',
                 'products.name',
+                'products.price',
                 'products.price_buy',
                 'products.thumbnail',
                 'products.product_unit',
@@ -215,6 +216,8 @@ class ProductController extends Controller
                     'barcode' => $product->barcode,
                     'thumbnail' => $product->thumbnail,
                     'thumbnail_url' => $product->thumbnail_url,
+                    'price' => (float) $product->price,
+                    'unit_price' => (float) $product->price,
                     'price_buy' => (float) $product->price_buy,
                     'quantity' => $availableQuantity,
                     'available_quantity' => $availableQuantity,
@@ -287,6 +290,8 @@ class ProductController extends Controller
                         'code' => $product->code,
                         'thumbnail' => $product->thumbnail,
                         'thumbnail_url' => $product->thumbnail_url,
+                        'price' => (float) $product->price,
+                        'unit_price' => (float) $product->price,
                         'price_buy' => (float) $product->price_buy,
                         'imei' => $imei->imei,
                         'barcode' => $imei->barcode,
@@ -357,7 +362,7 @@ class ProductController extends Controller
 
             Cart::create([
                 'product_id' => $productId,
-                'price' => $product->price_buy,
+                'price' => $product->price,
                 'user_id' => $user->id,
                 'amount' => $amount,
             ]);
@@ -380,6 +385,7 @@ class ProductController extends Controller
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'amount' => $item->amount,
+                    'unit_price' => $item->price,
                     'price_buy' => $item->price,
                     'product_name' => $product->product->name,
                     'quantity' => $product->quantity,
@@ -426,6 +432,7 @@ class ProductController extends Controller
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'amount' => $item->amount,
+                    'unit_price' => $item->price,
                     'price_buy' => $item->price,
                     'product_name' => $product->product->name,
                     'quantity' => $product->quantity,
@@ -458,6 +465,7 @@ class ProductController extends Controller
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'amount' => $item->amount,
+                    'unit_price' => $item->price,
                     'price_buy' => $item->price,
                     'product_name' => $product->product->name,
                     'quantity' => $product->quantity,
@@ -503,7 +511,9 @@ class ProductController extends Controller
                 'id' => $product->id,
                 'product_id' => $product->id,
                 'name' => $product->name,
-                'price_buy' => $product->price_buy,
+                'price' => (float) $product->price,
+                'unit_price' => (float) $product->price,
+                'price_buy' => (float) $product->price_buy,
                 'quantity' => $storage->quantity,
                 'available_quantity' => (int) $storage->quantity,
                 'storage_id' => (int) $storage->storage_id,
@@ -521,11 +531,17 @@ class ProductController extends Controller
 
     public function updatePriceCart(Request $request)
     {
-
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
-        $existingCartItem = Cart::find($request->cart);
-        $price = $request->price;
+        $validated = $request->validate([
+            'cart' => ['required', 'integer'],
+            'price' => ['required', 'integer', 'min:0'],
+        ]);
+        $existingCartItem = Cart::query()
+            ->whereKey($validated['cart'])
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+        $price = $validated['price'];
 
         $existingCartItem->update(['price' => $price]);
 
@@ -546,6 +562,7 @@ class ProductController extends Controller
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'amount' => $item->amount,
+                    'unit_price' => $item->price,
                     'price_buy' => $item->price,
                     'product_name' => $product->product->name,
                     'quantity' => $product->quantity,

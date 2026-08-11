@@ -236,6 +236,7 @@ class SaleService
                     'product_imei_id' => $productImeiId,
                     'product_id' => (int) ($item['product_id'] ?? 0),
                     'quantity' => 1,
+                    'unit_price' => (int) $item['unit_price'],
                 ]);
 
                 continue;
@@ -248,15 +249,29 @@ class SaleService
                 continue;
             }
 
-            $quantityByProduct[$productId] = (int) ($quantityByProduct[$productId] ?? 0) + $quantity;
+            $unitPrice = (int) $item['unit_price'];
+
+            if (isset($quantityByProduct[$productId])
+                && $quantityByProduct[$productId]['unit_price'] !== $unitPrice
+            ) {
+                throw ValidationException::withMessages([
+                    'items' => 'Một sản phẩm không thể có nhiều giá bán khác nhau trong cùng giỏ hàng.',
+                ]);
+            }
+
+            $quantityByProduct[$productId] = [
+                'quantity' => (int) ($quantityByProduct[$productId]['quantity'] ?? 0) + $quantity,
+                'unit_price' => $unitPrice,
+            ];
         }
 
-        foreach ($quantityByProduct as $productId => $quantity) {
+        foreach ($quantityByProduct as $productId => $item) {
             $normalized->push([
                 'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
                 'product_id' => (int) $productId,
                 'product_imei_id' => null,
-                'quantity' => (int) $quantity,
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
             ]);
         }
 
@@ -340,7 +355,7 @@ class SaleService
             ]);
         }
 
-        $price = (float) $activeProduct->price_buy;
+        $price = (float) $item['unit_price'];
 
         return [
             'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
@@ -372,7 +387,7 @@ class SaleService
         }
 
         $quantity = (int) $item['quantity'];
-        $price = (float) $product->price_buy;
+        $price = (float) $item['unit_price'];
 
         return [
             'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
@@ -423,11 +438,23 @@ class SaleService
         }
 
         if ($discountType === 'percent') {
+            if ($discountInput > 100) {
+                throw ValidationException::withMessages([
+                    'discountInput' => 'Giảm giá phần trăm không được lớn hơn 100%.',
+                ]);
+            }
+
             return $subtotal * ($discountInput / 100);
         }
 
         if ($discountType === 'amount') {
-            return min($discountInput, $subtotal);
+            if ($discountInput > $subtotal) {
+                throw ValidationException::withMessages([
+                    'discountInput' => 'Giảm giá không được lớn hơn tạm tính.',
+                ]);
+            }
+
+            return $discountInput;
         }
 
         return 0;

@@ -18,6 +18,8 @@ use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\SaleService;
+use App\Services\DailyReportService;
+use App\Services\ProfitService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -73,6 +75,310 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame('9', (string) $product->fresh()->quantity);
         $this->assertDatabaseCount('transactions', 1);
         $this->assertDatabaseCount('transaction_entries', 2);
+    }
+
+    public function test_custom_unit_price_is_the_sale_snapshot_total_and_accounting_source(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'quantity' => 10,
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 10,
+        ]);
+
+        $payload = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 3,
+            'unit_price' => 1200000,
+        ]], 3500000);
+        $payload['subtotal'] = 3600000;
+        $payload['discountInput'] = 100000;
+
+        $response = $this->actingAs($staff)->postJson('/ban-hang/order', $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('order.subtotal', 3600000)
+            ->assertJsonPath('order.discount', 100000)
+            ->assertJsonPath('order.total', 3500000)
+            ->assertJsonPath('order.items.0.unit_price', 1200000)
+            ->assertJsonPath('order.items.0.line_total', 3600000);
+
+        $order = Order::firstOrFail();
+        $this->assertDatabaseHas('order_details', [
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'price' => 1200000,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'total_money' => 3500000,
+            'discount_value' => 100000,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'debit_amount' => 3500000,
+            'credit_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'debit_amount' => 0,
+            'credit_amount' => 3500000,
+        ]);
+    }
+
+    public function test_default_sale_price_is_used_when_the_seller_does_not_edit_it(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $this->actingAs($staff)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'unit_price' => 1500000,
+            ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 1],
+            ], 1500000))
+            ->assertCreated()
+            ->assertJsonPath('order.total', 1500000);
+
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'price' => 1500000,
+        ]);
+    }
+
+    public function test_quantity_then_custom_price_uses_the_final_cart_unit_price(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([[
+                'id' => $product->id,
+                'qty' => 3,
+                'unit_price' => 1100000,
+            ]], 3300000))
+            ->assertCreated()
+            ->assertJsonPath('order.subtotal', 3300000)
+            ->assertJsonPath('order.items.0.unit_price', 1100000)
+            ->assertJsonPath('order.items.0.line_total', 3300000);
+    }
+
+    public function test_percent_discount_uses_edited_prices_for_multiple_products(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $first = $this->createProduct(['name' => 'A', 'price' => 1500000, 'price_buy' => 900000]);
+        $second = $this->createProduct(['name' => 'B', 'price' => 600000, 'price_buy' => 300000]);
+        ProductStorage::create(['product_id' => $first->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+        ProductStorage::create(['product_id' => $second->id, 'storage_id' => $storage->id, 'quantity' => 10]);
+
+        $payload = $this->orderPayload([
+            ['id' => $first->id, 'qty' => 2, 'unit_price' => 1200000],
+            ['id' => $second->id, 'qty' => 3, 'unit_price' => 500000],
+        ], 3510000);
+        $payload['subtotal'] = 3900000;
+        $payload['discountType'] = 'percent';
+        $payload['discountInput'] = 10;
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertCreated();
+
+        $this->assertDatabaseHas('orders', [
+            'total_money' => 3510000,
+            'discount_value' => 390000,
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $first->id,
+            'price' => 1200000,
+            'quantity' => 2,
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $second->id,
+            'price' => 500000,
+            'quantity' => 3,
+        ]);
+    }
+
+    public function test_revenue_and_profit_reports_use_net_order_revenue_and_sale_snapshots(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'quantity' => 5,
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $payload = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 2,
+            'unit_price' => 1200000,
+        ]], 2300000);
+        $payload['subtotal'] = 2400000;
+        $payload['discountInput'] = 100000;
+
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $profit = app(ProfitService::class)->profitReport('1', $storage->id)[0];
+        $this->assertSame(2, $profit['soldQuantity']);
+        $this->assertEquals(2300000, $profit['revenue']);
+        $this->assertEquals(1800000, $profit['invest']);
+        $this->assertEquals(500000, $profit['profit']);
+
+        $dailyReport = app(DailyReportService::class)->getDailyOrder();
+        $productSale = array_values($dailyReport['productSales']->items())[0];
+        $this->assertSame(2, $productSale['quantity']);
+        $this->assertEquals(2300000, $productSale['total']);
+    }
+
+    public function test_profit_without_discount_uses_custom_sale_snapshot(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'quantity' => 5,
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $this->actingAs($staff)->postJson('/ban-hang/order', $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 2,
+            'unit_price' => 1200000,
+        ]], 2400000))->assertCreated();
+
+        $profit = app(ProfitService::class)->profitReport('1', $storage->id)[0];
+        $this->assertSame(2, $profit['soldQuantity']);
+        $this->assertEquals(2400000, $profit['revenue']);
+        $this->assertEquals(1800000, $profit['invest']);
+        $this->assertEquals(600000, $profit['profit']);
+    }
+
+    public function test_checkout_rejects_missing_or_invalid_unit_price_and_tampered_totals(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['price' => 1500000, 'price_buy' => 900000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 5]);
+
+        $missingPrice = $this->orderPayload([['id' => $product->id, 'qty' => 1]], 1500000);
+        unset($missingPrice['items'][0]['unit_price']);
+        $this->actingAs($staff)->postJson('/ban-hang/order', $missingPrice)->assertUnprocessable();
+
+        $negativePrice = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 1,
+            'unit_price' => -1,
+        ]], 0);
+        $this->actingAs($staff)->postJson('/ban-hang/order', $negativePrice)->assertUnprocessable();
+
+        $tampered = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 1,
+            'unit_price' => 1200000,
+        ]], 1500000);
+        $this->actingAs($staff)->postJson('/ban-hang/order', $tampered)
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Dữ liệu đơn hàng không hợp lệ, vui lòng tải lại giỏ hàng.']);
+
+        $excessAmountDiscount = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 1,
+            'unit_price' => 1200000,
+        ]], 0);
+        $excessAmountDiscount['subtotal'] = 1200000;
+        $excessAmountDiscount['discountInput'] = 1200001;
+        $this->actingAs($staff)->postJson('/ban-hang/order', $excessAmountDiscount)
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Giảm giá không được lớn hơn tạm tính.']);
+
+        $excessPercentDiscount = $excessAmountDiscount;
+        $excessPercentDiscount['discountType'] = 'percent';
+        $excessPercentDiscount['discountInput'] = 101;
+        $this->actingAs($staff)->postJson('/ban-hang/order', $excessPercentDiscount)
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Giảm giá phần trăm không được lớn hơn 100%.']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_debt_checkout_uses_custom_unit_price_and_net_total_without_cash_transaction(): void
+    {
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'quantity' => 5,
+            'price' => 1500000,
+            'price_buy' => 900000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 5,
+        ]);
+
+        $payload = $this->orderPayload([[
+            'id' => $product->id,
+            'qty' => 2,
+            'unit_price' => 1200000,
+        ]], 2300000, 'debt');
+        $payload['subtotal'] = 2400000;
+        $payload['discountInput'] = 100000;
+
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $this->assertDatabaseHas('orders', [
+            'total_money' => 2300000,
+            'paid_amount' => 0,
+            'debt_amount' => 2300000,
+            'payment_status' => 'debt',
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'product_id' => $product->id,
+            'price' => 1200000,
+            'quantity' => 2,
+        ]);
+        $this->assertDatabaseCount('transactions', 0);
     }
 
     public function test_admin_uses_default_kho_a_and_storage_picker_is_hidden(): void
@@ -775,7 +1081,7 @@ class StaffPosSaleTest extends TestCase
     public function test_product_endpoint_returns_only_assigned_storage_availability(): void
     {
         [$storage, $otherStorage, $staff] = $this->createStaffContext();
-        $sameProduct = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
+        $sameProduct = $this->createProduct(['quantity' => 12, 'price' => 150000, 'price_buy' => 100000]);
         $otherStorageProduct = $this->createProduct(['name' => 'iPhone only other storage', 'quantity' => 8, 'price_buy' => 100000]);
         ProductStorage::create(['product_id' => $sameProduct->id, 'storage_id' => $storage->id, 'quantity' => 2]);
         ProductStorage::create(['product_id' => $sameProduct->id, 'storage_id' => $otherStorage->id, 'quantity' => 10]);
@@ -790,6 +1096,8 @@ class StaffPosSaleTest extends TestCase
                 'quantity' => 2,
                 'available_quantity' => 2,
                 'storage_id' => $storage->id,
+                'price' => 150000,
+                'unit_price' => 150000,
             ])
             ->assertJsonMissing(['product_id' => $otherStorageProduct->id]);
     }
@@ -923,6 +1231,7 @@ class StaffPosSaleTest extends TestCase
             'code' => 'SKU-CABLE-001',
             'barcode' => 'BAR-CABLE-001',
             'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'price' => 350000,
             'price_buy' => 250000,
         ]);
         ProductStorage::create([
@@ -1031,6 +1340,7 @@ class StaffPosSaleTest extends TestCase
             'name' => 'Cap sac',
             'barcode' => 'CABLE-001',
             'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'price' => 350000,
             'price_buy' => 250000,
         ]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
@@ -1046,6 +1356,8 @@ class StaffPosSaleTest extends TestCase
                 'barcode' => 'CABLE-001',
                 'available_quantity' => 10,
                 'quantity' => 1,
+                'price' => 350000,
+                'unit_price' => 350000,
             ]);
     }
 
@@ -1181,9 +1493,10 @@ class StaffPosSaleTest extends TestCase
                     'product_id' => $product->id,
                     'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
                     'product_imei_id' => $imei->id,
+                    'unit_price' => 11000000,
                     'qty' => 1,
                 ],
-            ], 12000000))
+            ], 11000000))
             ->assertCreated();
 
         $this->assertDatabaseHas('order_details', [
@@ -1191,7 +1504,7 @@ class StaffPosSaleTest extends TestCase
             'product_imei_id' => $imei->id,
             'storage_id' => $storage->id,
             'quantity' => 1,
-            'price' => 12000000,
+            'price' => 11000000,
         ]);
         $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
         $this->assertDatabaseHas('product_storage', [
@@ -1849,12 +2162,16 @@ class StaffPosSaleTest extends TestCase
 
     private function createProduct(array $overrides = []): Product
     {
+        if (array_key_exists('price_buy', $overrides) && ! array_key_exists('price', $overrides)) {
+            $overrides['price'] = $overrides['price_buy'];
+        }
+
         return Product::create(array_merge([
             'user_id' => 1,
             'code' => uniqid('IP'),
             'barcode' => null,
             'name' => 'iPhone 15',
-            'price' => 90000,
+            'price' => 100000,
             'price_buy' => 100000,
             'thumbnail' => null,
             'product_unit' => 'cái',
@@ -1953,6 +2270,14 @@ class StaffPosSaleTest extends TestCase
 
     private function orderPayload(array $items, float $grand, string $payment = 'cash', ?int $clientId = null): array
     {
+        $items = collect($items)->map(function (array $item): array {
+            $productId = $item['product_id'] ?? $item['id'] ?? null;
+            $item['unit_price'] = $item['unit_price']
+                ?? (int) Product::query()->findOrFail($productId)->price;
+
+            return $item;
+        })->all();
+
         return [
             'items' => $items,
             'subtotal' => $grand,

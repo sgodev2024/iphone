@@ -44,10 +44,11 @@ class ReportdebtController extends Controller
         ");
 
         $ordersSubquery = DB::raw("
-            (SELECT product_id, SUM(quantity) as total_orders
-            FROM order_details
-            WHERE DATE(created_at) BETWEEN '$startOfMonth' AND '$endOfMonth'
-            GROUP BY product_id) as orders
+            (SELECT od.product_id, SUM(od.quantity) as total_orders
+            FROM order_details od
+            INNER JOIN orders o ON o.id = od.order_id AND o.status = 1
+            WHERE DATE(od.created_at) BETWEEN '$startOfMonth' AND '$endOfMonth'
+            GROUP BY od.product_id) as orders
         ");
 
         $stocks = DB::table('products')
@@ -66,12 +67,14 @@ class ReportdebtController extends Controller
             $tongluongnhap = 0;
             $tongluongban = 0;
             $tongtintonghang = 0;
-            $tongtiendaban = 0;
+            $tongtiendaban = (float) DB::table('orders')
+                ->where('status', 1)
+                ->whereBetween(DB::raw('DATE(created_at)'), [$startOfMonth, $endOfMonth])
+                ->sum('total_money');
             foreach($stocks as $item){
                 $tongtonkho += $item->quantity;
                 $tongluongnhap += $item->total_imports;
                 $tongluongban += $item->total_orders;
-                $tongtiendaban += $item->total_orders * $item->price_buy;
                 $tongtintonghang += $item->quantity * $item->price_buy;
             }
         return view('admin.report.index', compact('stocks', 'title', 'tongtonkho', 'tongluongnhap', 'tongluongban', 'tongtiendaban', 'tongtintonghang'));
@@ -91,10 +94,11 @@ class ReportdebtController extends Controller
         ");
 
         $ordersSubquery = DB::raw("
-            (SELECT product_id, SUM(quantity) as total_orders
-            FROM order_details
-            WHERE DATE(created_at) BETWEEN '$startOfMonth' AND '$endOfMonth'
-            GROUP BY product_id) as orders
+            (SELECT od.product_id, SUM(od.quantity) as total_orders
+            FROM order_details od
+            INNER JOIN orders o ON o.id = od.order_id AND o.status = 1
+            WHERE DATE(od.created_at) BETWEEN '$startOfMonth' AND '$endOfMonth'
+            GROUP BY od.product_id) as orders
         ");
 
         $stocks = DB::table('products')
@@ -113,12 +117,14 @@ class ReportdebtController extends Controller
             $tongluongnhap = 0;
             $tongluongban = 0;
             $tongtintonghang = 0;
-            $tongtiendaban = 0;
+            $tongtiendaban = (float) DB::table('orders')
+                ->where('status', 1)
+                ->whereBetween(DB::raw('DATE(created_at)'), [$startOfMonth, $endOfMonth])
+                ->sum('total_money');
             foreach($stocks as $item){
                 $tongtonkho += $item->quantity;
                 $tongluongnhap += $item->total_imports;
                 $tongluongban += $item->total_orders;
-                $tongtiendaban += $item->total_orders * $item->price_buy;
                 $tongtintonghang += $item->quantity * $item->price_buy;
             }
         return view('admin.report.print', compact('stocks','tongtonkho', 'tongluongnhap', 'tongluongban', 'tongtiendaban', 'tongtintonghang'));

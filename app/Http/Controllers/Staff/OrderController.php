@@ -92,10 +92,30 @@ class OrderController extends Controller
                 $request->user(),
                 $request->input('storage_id')
             );
-            $saleService->createPosOrder($request->user(), $request->validated(), $storageId);
+            $order = $saleService->createPosOrder($request->user(), $request->validated(), $storageId)
+                ->load(['orderDetails.product', 'orderDetails.productImei']);
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công!',
+                'order' => [
+                    'id' => (int) $order->id,
+                    'code' => $order->code,
+                    'subtotal' => (float) $order->orderDetails->sum(
+                        fn ($detail) => (float) $detail->price * (int) $detail->quantity
+                    ),
+                    'discount' => (float) ($order->discount_value ?? 0),
+                    'total' => (float) $order->total_money,
+                    'payment_method' => $order->payment_method,
+                    'note' => $order->note,
+                    'items' => $order->orderDetails->map(fn ($detail) => [
+                        'product_id' => (int) $detail->product_id,
+                        'name' => $detail->product?->name,
+                        'imei' => $detail->productImei?->imei,
+                        'quantity' => (int) $detail->quantity,
+                        'unit_price' => (float) $detail->price,
+                        'line_total' => (float) $detail->price * (int) $detail->quantity,
+                    ])->values(),
+                ],
             ], Response::HTTP_CREATED);
         } catch (ValidationException $e) {
             return response()->json([
