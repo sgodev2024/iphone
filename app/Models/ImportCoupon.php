@@ -20,7 +20,11 @@ class ImportCoupon extends Model
 
     public const PAYMENT_STATUS_PARTIAL = 'partial';
 
-    public const PAYMENT_STATUS_UNPAID = 'unpaid';
+    public const PAYMENT_STATUS_DEBT = 'debt';
+
+    // Kept as a source-compatible alias for Phase 6A callers; persisted new
+    // import status values are canonicalized to "debt".
+    public const PAYMENT_STATUS_UNPAID = self::PAYMENT_STATUS_DEBT;
 
     protected $table = 'import_coupon';
 
@@ -46,7 +50,9 @@ class ImportCoupon extends Model
         'debt_amount' => 'integer',
     ];
 
-    protected $appends = ['detail', 'user', 'supplier', 'company'];
+    // New import accounting is Company-based; do not expose the legacy
+    // representative accessor as if it were the accounting party.
+    protected $appends = ['detail', 'user', 'company'];
 
     public static function paymentMethods(): array
     {

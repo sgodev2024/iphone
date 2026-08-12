@@ -574,6 +574,26 @@
                                                                     cho nhà cung cấp</div>
                                                             </div>
                                                         </div>
+
+                                                        <div class="import-confirm-row mt-3" id="bank-account-row"
+                                                            style="display: none;">
+                                                            <div class="import-confirm-label">Tài khoản ngân hàng chi</div>
+                                                            <div class="import-confirm-value">
+                                                                <select name="bank_account_id" class="form-control"
+                                                                    id="bank_account_id">
+                                                                    <option value="">--- Chọn tài khoản con của 112 ---</option>
+                                                                    @foreach ($bankAccounts as $bankAccount)
+                                                                        <option value="{{ $bankAccount->id }}"
+                                                                            @selected((string) old('bank_account_id') === (string) $bankAccount->id)>
+                                                                            {{ $bankAccount->code }} - {{ $bankAccount->name }}
+                                                                        </option>
+                                                                    @endforeach
+                                                                </select>
+                                                                @if ($bankAccounts->isEmpty())
+                                                                    <small class="text-danger">Chưa có tài khoản ngân hàng con đang hoạt động dưới 112.</small>
+                                                                @endif
+                                                            </div>
+                                                        </div>
                                                     </div>
 
                                                     <input type="text" id="payment" name="totalncc"
@@ -1145,7 +1165,8 @@
                     const rawTotal = Math.round(parseMoneyValue(total));
                     $j('#total_input').val(rawTotal);
                     $j('.cantra').text(formatMoneyValue(rawTotal));
-                    syncPaymentAmount();
+                    const paymentInput = document.getElementById('payment');
+                    syncPaymentAmount(paymentInput?.value === '');
                 }
 
                 function updateimport(importproduct, total) {
@@ -1411,15 +1432,19 @@
                 const total = getImportPaymentTotal();
                 const paidElement = document.getElementById('tientra');
                 const currentPaidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
-                const shouldPayFull = method === 'cash' || method === 'bank_transfer';
-                const paidAmount = shouldPayFull ? total : (resetAmount ? 0 : Math.min(currentPaidAmount, total));
+                const paidAmount = resetAmount
+                    ? (method === 'debt' ? 0 : total)
+                    : Math.min(currentPaidAmount, total);
 
                 if (paidElement) {
-                    paidElement.setAttribute('contenteditable', shouldPayFull ? 'false' : 'true');
-                    paidElement.classList.toggle('text-muted', shouldPayFull);
-                    paidElement.title = shouldPayFull ?
-                        'Tiền mặt/chuyển khoản mặc định thanh toán đủ phiếu nhập' :
-                        'Công nợ cho phép nhập 0 hoặc một phần';
+                    paidElement.setAttribute('contenteditable', 'true');
+                    paidElement.classList.remove('text-muted');
+                    paidElement.title = 'Nhập 0 hoặc số tiền thanh toán một phần/đủ phiếu nhập';
+                }
+
+                const bankRow = document.getElementById('bank-account-row');
+                if (bankRow) {
+                    bankRow.style.display = method === 'bank_transfer' ? '' : 'none';
                 }
 
                 setImportPaidAmount(paidAmount);
@@ -1427,12 +1452,7 @@
 
             function normalizePaymentBeforeSubmit() {
                 const total = getImportPaymentTotal();
-                const method = getSelectedImportPaymentMethod();
                 let paidAmount = Math.round(parseMoneyValue(document.getElementById('payment')?.value || 0));
-
-                if (method === 'cash' || method === 'bank_transfer') {
-                    paidAmount = total;
-                }
 
                 if (paidAmount < 0 || paidAmount > total) {
                     alert('Số tiền trả nhà cung cấp phải nằm trong khoảng từ 0 đến tổng tiền phiếu nhập.');
@@ -1447,19 +1467,10 @@
             const paidSupplierElement = document.getElementById('tientra');
 
             paidSupplierElement?.addEventListener('focus', function() {
-                if (getSelectedImportPaymentMethod() !== 'debt') {
-                    return;
-                }
-
                 this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
             });
 
             paidSupplierElement?.addEventListener('input', function() {
-                if (getSelectedImportPaymentMethod() !== 'debt') {
-                    syncPaymentAmount();
-                    return;
-                }
-
                 this.innerText = this.innerText.replace(/\D/g, '');
                 document.getElementById('payment').value = Math.min(
                     Math.round(parseMoneyValue(this.innerText)),

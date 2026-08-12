@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Models\Import;
 use App\Models\Product;
 use App\Services\CategoryService;
@@ -14,6 +15,7 @@ use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -42,7 +44,7 @@ class ImportProductController extends Controller
     {
         $title = 'Nhập hàng';
         $search = $request->input('search');
-        $import = $this->importProductService->getImportCoupon(10, $search);
+        $import = $this->importProductService->getImportCoupon(10, $search, (int) $request->user()->ownerId());
 
         return view('admin.Importproduct.index', compact('title', 'import', 'search'));
     }
@@ -92,7 +94,7 @@ class ImportProductController extends Controller
     public function importdetail($id)
     {
         $title = 'Thông tin hóa đơn';
-        $importdetail = $this->importProductService->getImportCouponByid($id);
+        $importdetail = $this->importProductService->getImportCouponByid($id, (int) request()->user()->ownerId());
 
         return view('admin.Importproduct.detail', compact('title', 'importdetail'));
     }
@@ -107,9 +109,22 @@ class ImportProductController extends Controller
             ->latest()
             ->get();
         $category = $this->categoryService->getCategoryAllStaff();
-        $supplier = $this->companyService->getCompany();
-        $storage = $this->storageService->getAllStorage();
         $user = Auth::user();
+        $supplier = $this->companyService->getCompanyForOwner((int) $user->ownerId());
+        $storage = $this->storageService->getAllStorage();
+        $bankAccounts = collect();
+
+        if (Schema::hasTable('accounts')
+            && Schema::hasColumn('accounts', 'parent_id')
+            && Schema::hasColumn('accounts', 'status')
+            && Schema::hasColumn('accounts', 'is_default')) {
+            $bankAccounts = Account::query()
+                ->whereHas('parent', fn ($query) => $query->where('code', '112'))
+                ->where('is_default', false)
+                ->where('status', true)
+                ->orderBy('code')
+                ->get();
+        }
 
         if ($request->query->has('product_id')) {
             $this->clearCurrentImportItems();
@@ -132,7 +147,7 @@ class ImportProductController extends Controller
             }
         }
 
-        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'title', 'productQueryWarning'));
+        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'bankAccounts', 'title', 'productQueryWarning'));
     }
 
     public function importadd(Request $request)
@@ -298,11 +313,6 @@ class ImportProductController extends Controller
     {
         $user = Auth::user();
 
-        return collect([$user?->id, $user?->manager_id])
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
+        return $user ? [(int) $user->ownerId()] : [];
     }
 }

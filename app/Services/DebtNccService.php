@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\SupplierDebt;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -14,10 +15,16 @@ class DebtNccService
         $this->supplierDebt = $supplierDebt;
     }
 
-    public function getAllSupplierDebt(){
+    public function getAllSupplierDebt(?int $ownerId = null){
         try {
             Log::info('Fetching all supplierDebt');
-            return $this->supplierDebt->orderByDesc('created_at')->get();
+            $query = $this->supplierDebt->newQuery()->orderByDesc('created_at');
+
+            if ($ownerId !== null) {
+                $query->whereIn('companies_id', Company::query()->where('user_id', $ownerId)->select('id'));
+            }
+
+            return $query->get();
         } catch (Exception $e) {
             Log::error('Failed to fetch supplierDebt: ' . $e->getMessage());
             throw new Exception('Failed to fetch supplierDebt');
@@ -59,10 +66,16 @@ class DebtNccService
         }
     }
 
-    public function findCompanyDebtBySupplier($supplier_id ){
+    public function findCompanyDebtBySupplier($supplier_id, ?int $ownerId = null){
         try {
             Log::info('Fetching find companies');
-            $receipt = $this->supplierDebt->where('companies_id', $supplier_id )->first();
+            $query = $this->supplierDebt->where('companies_id', $supplier_id);
+
+            if ($ownerId !== null) {
+                $query->whereIn('companies_id', Company::query()->where('user_id', $ownerId)->select('id'));
+            }
+
+            $receipt = $query->first();
             return $receipt;
         } catch (Exception $e) {
             Log::error('Failed to  find companies: ' . $e->getMessage());

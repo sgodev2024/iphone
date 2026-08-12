@@ -23,10 +23,14 @@ class ImportProductService
         $this->importDetail = $importDetail;
     }
 
-    public function getImportCoupon($perPage = 10, $search = null)
+    public function getImportCoupon($perPage = 10, $search = null, ?int $ownerId = null)
     {
         $query = ImportCoupon::query()
             ->with(['user', 'companyRelation']);
+
+        if ($ownerId !== null) {
+            $query->where('user_id', $ownerId);
+        }
 
         if (! empty($search)) {
             $query->where(function ($q) use ($search) {
@@ -39,9 +43,9 @@ class ImportProductService
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 
-    public function getImportCouponByid($id)
+    public function getImportCouponByid($id, ?int $ownerId = null)
     {
-        return $this->importCoupon
+        $query = $this->importCoupon
             ->newQuery()
             ->with([
                 'user',
@@ -49,8 +53,13 @@ class ImportProductService
                 'storage',
                 'details.product',
                 'details.imeis',
-            ])
-            ->findOrFail($id);
+            ]);
+
+        if ($ownerId !== null) {
+            $query->where('user_id', $ownerId);
+        }
+
+        return $query->findOrFail($id);
     }
 
     public function addImportCoupon($data)
@@ -97,10 +106,7 @@ class ImportProductService
                 ->whereIn('id', $ids)
                 ->lockForUpdate();
 
-            $roleId = (int) ($user->role_id ?? 0);
-            if (! in_array($roleId, [1, 2], true)) {
-                $query->where('user_id', $user->id);
-            }
+            $query->where('user_id', (int) $user->ownerId());
 
             $coupons = $query->get();
 

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Expense;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -14,9 +15,15 @@ class ExpenseService
         $this->expense = $expense;
     }
 
-    public function getAllExpense(){
+    public function getAllExpense(?int $ownerId = null){
         try {
-            return $this->expense->get();
+            $query = $this->expense->newQuery();
+
+            if ($ownerId !== null) {
+                $query->whereIn('companies_id', Company::query()->where('user_id', $ownerId)->select('id'));
+            }
+
+            return $query->get();
         } catch (Exception $e) {
             Log::error('Failed to get all expense: ' . $e->getMessage());
             throw new Exception('Failed to get all expense');
@@ -57,20 +64,32 @@ class ExpenseService
         }
     }
 
-    public function findExpenseByCompany( $supplier){
+    public function findExpenseByCompany($supplier, ?int $ownerId = null){
         try {
             Log::info('Fetching find Expense');
-            $expenses = $this->expense->where('companies_id', $supplier)->first();
+            $query = $this->expense->where('companies_id', $supplier);
+
+            if ($ownerId !== null) {
+                $query->whereIn('companies_id', Company::query()->where('user_id', $ownerId)->select('id'));
+            }
+
+            $expenses = $query->first();
             return $expenses;
         } catch (Exception $e) {
             Log::error('Failed to get find expense: ' . $e->getMessage());
             throw new Exception('Failed to get find expense');
         }
     }
-    public function findExpenseById($id){
+    public function findExpenseById($id, ?int $ownerId = null){
         try {
             Log::info('Fetching find expense ');
-            $receipt = $this->expense->find($id);
+            $query = $this->expense->newQuery()->whereKey($id);
+
+            if ($ownerId !== null) {
+                $query->whereIn('companies_id', Company::query()->where('user_id', $ownerId)->select('id'));
+            }
+
+            $receipt = $query->firstOrFail();
             return $receipt;
         } catch (Exception $e) {
             Log::error('Failed to  find expense: ' . $e->getMessage());

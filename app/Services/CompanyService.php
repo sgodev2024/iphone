@@ -35,6 +35,20 @@ class CompanyService
             throw new Exception('Failed to fetch companies');
         }
     }
+
+    public function getCompanyForOwner(int $ownerId)
+    {
+        try {
+            return $this->company
+                ->newQuery()
+                ->where('user_id', $ownerId)
+                ->orderBy('name')
+                ->get();
+        } catch (Exception $e) {
+            Log::error('Failed to fetch owner-scoped companies: ' . $e->getMessage());
+            throw new Exception('Failed to fetch owner-scoped companies');
+        }
+    }
     public function companyFilter($name, $city_id)
     {
         try {

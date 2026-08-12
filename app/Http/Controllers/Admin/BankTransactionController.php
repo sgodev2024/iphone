@@ -185,6 +185,10 @@ class BankTransactionController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->input('obj_type') === 'supplier') {
+            abort(410, 'Thanh toán nhà cung cấp qua luồng ngân hàng legacy đã được vô hiệu hóa cho tới Phase 6C.');
+        }
+
         $credentials = $request->validate([
             'transaction_date'   => 'required|date_format:Y-m-d',
             'obj_type'           => ['required', Rule::in(['client', 'supplier'])],
@@ -395,6 +399,10 @@ class BankTransactionController extends Controller
 
     public function update(Request $request)
     {
+        if ($request->input('obj_type') === 'supplier') {
+            abort(410, 'Thanh toán nhà cung cấp qua luồng ngân hàng legacy đã được vô hiệu hóa cho tới Phase 6C.');
+        }
+
         $transactionId = $request->input('transaction_id');
 
         $credentials = $request->validate([

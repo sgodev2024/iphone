@@ -26,20 +26,20 @@ class ImportCouponPaymentNormalizationTest extends TestCase
     public static function paymentCases(): array
     {
         return [
-            'cash pays full amount' => [
+            'cash uses the submitted paid amount' => [
                 ImportCoupon::PAYMENT_METHOD_CASH,
-                0,
+                40000,
                 100000,
                 [
                     'payment_method' => ImportCoupon::PAYMENT_METHOD_CASH,
-                    'paid_amount' => 100000,
-                    'debt_amount' => 0,
-                    'payment_status' => ImportCoupon::PAYMENT_STATUS_PAID,
+                    'paid_amount' => 40000,
+                    'debt_amount' => 60000,
+                    'payment_status' => ImportCoupon::PAYMENT_STATUS_PARTIAL,
                 ],
             ],
-            'bank transfer pays full amount' => [
+            'bank transfer uses the submitted paid amount' => [
                 ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER,
-                0,
+                100000,
                 100000,
                 [
                     'payment_method' => ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER,

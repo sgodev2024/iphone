@@ -7,6 +7,8 @@ use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Models\ProductImei;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreImportCouponRequest extends FormRequest
@@ -43,12 +45,29 @@ class StoreImportCouponRequest extends FormRequest
 
     public function rules(): array
     {
+        $ownerId = $this->user()?->ownerId();
+
         return [
-            'supplier' => ['required', 'integer', 'exists:companies,id'],
-            'storage' => ['required', 'integer', 'exists:storages,id'],
+            'supplier' => [
+                'required',
+                'integer',
+                Rule::exists('companies', 'id')->where(fn ($query) => $query->where('user_id', $ownerId)),
+            ],
+            'storage' => [
+                'required',
+                'integer',
+                Rule::exists('storages', 'id')->where(fn ($query) => $query->where('user_id', $ownerId)),
+            ],
             'total' => ['nullable', 'numeric', 'min:0'],
             'totalncc' => ['nullable', 'numeric', 'min:0'],
             'payment_method' => ['required', 'string', 'in:cash,bank_transfer,debt'],
+            'bank_account_id' => [
+                'nullable',
+                'integer',
+                Rule::requiredIf(fn () => $this->input('payment_method') === ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER
+                    && (int) $this->input('totalncc', 0) > 0),
+            ],
+            'datetime' => ['nullable', 'date'],
             'imeis' => ['nullable', 'array'],
             'imeis.*' => ['array'],
             'imeis.*.*' => ['required', 'string', 'min:1', 'max:' . ProductImei::IMEI_MAX_LENGTH],
@@ -75,17 +94,14 @@ class StoreImportCouponRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            $ownerIds = collect([$this->user()?->id, $this->user()?->manager_id])
-                ->filter()
-                ->map(fn($id) => (int) $id)
-                ->unique()
-                ->values()
-                ->all();
+            $this->validateBankAccount($validator);
+
+            $ownerId = (int) $this->user()->ownerId();
             $imports = Import::query()
                 ->with('product')
                 ->where('quantity', '>', 0)
-                ->whereHas('product', function ($query) use ($ownerIds) {
-                    $query->whereIn('user_id', $ownerIds);
+                ->whereHas('product', function ($query) use ($ownerId) {
+                    $query->where('user_id', $ownerId);
                 })
                 ->get();
 
@@ -220,5 +236,49 @@ class StoreImportCouponRequest extends FormRequest
                 }
             }
         });
+    }
+
+    private function validateBankAccount(Validator $validator): void
+    {
+        if ($this->input('payment_method') !== ImportCoupon::PAYMENT_METHOD_BANK_TRANSFER
+            || (int) $this->input('totalncc', 0) <= 0) {
+            return;
+        }
+
+        if (! $this->filled('bank_account_id')) {
+            $validator->errors()->add(
+                'bank_account_id',
+                'Vui lòng chọn tài khoản ngân hàng con khi thanh toán chuyển khoản.'
+            );
+
+            return;
+        }
+
+        if (! Schema::hasTable('accounts')
+            || ! Schema::hasColumn('accounts', 'parent_id')
+            || ! Schema::hasColumn('accounts', 'status')
+            || ! Schema::hasColumn('accounts', 'is_default')) {
+            $validator->errors()->add(
+                'bank_account_id',
+                'Hệ thống chưa có cấu hình tài khoản ngân hàng con dưới 112.'
+            );
+
+            return;
+        }
+
+        $parentId = \App\Models\Account::query()->where('code', '112')->value('id');
+        $valid = $parentId && \App\Models\Account::query()
+            ->whereKey((int) $this->input('bank_account_id'))
+            ->where('parent_id', $parentId)
+            ->where('status', true)
+            ->where('is_default', false)
+            ->exists();
+
+        if (! $valid) {
+            $validator->errors()->add(
+                'bank_account_id',
+                'Tài khoản ngân hàng phải là tài khoản con đang hoạt động của 112.'
+            );
+        }
     }
 }
