@@ -25,7 +25,15 @@ class CustomerDebtReportTest extends TestCase
     {
         parent::setUp();
 
-        foreach (['transaction_entries', 'transactions', 'clients', 'accounts', 'users'] as $table) {
+        foreach ([
+            'customer_debt_snapshot_states',
+            'customer_debt_yearly_snapshots',
+            'transaction_entries',
+            'transactions',
+            'clients',
+            'accounts',
+            'users',
+        ] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -86,6 +94,30 @@ class CustomerDebtReportTest extends TestCase
             $table->unsignedBigInteger('tableable_id')->nullable();
             $table->string('note')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('customer_debt_yearly_snapshots', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id');
+            $table->unsignedSmallInteger('fiscal_year');
+            $table->unsignedDecimal('opening_debit', 20, 2)->default(0);
+            $table->unsignedDecimal('opening_credit', 20, 2)->default(0);
+            $table->date('source_through_date');
+            $table->unsignedBigInteger('source_version')->default(0);
+            $table->timestamp('calculated_at')->nullable();
+            $table->timestamps();
+            $table->unique(['owner_id', 'client_id', 'fiscal_year']);
+        });
+
+        Schema::create('customer_debt_snapshot_states', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id');
+            $table->unsignedBigInteger('ledger_version')->default(0);
+            $table->unsignedSmallInteger('dirty_from_year')->nullable();
+            $table->timestamps();
+            $table->unique(['owner_id', 'client_id']);
         });
 
         $this->receivableAccountId = $this->createAccount('131', 'Phải thu khách hàng');
@@ -193,7 +225,17 @@ class CustomerDebtReportTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(['Owner A Client'], collect($response->json())->pluck('client_name')->all());
-        $this->assertSame(1, $ledgerQueryCount);
+        $this->assertSame(2, $ledgerQueryCount, 'First request uses one lazy bootstrap aggregate and one period aggregate.');
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->report($staffA, 'Owner')->assertOk();
+        $warmLedgerQueryCount = collect(DB::getQueryLog())
+            ->filter(fn (array $query) => str_contains($query['query'], 'transaction_entries'))
+            ->count();
+        DB::disableQueryLog();
+
+        $this->assertSame(1, $warmLedgerQueryCount, 'A valid snapshot removes the full-history aggregate.');
     }
 
     public function test_case_9_includes_both_boundary_dates_and_excludes_after_end(): void

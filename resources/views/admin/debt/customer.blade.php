@@ -95,12 +95,12 @@
                                 <span class="customer-name">{{ $debt->client_name }}</span>
                                 <span class="customer-phone">SĐT: {{ $debt->client_phone ?: '—' }}</span>
                             </td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->opening_debit) }}</td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->opening_credit) }}</td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->period_debit) }}</td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->period_credit) }}</td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->ending_debit) }}</td>
-                            <td class="text-end money-cell">{{ formatPrice($debt->ending_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->opening_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->opening_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->period_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->period_credit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->ending_debit) }}</td>
+                            <td class="text-end money-cell">{{ formatExactMoney($debt->ending_credit) }}</td>
                             @if ($canCollectDebt)
                                 <td>
                                     <button type="button" class="btn btn-sm btn-primary collect-debt-button"
@@ -282,18 +282,15 @@
         }
 
         function formatDebtPrice(amount) {
-            const value = Number(amount) || 0;
+            const match = String(amount ?? '0').trim().match(/^([+-]?)(\d+)(?:\.(\d{1,2}))?$/);
+            if (!match) return '0';
 
-            if (Math.floor(value) === value) {
-                return new Intl.NumberFormat('de-DE', {
-                    maximumFractionDigits: 0
-                }).format(value);
-            }
+            const whole = (match[2].replace(/^0+(?=\d)/, '') || '0');
+            const fraction = (match[3] || '').padEnd(2, '0');
+            const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            const sign = match[1] === '-' && (whole !== '0' || fraction !== '00') ? '-' : '';
 
-            return new Intl.NumberFormat('de-DE', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(value);
+            return sign + grouped + (fraction === '00' ? '' : ',' + fraction);
         }
 
         function escapeHtml(value) {

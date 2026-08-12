@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\Customer;
 use App\Models\Transaction;
+use App\Services\Accounting\CustomerDebtSnapshotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +19,7 @@ use Illuminate\Validation\Rule;
 class DebtController extends Controller
 {
 
-    public function customer(Request $request)
+    public function customer(Request $request, CustomerDebtSnapshotService $snapshotService)
     {
         $dateRange = $request->input('date_range');
         $nameFilter = trim((string) $request->input('name', ''));
@@ -32,71 +33,19 @@ class DebtController extends Controller
             $startDate = Carbon::now()->subMonth()->toDateString();
         }
 
-        $receivableAccountId = Account::query()
-            ->where('code', '131')
-            ->where('status', true)
-            ->value('id');
-
-        if (! $receivableAccountId) {
+        try {
+            $ownerId = $request->user()->ownerId();
+            $debtReports = $snapshotService->report(
+                $ownerId,
+                $startDate,
+                $endDate,
+                $nameFilter
+            );
+        } catch (\RuntimeException $exception) {
             Log::error('Không thể lập báo cáo công nợ khách hàng vì thiếu tài khoản 131 đang hoạt động.');
 
-            abort(500, 'Không tìm thấy tài khoản phải thu khách hàng (131) đang hoạt động.');
+            abort(500, $exception->getMessage());
         }
-
-        $ownerId = $request->user()->ownerId();
-        $debtReports = DB::table('clients as c')
-            ->join('transaction_entries as te', function ($join) use ($receivableAccountId) {
-                $join->on('te.tableable_id', '=', 'c.id')
-                    ->where('te.tableable_type', Client::class)
-                    ->where('te.account_id', $receivableAccountId);
-            })
-            ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-            ->where('c.user_id', $ownerId)
-            ->where('t.transaction_date', '<=', $endDate)
-            ->when($nameFilter !== '', function ($query) use ($nameFilter) {
-                $query->where('c.name', 'like', "%{$nameFilter}%");
-            })
-            ->select('c.id', 'c.code', 'c.name', 'c.phone')
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount - te.credit_amount ELSE 0 END), 0) AS opening_balance',
-                [$startDate]
-            )
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN t.transaction_date >= ? AND t.transaction_date <= ? THEN te.debit_amount ELSE 0 END), 0) AS period_debit',
-                [$startDate, $endDate]
-            )
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN t.transaction_date >= ? AND t.transaction_date <= ? THEN te.credit_amount ELSE 0 END), 0) AS period_credit',
-                [$startDate, $endDate]
-            )
-            ->groupBy('c.id', 'c.code', 'c.name', 'c.phone')
-            ->orderBy('c.name')
-            ->orderBy('c.id')
-            ->get()
-            ->map(function ($client) {
-                $openingBalance = (float) $client->opening_balance;
-                $periodDebit = (float) $client->period_debit;
-                $periodCredit = (float) $client->period_credit;
-                $endingBalance = $openingBalance + $periodDebit - $periodCredit;
-
-                return (object) [
-                    'client_id' => (int) $client->id,
-                    'client_code' => $client->code,
-                    'client_name' => $client->name,
-                    'client_phone' => $client->phone,
-                    'opening_debit' => max($openingBalance, 0),
-                    'opening_credit' => max(-$openingBalance, 0),
-                    'period_debit' => $periodDebit,
-                    'period_credit' => $periodCredit,
-                    'ending_debit' => max($endingBalance, 0),
-                    'ending_credit' => max(-$endingBalance, 0),
-                ];
-            })
-            ->filter(fn ($item) => $item->opening_debit
-                || $item->opening_credit
-                || $item->period_debit
-                || $item->period_credit)
-            ->values();
 
         if ($request->ajax()) {
             return response()->json($debtReports);

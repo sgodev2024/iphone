@@ -85,9 +85,13 @@ class JournalEntryController extends Controller
 
         return DB::transaction(function () use ($request) {
             $transactionIds = $request->input('ids');
+            $ownerId = $request->user()->ownerId();
 
             foreach ($transactionIds as $transactionId) {
-                $transaction = Transaction::find($transactionId);
+                $transaction = Transaction::query()
+                    ->whereKey($transactionId)
+                    ->where('user_id', $ownerId)
+                    ->first();
                 if ($transaction) {
                     // Xóa file nếu có
                     if ($transaction->attachment) {

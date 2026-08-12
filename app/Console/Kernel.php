@@ -12,7 +12,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('accounting:build-customer-debt-snapshots')
+            ->yearlyOn(1, 1, '00:05')
+            ->timezone('Asia/Ho_Chi_Minh')
+            ->withoutOverlapping();
     }
 
     /**

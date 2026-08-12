@@ -103,6 +103,25 @@ function formatPrice($price)
     return '0';
 }
 
+if (!function_exists('formatExactMoney')) {
+    function formatExactMoney(string|int|null $amount): string
+    {
+        $amount = trim((string) ($amount ?? '0'));
+
+        if (!preg_match('/^([+-]?)(\d+)(?:\.(\d{1,2}))?$/', $amount, $matches)) {
+            return '0';
+        }
+
+        $whole = ltrim($matches[2], '0');
+        $whole = $whole === '' ? '0' : $whole;
+        $grouped = strrev(implode('.', str_split(strrev($whole), 3)));
+        $fraction = str_pad($matches[3] ?? '', 2, '0');
+        $sign = ($matches[1] ?? '') === '-' && ($whole !== '0' || $fraction !== '00') ? '-' : '';
+
+        return $sign.$grouped.($fraction === '00' ? '' : ','.$fraction);
+    }
+}
+
 if (!function_exists('transaction')) {
     function transaction($callback, $onError = null)
     {

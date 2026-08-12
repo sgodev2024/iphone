@@ -2667,6 +2667,30 @@ class StaffPosSaleTest extends TestCase
             $table->string('note')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('customer_debt_yearly_snapshots', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id');
+            $table->unsignedSmallInteger('fiscal_year');
+            $table->unsignedDecimal('opening_debit', 20, 2)->default(0);
+            $table->unsignedDecimal('opening_credit', 20, 2)->default(0);
+            $table->date('source_through_date');
+            $table->unsignedBigInteger('source_version')->default(0);
+            $table->timestamp('calculated_at')->nullable();
+            $table->timestamps();
+            $table->unique(['owner_id', 'client_id', 'fiscal_year']);
+        });
+
+        Schema::create('customer_debt_snapshot_states', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id');
+            $table->unsignedBigInteger('ledger_version')->default(0);
+            $table->unsignedSmallInteger('dirty_from_year')->nullable();
+            $table->timestamps();
+            $table->unique(['owner_id', 'client_id']);
+        });
     }
 
     private function createStaffContext(): array

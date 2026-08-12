@@ -4,6 +4,10 @@ namespace App\Providers;
 
 use App\Http\View\Composers\NotificationComposer;
 use App\Models\Config;
+use App\Models\Transaction;
+use App\Models\TransactionEntry;
+use App\Observers\TransactionEntryObserver;
+use App\Observers\TransactionObserver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +28,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Transaction::observe(TransactionObserver::class);
+        TransactionEntry::observe(TransactionEntryObserver::class);
+
         View::composer('admin.layout.header', NotificationComposer::class);
 
         // Chia sẻ $config cho tất cả view
