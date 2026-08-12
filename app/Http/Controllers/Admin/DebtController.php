@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
-use App\Models\Client;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\Accounting\CustomerDebtSnapshotService;
+use App\Services\SupplierDebtReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +18,6 @@ use Illuminate\Validation\Rule;
 
 class DebtController extends Controller
 {
-
     public function customer(Request $request, CustomerDebtSnapshotService $snapshotService)
     {
         $dateRange = $request->input('date_range');
@@ -54,87 +53,55 @@ class DebtController extends Controller
         return view('admin.debt.customer', [
             'clientDebts' => $debtReports,
             'startDate' => $startDate,
-            'endDate' => $endDate
+            'endDate' => $endDate,
         ]);
     }
 
-
-    public function supplier(Request $request)
+    public function supplier(Request $request, SupplierDebtReportService $reportService)
     {
-        $dateRange = $request->input('date_range');
-        $nameFilter = $request->input('name');
-
-        if ($dateRange) {
-            [$start, $end] = explode(' - ', $dateRange);
-            $startDate = Carbon::createFromFormat('d/m/Y', $start)->startOfDay();
-            $endDate = Carbon::createFromFormat('d/m/Y', $end)->endOfDay();
-        } else {
-            $endDate = Carbon::now();
-            $startDate = $endDate->copy()->subMonth()->startOfDay();
-        }
-
-        $suppliersQuery = DB::table('suppliers as s')
-            ->select('s.id', 's.name', 's.phone');
-
-        if ($nameFilter) {
-            $suppliersQuery->where('s.name', 'like', "%$nameFilter%");
-        }
-
-        $supplierDebts = $suppliersQuery->get()
-            ->map(function ($supplier) use ($startDate, $endDate) {
-                $openingDebit = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Supplier')
-                    ->where('te.tableable_id', $supplier->id)
-                    ->where('t.transaction_date', '<', $startDate)
-                    ->sum('te.debit_amount');
-
-                $openingCredit = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Supplier')
-                    ->where('te.tableable_id', $supplier->id)
-                    ->where('t.transaction_date', '<', $startDate)
-                    ->sum('te.credit_amount');
-
-                $periodDebit = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Supplier')
-                    ->where('te.tableable_id', $supplier->id)
-                    ->whereBetween('t.transaction_date', [$startDate, $endDate])
-                    ->sum('te.debit_amount');
-
-                $periodCredit = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Supplier')
-                    ->where('te.tableable_id', $supplier->id)
-                    ->whereBetween('t.transaction_date', [$startDate, $endDate])
-                    ->sum('te.credit_amount');
-
-                $endingBalance = ($openingDebit + $periodDebit) - ($openingCredit + $periodCredit);
-
-                return (object)[
-                    'supplier_code' => 'NCC' . str_pad($supplier->id, 5, '0', STR_PAD_LEFT),
-                    'supplier_name' => $supplier->name,
-                    'supplier_phone' => $supplier->phone,
-                    'opening_debit' => $openingDebit,
-                    'opening_credit' => $openingCredit,
-                    'period_debit' => $periodDebit,
-                    'period_credit' => $periodCredit,
-                    'ending_debit' => $endingBalance > 0 ? $endingBalance : 0,
-                    'ending_credit' => $endingBalance < 0 ? abs($endingBalance) : 0,
-                ];
-            })
-            ->filter(
-                fn($item) =>
-                $item->opening_debit || $item->opening_credit || $item->period_debit || $item->period_credit
-            )
-            ->values();
+        [$startDate, $endDate] = $this->supplierReportDates($request);
+        $supplierDebts = $reportService->report(
+            $request->user(),
+            $startDate,
+            $endDate,
+            (string) $request->input('name', '')
+        );
 
         if ($request->ajax()) {
             return response()->json($supplierDebts);
         }
 
         return view('admin.debt.supplier', compact('supplierDebts', 'startDate', 'endDate'));
+    }
+
+    private function supplierReportDates(Request $request): array
+    {
+        $dateRange = trim((string) $request->input('date_range', ''));
+
+        if ($dateRange === '') {
+            $endDate = Carbon::now()->toDateString();
+
+            return [Carbon::now()->subMonth()->toDateString(), $endDate];
+        }
+
+        $parts = preg_split('/\s+-\s+/', $dateRange);
+
+        if (count($parts) !== 2) {
+            abort(422, 'Invalid supplier debt report date range.');
+        }
+
+        try {
+            $startDate = Carbon::createFromFormat('d/m/Y', trim($parts[0]))->toDateString();
+            $endDate = Carbon::createFromFormat('d/m/Y', trim($parts[1]))->toDateString();
+        } catch (\Throwable $exception) {
+            abort(422, 'Invalid supplier debt report date range.');
+        }
+
+        if ($startDate > $endDate) {
+            abort(422, 'Supplier debt report start date must not be after end date.');
+        }
+
+        return [$startDate, $endDate];
     }
 
     public function create()
@@ -146,11 +113,11 @@ class DebtController extends Controller
     {
         $credentials = Validator::make($request->all(), [
             'transaction_date' => 'required|date_format:Y-m-d',
-            'object_type'      => 'required|in:client,supplier',
-            'type'             => 'required|in:income,expense',
-            'amount'           => 'required|numeric|min:0',
-            'description'      => 'nullable|max:255',
-            'object_id'        => [
+            'object_type' => 'required|in:client,supplier',
+            'type' => 'required|in:income,expense',
+            'amount' => 'required|numeric|min:0',
+            'description' => 'nullable|max:255',
+            'object_id' => [
                 'required',
                 'integer',
                 Rule::when($request->object_type === 'client', ['exists:clients,id']),
@@ -227,7 +194,7 @@ class DebtController extends Controller
                 'note' => 'Công nợ đầu kỳ',
             ]);
 
-            $message = "Tạo công nợ đầu kỳ thành công.";
+            $message = 'Tạo công nợ đầu kỳ thành công.';
 
             $redirect = $credentials['object_type'] === 'client'
                 ? '/admin/debts/customer'
@@ -235,7 +202,7 @@ class DebtController extends Controller
 
             return response()->json([
                 'message' => $message,
-                'data' => $redirect
+                'data' => $redirect,
             ]);
         });
     }
