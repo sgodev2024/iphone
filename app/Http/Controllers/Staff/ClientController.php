@@ -61,6 +61,7 @@ class ClientController extends Controller
 
     public function addClient(Request $request)
     {
+        
         $user = Auth::user();
 
         $userId = $user->role_id === 3 ? $user->manager_id : $user->id;
@@ -71,14 +72,19 @@ class ClientController extends Controller
                 'required',
                 'max:11',
                 'min:10',
-                Rule::unique('clients', 'phone')->where(fn ($query) => $query->where('user_id', $userId)),
+                Rule::unique('clients', 'phone')
+                    ->where(fn ($query) => $query->where('user_id', $userId)),
             ],
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'max:255'],
             'gender' => ['nullable', 'in:Male,Female'],
             'dob' => ['nullable', 'date'],
             'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],
         ], __('request.messages'), [
             'name' => 'Tên khách hàng',
-            'phone' => 'Số điện thoại'
+            'phone' => 'Số điện thoại',
+            'email' => 'Email',
+            'address' => 'Địa chỉ',
         ]);
 
         if ($data->fails()) {
@@ -93,7 +99,8 @@ class ClientController extends Controller
         $credentials['user_id'] = $userId;
 
         $client =  Client::create($credentials);
-
+       
+      
         return response()->json([
             "message" => 'Tạo mới khách hàng thành công.',
             'data' => $client

@@ -31,7 +31,7 @@ class Order extends Model
         'paid_amount',
         'debt_amount',
         'payment_status',
-        'status',
+        'status', 
         'note',
         'created_by',
         'notification',
