@@ -106,6 +106,9 @@ class OrderController extends Controller
                     'discount' => (float) ($order->discount_value ?? 0),
                     'total' => (float) $order->total_money,
                     'payment_method' => $order->payment_method,
+                    'paid_amount' => (int) $order->paid_amount,
+                    'debt_amount' => (int) $order->debt_amount,
+                    'payment_status' => $order->payment_status,
                     'note' => $order->note,
                     'items' => $order->orderDetails->map(fn ($detail) => [
                         'product_id' => (int) $detail->product_id,

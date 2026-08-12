@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\CheckInventoryController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\ConfigController;
+use App\Http\Controllers\Admin\CustomerDebtPaymentController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\DailyReportController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -614,15 +615,15 @@ Route::middleware(['auth'])
                                 ->middleware('permission:receipt.detail')
                                 ->name('detail');
 
-                            Route::get('/add', [ReceiptController::class, 'add'])
+                            Route::get('/add', [CustomerDebtPaymentController::class, 'legacyReceiptRedirect'])
                                 ->middleware('permission:receipt.create')
                                 ->name('add');
 
-                            Route::post('/add', [ReceiptController::class, 'addSubmit'])
+                            Route::post('/add', [CustomerDebtPaymentController::class, 'legacyWriteDisabled'])
                                 ->middleware('permission:receipt.create')
                                 ->name('addSubmit');
 
-                            Route::post('/debt', [ReceiptController::class, 'debt'])
+                            Route::post('/debt', [CustomerDebtPaymentController::class, 'legacyWriteDisabled'])
                                 ->middleware('permission:receipt.debt')
                                 ->name('debt');
                         });
@@ -658,6 +659,14 @@ Route::middleware(['auth'])
                                 ->name('debt');
                         });
                 });
+
+            Route::get('debts/customer/{clientId}/payment-options', [CustomerDebtPaymentController::class, 'options'])
+                ->middleware('permission:receipt.create')
+                ->name('debts.customer.payment-options');
+
+            Route::post('debts/customer/payments', [CustomerDebtPaymentController::class, 'store'])
+                ->middleware('permission:receipt.create')
+                ->name('debts.customer.payments.store');
 
             /*
             |--------------------------------------------------------------------------
@@ -1120,7 +1129,7 @@ Route::middleware('role:staff')->prefix('ban-hang')->name('staff.')->group(funct
     Route::post('/cart/update_price', [StaffProductController::class, 'updatePriceCart'])->name('cart.update.price');
     Route::post('/cart/remove', [StaffProductController::class, 'removeFromCart'])->name('cart.remove');
     Route::post('clients/add', [StaffClientController::class, 'addClient'])->name('client.add');
-    Route::post('pay', [StaffClientController::class, 'pay'])->name('pay');
+    Route::post('pay', [CustomerDebtPaymentController::class, 'legacyPosDisabled'])->name('pay');
     Route::get('cart', [StaffClientController::class, 'cart'])->name('cart.data');
     Route::get('order', [StaffOrderController::class, 'index'])->name('order');
     Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])->name('orderFetch');

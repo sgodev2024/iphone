@@ -22,11 +22,20 @@ class SaleService
     {
         return DB::transaction(function () use ($user, $data, $storageId) {
             $ownerId = $this->resolveOrderOwnerId($user);
-            $paymentMethod = $data['customer']['payment'];
+            $paymentMethod = (string) ($data['payment_method']
+                ?? data_get($data, 'customer.payment', Order::PAYMENT_METHOD_CASH));
+            $paidAmount = array_key_exists('paid_amount', $data)
+                ? (int) $data['paid_amount']
+                : ($paymentMethod === Order::PAYMENT_METHOD_DEBT ? 0 : (int) ($data['grand'] ?? 0));
+            $bankAccountId = isset($data['bank_account_id'])
+                ? (int) $data['bank_account_id']
+                : null;
             $client = null;
             $branchId = auth()->user()->branchScopeId();
             if (! empty($data['customer']['id'])) {
-                $client = Client::query()->find($data['customer']['id']);
+                $client = Client::query()
+                    ->where('user_id', $ownerId)
+                    ->find($data['customer']['id']);
 
                 if (! $client) {
                     throw ValidationException::withMessages([
@@ -126,6 +135,44 @@ class SaleService
                 ]);
             }
 
+            if ($paidAmount > $grand) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => 'Số tiền khách trả không được lớn hơn tổng tiền đơn hàng.',
+                ]);
+            }
+
+            $debtAmount = (int) round($grand - $paidAmount);
+
+            if ($paidAmount === 0 && $paymentMethod !== Order::PAYMENT_METHOD_DEBT) {
+                throw ValidationException::withMessages([
+                    'payment_method' => 'Đơn chưa thanh toán phải chọn phương thức công nợ.',
+                ]);
+            }
+
+            if ($paidAmount > 0 && $paymentMethod === Order::PAYMENT_METHOD_DEBT) {
+                throw ValidationException::withMessages([
+                    'payment_method' => 'Đơn công nợ không được ghi nhận tiền trả tại checkout.',
+                ]);
+            }
+
+            if ($debtAmount > 0 && ! $client) {
+                throw ValidationException::withMessages([
+                    'customer.id' => 'Đơn còn công nợ bắt buộc phải chọn khách hàng.',
+                ]);
+            }
+
+            if ($paymentMethod === Order::PAYMENT_METHOD_BANK_TRANSFER) {
+                $this->resolveBankAccountId($bankAccountId);
+            } elseif ($bankAccountId !== null) {
+                throw ValidationException::withMessages([
+                    'bank_account_id' => 'Tài khoản ngân hàng chỉ dùng cho phương thức chuyển khoản.',
+                ]);
+            }
+
+            $paymentStatus = $debtAmount <= 0
+                ? Order::PAYMENT_STATUS_PAID
+                : ($paidAmount <= 0 ? Order::PAYMENT_STATUS_DEBT : Order::PAYMENT_STATUS_PARTIAL);
+
             $orderData = [
                 'client_id' => $client?->id,
                 'user_id' => $ownerId,
@@ -141,9 +188,9 @@ class SaleService
                 'discount_value' => $discount,
                 'discount_type' => $data['discountType'] ?? null,
                 'payment_method' => $paymentMethod,
-                'paid_amount' => $paymentMethod === 'debt' ? 0 : $grand,
-                'debt_amount' => $paymentMethod === 'debt' ? $grand : 0,
-                'payment_status' => $paymentMethod === 'debt' ? 'debt' : 'paid',
+                'paid_amount' => $paidAmount,
+                'debt_amount' => $debtAmount,
+                'payment_status' => $paymentStatus,
                 'status' => 1,
                 'created_by' => $user->id,
                 'notification' => 1,
@@ -192,7 +239,7 @@ class SaleService
                 $this->syncProductTotalQuantity((int) $productId);
             }
 
-            $this->createAccountingEntries($order, $user, $ownerId);
+            $this->createAccountingEntries($order, $user, $ownerId, $bankAccountId);
 
             return $order;
         }, 3);
@@ -200,11 +247,7 @@ class SaleService
 
     private function resolveOrderOwnerId(User $user): int
     {
-        if ((int) $user->role_id === 3 && $user->manager_id) {
-            return (int) $user->manager_id;
-        }
-
-        return (int) $user->id;
+        return $user->ownerId();
     }
 
     private function normalizeItems(array $items): Collection
@@ -488,9 +531,10 @@ class SaleService
     private function createAccountingEntries(
         Order $order,
         User $creator,
-        int $ownerId
+        int $ownerId,
+        ?int $bankAccountId = null
     ): void {
-        DB::transaction(function () use ($order, $creator, $ownerId): void {
+        DB::transaction(function () use ($order, $creator, $ownerId, $bankAccountId): void {
             $order = Order::query()
                 ->whereKey($order->id)
                 ->lockForUpdate()
@@ -538,7 +582,8 @@ class SaleService
                 $paidAmount,
                 (int) $receivableAccountId,
                 $creator,
-                $ownerId
+                $ownerId,
+                $bankAccountId
             );
         });
     }
@@ -590,8 +635,23 @@ class SaleService
         float $paidAmount,
         int $receivableAccountId,
         User $creator,
-        int $ownerId
+        int $ownerId,
+        ?int $bankAccountId
     ): void {
+        // Checkout owns at most one initial payment. Later debt collections use the
+        // dedicated service and always carry a non-null idempotency key.
+        $checkoutPaymentExists = Transaction::query()
+            ->where('user_id', $ownerId)
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->whereIn('type', ['income', 'credit_notice'])
+            ->whereNull('idempotency_key')
+            ->exists();
+
+        if ($checkoutPaymentExists) {
+            return;
+        }
+
         $paymentMethod = (string) $order->payment_method;
 
         if (! in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
@@ -600,12 +660,8 @@ class SaleService
             );
         }
 
-        if ($this->hasAccountingTransactionForOrder($order, ['income', 'credit_notice'])) {
-            return;
-        }
-
         $moneyAccountId = $paymentMethod === 'bank_transfer'
-            ? $this->resolveBankAccountId()
+            ? $this->resolveBankAccountId($bankAccountId)
             : $this->resolveCashAccountId();
         $transactionType = $paymentMethod === 'bank_transfer' ? 'credit_notice' : 'income';
         $paymentNote = $paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
@@ -652,23 +708,20 @@ class SaleService
         return (int) $parent->id;
     }
 
-    private function resolveBankAccountId(): int
+    private function resolveBankAccountId(?int $bankAccountId): int
     {
         $parent = $this->resolveRequiredAccount('112', 'tài khoản ngân hàng');
 
         $account = Account::query()
+            ->whereKey($bankAccountId)
             ->where('parent_id', $parent->id)
             ->where('status', true)
-            ->where('is_default', false)
-            ->orderBy('code')
             ->first();
 
         if (! $account) {
-            throw new \Exception(
-                'Không tìm thấy tài khoản ngân hàng đang hoạt động dưới 112. '
-                .'Vui lòng vào Tài khoản kế toán (/admin/accounts) tạo tài khoản con của 112 '
-                .'theo ngân hàng thật đang cấu hình, ví dụ 112MB - Tiền gửi ngân hàng MBBank.'
-            );
+            throw ValidationException::withMessages([
+                'bank_account_id' => 'Tài khoản ngân hàng phải là tài khoản đang hoạt động trực tiếp dưới 112.',
+            ]);
         }
 
         return (int) $account->id;

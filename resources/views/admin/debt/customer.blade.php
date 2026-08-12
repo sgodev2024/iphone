@@ -1,6 +1,7 @@
 @extends('admin.layout.index')
 
 @section('content')
+    @php($canCollectDebt = auth()->user()?->hasPermission('receipt.create') ?? false)
     <div class="page-inner customer-debt-page">
         <x-breadcrumb :items="[['label' => 'Công nợ khách hàng']]" />
         {{-- <div class="page-header">
@@ -48,6 +49,9 @@
                     <col class="col-money">
                     <col class="col-ending">
                     <col class="col-ending">
+                    @if ($canCollectDebt)
+                        <col class="col-action">
+                    @endif
                 </colgroup>
                 <thead class="table-light align-middle">
                     <tr>
@@ -56,6 +60,9 @@
                         <th colspan="2"><span class="heading-nowrap">Số dư đầu kỳ</span></th>
                         <th colspan="2"><span class="heading-nowrap">Phát sinh trong kỳ</span></th>
                         <th colspan="2"><span class="heading-nowrap">Số dư cuối kỳ</span></th>
+                        @if ($canCollectDebt)
+                            <th rowspan="3">Thao tác</th>
+                        @endif
                     </tr>
                     <tr>
                         <th><span class="heading-nowrap">Nợ (Phải thu)</span></th>
@@ -94,15 +101,77 @@
                             <td class="text-end money-cell">{{ formatPrice($debt->period_credit) }}</td>
                             <td class="text-end money-cell">{{ formatPrice($debt->ending_debit) }}</td>
                             <td class="text-end money-cell">{{ formatPrice($debt->ending_credit) }}</td>
+                            @if ($canCollectDebt)
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-primary collect-debt-button"
+                                        data-client-id="{{ $debt->client_id }}"
+                                        data-client-name="{{ $debt->client_name }}">
+                                        Thu nợ
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center">Không có dữ liệu</td>
+                            <td colspan="{{ $canCollectDebt ? 9 : 8 }}" class="text-center">Không có dữ liệu</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
+
+        @if ($canCollectDebt)
+            <div class="modal fade" id="customerDebtPaymentModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Thu công nợ — <span id="debtPaymentClientName"></span></h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <form id="customerDebtPaymentForm">
+                            <div class="modal-body">
+                                <div class="form-group">
+                                    <label for="debtPaymentOrder">Đơn còn nợ</label>
+                                    <select id="debtPaymentOrder" class="form-control" required></select>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 form-group">
+                                        <label for="debtPaymentAmount">Số tiền thu</label>
+                                        <input id="debtPaymentAmount" type="number" min="1" step="1"
+                                            class="form-control" required>
+                                        <small id="debtPaymentRemaining" class="form-text text-muted"></small>
+                                    </div>
+                                    <div class="col-md-6 form-group">
+                                        <label for="debtPaymentDate">Ngày thu</label>
+                                        <input id="debtPaymentDate" type="date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 form-group">
+                                        <label for="debtPaymentMethod">Phương thức</label>
+                                        <select id="debtPaymentMethod" class="form-control" required>
+                                            <option value="cash">Tiền mặt</option>
+                                            <option value="bank_transfer">Chuyển khoản</option>
+                                        </select>
+                                    </div>
+                                    <div id="debtPaymentBankWrap" class="col-md-6 form-group d-none">
+                                        <label for="debtPaymentBank">Tài khoản ngân hàng</label>
+                                        <select id="debtPaymentBank" class="form-control"></select>
+                                    </div>
+                                </div>
+                                <div id="debtPaymentError" class="alert alert-danger d-none mb-0"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>
+                                <button id="debtPaymentSubmit" type="submit" class="btn btn-primary">Xác nhận thu</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endif
 
     </div>
 @endsection
@@ -112,6 +181,12 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 
     <script>
+        const canCollectDebt = @json($canCollectDebt);
+        const debtPaymentOptionsUrl = @json(route('admin.debts.customer.payment-options', ['clientId' => '__CLIENT__']));
+        const debtPaymentStoreUrl = @json(route('admin.debts.customer.payments.store'));
+        let debtPaymentOrders = [];
+        let debtPaymentIdempotencyKey = null;
+
         let start = moment().subtract(1, 'month'); // 15/06/2025
         let end = moment();
 
@@ -179,7 +254,7 @@
             let tbody = '';
 
             if (data.length === 0) {
-                tbody = `<tr><td colspan="8" class="text-center">Không có dữ liệu</td></tr>`;
+                tbody = `<tr><td colspan="${canCollectDebt ? 9 : 8}" class="text-center">Không có dữ liệu</td></tr>`;
             } else {
                 data.forEach((debt, index) => {
                     const clientName = escapeHtml(debt.client_name || '');
@@ -198,6 +273,7 @@
                     <td class="text-end money-cell">${formatDebtPrice(debt.period_credit)}</td>
                     <td class="text-end money-cell">${formatDebtPrice(debt.ending_debit)}</td>
                     <td class="text-end money-cell">${formatDebtPrice(debt.ending_credit)}</td>
+                    ${canCollectDebt ? `<td><button type="button" class="btn btn-sm btn-primary collect-debt-button" data-client-id="${Number(debt.client_id)}" data-client-name="${clientName}">Thu nợ</button></td>` : ''}
                 </tr>`;
                 });
             }
@@ -228,6 +304,98 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
         }
+
+        function newDebtPaymentKey() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(character) {
+                const random = Math.random() * 16 | 0;
+                const value = character === 'x' ? random : (random & 0x3 | 0x8);
+                return value.toString(16);
+            });
+        }
+
+        function selectedDebtPaymentOrder() {
+            const orderId = Number($('#debtPaymentOrder').val());
+            return debtPaymentOrders.find(order => Number(order.id) === orderId) || null;
+        }
+
+        function syncDebtPaymentOrder() {
+            const order = selectedDebtPaymentOrder();
+            const remaining = Number(order?.remaining || 0);
+            $('#debtPaymentAmount').attr('max', remaining).val(remaining || '');
+            $('#debtPaymentRemaining').text(order ? `Còn nợ theo ledger: ${formatDebtPrice(remaining)}` : '');
+        }
+
+        $(document).on('click', '.collect-debt-button', function() {
+            const clientId = Number($(this).data('client-id'));
+            debtPaymentIdempotencyKey = newDebtPaymentKey();
+            $('#debtPaymentClientName').text($(this).data('client-name'));
+            $('#debtPaymentError').addClass('d-none').text('');
+
+            $.get(debtPaymentOptionsUrl.replace('__CLIENT__', clientId))
+                .done(function(response) {
+                    debtPaymentOrders = response.orders || [];
+                    $('#debtPaymentOrder').html(debtPaymentOrders.map(order =>
+                        `<option value="${Number(order.id)}">${escapeHtml(order.code || `#${order.id}`)} — còn ${formatDebtPrice(order.remaining)}</option>`
+                    ).join(''));
+                    $('#debtPaymentBank').html('<option value="">--- Chọn tài khoản ---</option>' +
+                        (response.bank_accounts || []).map(account =>
+                            `<option value="${Number(account.id)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`
+                        ).join(''));
+                    $('#debtPaymentDate').val(response.today);
+                    syncDebtPaymentOrder();
+
+                    if (!debtPaymentOrders.length) {
+                        $('#debtPaymentError').removeClass('d-none').text('Khách hàng không có order hợp lệ còn công nợ.');
+                        $('#debtPaymentSubmit').prop('disabled', true);
+                    } else {
+                        $('#debtPaymentSubmit').prop('disabled', false);
+                    }
+
+                    $('#customerDebtPaymentModal').modal('show');
+                })
+                .fail(function(xhr) {
+                    alert(xhr.responseJSON?.message || 'Không thể tải danh sách order còn nợ.');
+                });
+        });
+
+        $('#debtPaymentOrder').on('change', syncDebtPaymentOrder);
+        $('#debtPaymentMethod').on('change', function() {
+            $('#debtPaymentBankWrap').toggleClass('d-none', this.value !== 'bank_transfer');
+        });
+
+        $('#customerDebtPaymentForm').on('submit', function(event) {
+            event.preventDefault();
+            const method = $('#debtPaymentMethod').val();
+            const submit = $('#debtPaymentSubmit').prop('disabled', true);
+            $('#debtPaymentError').addClass('d-none').text('');
+
+            $.ajax({
+                url: debtPaymentStoreUrl,
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': @json(csrf_token()) },
+                data: {
+                    order_id: Number($('#debtPaymentOrder').val()),
+                    amount: Number($('#debtPaymentAmount').val()),
+                    payment_method: method,
+                    bank_account_id: method === 'bank_transfer' ? Number($('#debtPaymentBank').val()) : null,
+                    transaction_date: $('#debtPaymentDate').val(),
+                    idempotency_key: debtPaymentIdempotencyKey,
+                },
+            }).done(function(response) {
+                $('#customerDebtPaymentModal').modal('hide');
+                alert(response.message);
+                window.location.reload();
+            }).fail(function(xhr) {
+                $('#debtPaymentError').removeClass('d-none').text(
+                    xhr.responseJSON?.message || 'Không thể thu công nợ.'
+                );
+                submit.prop('disabled', false);
+            });
+        });
     </script>
 @endpush
 

@@ -18,11 +18,15 @@ use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DailyReportService;
+use App\Services\CustomerDebtPaymentService;
 use App\Services\ProfitService;
 use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Tests\TestCase;
 
 class StaffPosSaleTest extends TestCase
@@ -1048,7 +1052,7 @@ class StaffPosSaleTest extends TestCase
 
     public function test_accounting_entries_are_not_duplicated_for_same_order(): void
     {
-        $this->seedAccounts();
+        $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
         $product = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
@@ -1063,7 +1067,7 @@ class StaffPosSaleTest extends TestCase
         $service = app(SaleService::class);
         $method = new \ReflectionMethod(SaleService::class, 'createAccountingEntries');
         $method->setAccessible(true);
-        $method->invoke($service, $order, $staff, $manager->id);
+        $method->invoke($service, $order, $staff, $manager->id, $accounts['bank']->id);
 
         $this->assertDatabaseCount('transactions', 2);
         $this->assertDatabaseCount('transaction_entries', 4);
@@ -2046,6 +2050,365 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame('Số đã chụp', $order->phone);
     }
 
+    public function test_partial_checkout_can_be_settled_with_multiple_idempotent_payments(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Partial Test',
+            'phone' => '0904000000',
+        ]);
+        $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $payload = $this->orderPayload([
+            ['id' => $product->id, 'qty' => 1],
+        ], 10000000, Order::PAYMENT_METHOD_CASH, $client->id);
+        $payload['paid_amount'] = 4000000;
+
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $order = Order::query()->sole();
+        $this->assertSame(4000000, (int) $order->paid_amount);
+        $this->assertSame(6000000, (int) $order->debt_amount);
+        $this->assertSame(Order::PAYMENT_STATUS_PARTIAL, $order->payment_status);
+        $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
+        $this->assertSame(1, Transaction::query()->where('type', 'income')->count());
+
+        $service = app(CustomerDebtPaymentService::class);
+        $bankRequest = [
+            'order_id' => $order->id,
+            'amount' => 2000000,
+            'payment_method' => Order::PAYMENT_METHOD_BANK_TRANSFER,
+            'bank_account_id' => $accounts['bank']->id,
+            'transaction_date' => now()->toDateString(),
+            'idempotency_key' => '11111111-1111-4111-8111-111111111111',
+        ];
+        $bankResult = $service->collect($staff, $bankRequest);
+
+        $this->assertFalse($bankResult['replayed']);
+        $this->assertSame('credit_notice', $bankResult['transaction']->type);
+        $this->assertTrue($bankResult['transaction']->entries->contains(
+            fn ($entry) => (int) $entry->account_id === (int) $accounts['bank']->id
+                && (int) $entry->debit_amount === 2000000
+        ));
+        $order->refresh();
+        $this->assertSame(6000000, (int) $order->paid_amount);
+        $this->assertSame(4000000, (int) $order->debt_amount);
+        $this->assertSame(Order::PAYMENT_STATUS_PARTIAL, $order->payment_status);
+
+        $transactionCount = Transaction::query()->count();
+        $entryCount = DB::table('transaction_entries')->count();
+        $replay = $service->collect($staff, $bankRequest);
+        $this->assertTrue($replay['replayed']);
+        $this->assertSame($bankResult['transaction']->id, $replay['transaction']->id);
+        $this->assertSame($transactionCount, Transaction::query()->count());
+        $this->assertSame($entryCount, DB::table('transaction_entries')->count());
+
+        try {
+            $service->collect($staff, array_merge($bankRequest, ['amount' => 1000000]));
+            $this->fail('A reused idempotency key with a different payload must conflict.');
+        } catch (ConflictHttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        try {
+            $service->collect($staff, [
+                'order_id' => $order->id,
+                'amount' => 5000000,
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'bank_account_id' => null,
+                'transaction_date' => now()->toDateString(),
+                'idempotency_key' => '22222222-2222-4222-8222-222222222222',
+            ]);
+            $this->fail('An overpayment must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('amount', $exception->errors());
+        }
+        $this->assertSame($transactionCount, Transaction::query()->count());
+        $this->assertSame($entryCount, DB::table('transaction_entries')->count());
+
+        $finalResult = $service->collect($staff, [
+            'order_id' => $order->id,
+            'amount' => 4000000,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+            'bank_account_id' => null,
+            'transaction_date' => now()->toDateString(),
+            'idempotency_key' => '33333333-3333-4333-8333-333333333333',
+        ]);
+        $this->assertSame('income', $finalResult['transaction']->type);
+
+        $order->refresh();
+        $this->assertSame(10000000, (int) $order->paid_amount);
+        $this->assertSame(0, (int) $order->debt_amount);
+        $this->assertSame(Order::PAYMENT_STATUS_PAID, $order->payment_status);
+        $this->assertSame(Order::PAYMENT_METHOD_CASH, $order->payment_method);
+        $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
+        $this->assertSame(3, Transaction::query()->whereIn('type', ['income', 'credit_notice'])->count());
+        $this->assertSame(4, Transaction::query()->where('status', Transaction::STATUS_COMPLETED)->count());
+
+        $receivableDebit = (int) DB::table('transaction_entries')
+            ->where('account_id', $accounts['receivable']->id)
+            ->sum('debit_amount');
+        $receivableCredit = (int) DB::table('transaction_entries')
+            ->where('account_id', $accounts['receivable']->id)
+            ->sum('credit_amount');
+        $this->assertSame(10000000, $receivableDebit);
+        $this->assertSame(10000000, $receivableCredit);
+        Transaction::query()->get()->each(fn (Transaction $transaction) => $this->assertTransactionIsBalanced($transaction));
+    }
+
+    public function test_partial_bank_checkout_respects_selected_account(): void
+    {
+        $accounts = $this->seedAccounts();
+        $selectedBank = Account::create([
+            'code' => '112ALT',
+            'name' => 'Selected bank',
+            'parent_id' => $accounts['bankParent']->id,
+            'level' => 2,
+            'status' => true,
+        ]);
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create(['user_id' => $manager->id, 'name' => 'Bank Partial']);
+        $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+
+        $payload = $this->orderPayload([
+            ['id' => $product->id, 'qty' => 1],
+        ], 10000000, Order::PAYMENT_METHOD_BANK_TRANSFER, $client->id);
+        $payload['paid_amount'] = 4000000;
+        $payload['bank_account_id'] = $selectedBank->id;
+
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $order = Order::query()->sole();
+        $payment = Transaction::query()->where('type', 'credit_notice')->sole();
+        $this->assertSame(4000000, (int) $order->paid_amount);
+        $this->assertSame(6000000, (int) $order->debt_amount);
+        $this->assertSame(Order::PAYMENT_STATUS_PARTIAL, $order->payment_status);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $selectedBank->id,
+            'debit_amount' => 4000000,
+        ]);
+        $this->assertDatabaseMissing('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['bank']->id,
+            'debit_amount' => 4000000,
+        ]);
+    }
+
+    public function test_customerless_debt_partial_and_invalid_bank_checkout_are_rejected(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['quantity' => 3, 'price_buy' => 10000000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 3]);
+
+        $partial = $this->orderPayload([['id' => $product->id, 'qty' => 1]], 10000000);
+        $partial['paid_amount'] = 4000000;
+        $this->actingAs($staff)->postJson('/ban-hang/order', $partial)->assertUnprocessable();
+
+        $debt = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            10000000,
+            Order::PAYMENT_METHOD_DEBT
+        );
+        $this->actingAs($staff)->postJson('/ban-hang/order', $debt)->assertUnprocessable();
+
+        $invalidBank = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            10000000,
+            Order::PAYMENT_METHOD_BANK_TRANSFER
+        );
+        $invalidBank['bank_account_id'] = $accounts['bankParent']->id;
+        $this->actingAs($staff)->postJson('/ban-hang/order', $invalidBank)->assertUnprocessable();
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertSame(3, (int) ProductStorage::query()->value('quantity'));
+    }
+
+    public function test_debt_payment_is_owner_scoped_and_legacy_pos_pay_is_disabled(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create(['user_id' => $manager->id, 'name' => 'Tenant A']);
+        $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $payload = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            10000000,
+            Order::PAYMENT_METHOD_DEBT,
+            $client->id
+        );
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $order = Order::query()->sole();
+        $otherOwner = $this->createManager();
+        $beforeTransactions = Transaction::query()->count();
+        $beforeEntries = DB::table('transaction_entries')->count();
+
+        try {
+            app(CustomerDebtPaymentService::class)->collect($otherOwner, [
+                'order_id' => $order->id,
+                'amount' => 1000000,
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'bank_account_id' => null,
+                'transaction_date' => now()->toDateString(),
+                'idempotency_key' => '44444444-4444-4444-8444-444444444444',
+            ]);
+            $this->fail('A different owner must not see the order.');
+        } catch (ModelNotFoundException) {
+            $this->assertTrue(true);
+        }
+
+        $this->assertSame($beforeTransactions, Transaction::query()->count());
+        $this->assertSame($beforeEntries, DB::table('transaction_entries')->count());
+        $this->assertSame(10000000, (int) $order->fresh()->debt_amount);
+
+        $this->actingAs($staff)->postJson('/ban-hang/pay', [
+            'order_id' => $order->id,
+            'amount' => 1000000,
+        ])->assertStatus(410);
+        $this->actingAs($manager)
+            ->postJson('/admin/quanlythuchi/receipts/add', ['client_id' => $client->id, 'amount' => 1000000])
+            ->assertStatus(410);
+        $this->actingAs($manager)
+            ->postJson('/admin/quanlythuchi/receipts/debt', ['client_id' => $client->id, 'amount' => 1000000])
+            ->assertStatus(410);
+        $this->assertSame($beforeTransactions, Transaction::query()->count());
+        $this->assertSame($beforeEntries, DB::table('transaction_entries')->count());
+    }
+
+    public function test_debt_endpoint_uses_actual_payment_dates_and_report_reconciles(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create(['user_id' => $manager->id, 'name' => 'Dated Payments']);
+        $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $payload = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            10000000,
+            Order::PAYMENT_METHOD_CASH,
+            $client->id
+        );
+        $payload['paid_amount'] = 4000000;
+        $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
+
+        $order = Order::query()->sole();
+        $order->forceFill(['created_at' => '2026-08-01 09:00:00'])->save();
+        Transaction::query()->update(['transaction_date' => '2026-08-01']);
+        \Carbon\Carbon::setTestNow('2026-08-20 12:00:00');
+
+        try {
+            $request = [
+                'order_id' => $order->id,
+                'amount' => 2000000,
+                'payment_method' => Order::PAYMENT_METHOD_BANK_TRANSFER,
+                'bank_account_id' => $accounts['bank']->id,
+                'transaction_date' => '2026-08-10',
+                'idempotency_key' => '55555555-5555-4555-8555-555555555555',
+            ];
+
+            $this->actingAs($manager)
+                ->getJson("/admin/debts/customer/{$client->id}/payment-options")
+                ->assertOk()
+                ->assertJsonPath('orders.0.id', $order->id)
+                ->assertJsonPath('orders.0.remaining', 6000000)
+                ->assertJsonFragment(['id' => $accounts['bank']->id]);
+
+            $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', array_merge($request, [
+                    'idempotency_key' => 'not-a-uuid',
+                ]))
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('idempotency_key');
+            $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', array_merge($request, [
+                    'transaction_date' => '2026-08-21',
+                ]))
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('transaction_date');
+
+            $first = $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', $request)
+                ->assertOk()
+                ->assertJson([
+                    'replayed' => false,
+                    'order' => ['debt_amount' => 4000000, 'payment_status' => Order::PAYMENT_STATUS_PARTIAL],
+                ]);
+            $firstTransactionId = $first->json('transaction_id');
+            $this->assertDatabaseHas('transactions', [
+                'id' => $firstTransactionId,
+                'status' => Transaction::STATUS_COMPLETED,
+                'idempotency_key' => $request['idempotency_key'],
+            ]);
+            $this->assertSame(
+                '2026-08-10',
+                Transaction::query()->findOrFail($firstTransactionId)->transaction_date->toDateString()
+            );
+
+            $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', $request)
+                ->assertOk()
+                ->assertJson([
+                    'replayed' => true,
+                    'order' => ['debt_amount' => 4000000, 'payment_status' => Order::PAYMENT_STATUS_PARTIAL],
+                ]);
+            $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', array_merge($request, ['amount' => 1000000]))
+                ->assertStatus(409);
+
+            app(CustomerDebtPaymentService::class)->collect($staff, [
+                'order_id' => $order->id,
+                'amount' => 4000000,
+                'payment_method' => Order::PAYMENT_METHOD_CASH,
+                'bank_account_id' => null,
+                'transaction_date' => '2026-08-20',
+                'idempotency_key' => '66666666-6666-4666-8666-666666666666',
+            ]);
+
+            $order->refresh();
+            $this->assertSame(10000000, (int) $order->paid_amount);
+            $this->assertSame(0, (int) $order->debt_amount);
+            $this->assertSame(Order::PAYMENT_STATUS_PAID, $order->payment_status);
+            $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
+            $this->assertSame(4, Transaction::query()->count());
+            $this->assertDatabaseHas('transactions', [
+                'idempotency_key' => '66666666-6666-4666-8666-666666666666',
+            ]);
+            $this->assertSame(
+                '2026-08-20',
+                Transaction::query()
+                    ->where('idempotency_key', '66666666-6666-4666-8666-666666666666')
+                    ->sole()
+                    ->transaction_date
+                    ->toDateString()
+            );
+
+            $report = $this->actingAs($manager)
+                ->withHeader('X-Requested-With', 'XMLHttpRequest')
+                ->getJson('/admin/debts/customer?date_range=10%2F08%2F2026+-+21%2F08%2F2026')
+                ->assertOk()
+                ->json();
+            $row = collect($report)->firstWhere('client_id', $client->id);
+            $this->assertNotNull($row);
+            $this->assertSame(6000000, (int) $row['opening_debit']);
+            $this->assertSame(0, (int) $row['period_debit']);
+            $this->assertSame(6000000, (int) $row['period_credit']);
+            $this->assertSame(0, (int) $row['ending_debit']);
+        } finally {
+            \Carbon\Carbon::setTestNow();
+        }
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -2286,7 +2649,11 @@ class StaffPosSaleTest extends TestCase
             $table->string('attachment')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->string('status')->default(Transaction::STATUS_PENDING);
+            $table->char('idempotency_key', 36)->nullable();
+            $table->char('idempotency_hash', 64)->nullable();
             $table->timestamps();
+            $table->unique(['user_id', 'idempotency_key']);
+            $table->index(['document_type', 'reference_number', 'status']);
         });
 
         Schema::create('transaction_entries', function (Blueprint $table) {
@@ -2483,6 +2850,11 @@ class StaffPosSaleTest extends TestCase
             'discountType' => 'amount',
             'discountInput' => 0,
             'grand' => $grand,
+            'payment_method' => $payment,
+            'paid_amount' => $payment === Order::PAYMENT_METHOD_DEBT ? 0 : $grand,
+            'bank_account_id' => $payment === Order::PAYMENT_METHOD_BANK_TRANSFER
+                ? Account::query()->where('code', '112BANK')->value('id')
+                : null,
             'customer' => [
                 'id' => $clientId,
                 'name' => 'Nguyen Van A',

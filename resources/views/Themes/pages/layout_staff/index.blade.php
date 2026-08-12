@@ -962,6 +962,25 @@
                                     </select>
                                 </span>
                             </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="paidAmount">Khách trả</label>
+                                <input id="paidAmount" type="number" min="0" step="1" class="form-control" value="0">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Còn nợ</label>
+                                <div id="remainingAmount" class="form-control bg-light">0 VND</div>
+                            </div>
+                            <div id="bankAccountWrap" class="col-12 d-none">
+                                <label class="form-label" for="bankAccountId">Tài khoản ngân hàng</label>
+                                <select id="bankAccountId" class="form-select">
+                                    <option value="">--- Chọn tài khoản ngân hàng ---</option>
+                                    @foreach ($bankAccounts as $bankAccountOption)
+                                        <option value="{{ $bankAccountOption->id }}">
+                                            {{ $bankAccountOption->code }} - {{ $bankAccountOption->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <input type="hidden" id="custId">
                             <div class="col-12 d-grid sale-save-action">
                                 <button class="btn btn-success" id="saveOrderBtn" data-sale-storage-control
@@ -1170,6 +1189,7 @@
             const bankCode = @json($bankCode);
             const bankAccount = @json($bankAccountForQr);
             let currentInvoiceGrand = 0;
+            let paymentAmountTouched = false;
             let orderSaved = false;
             let hasSaleStorage = @json((bool) $saleStorage);
             const saleStorageMessage = qs('#saleStorageMessage');
@@ -1279,6 +1299,63 @@
 
             function selectedPaymentMethod() {
                 return qs('#paymentMethod')?.value || '';
+            }
+
+            function selectedPaidAmount() {
+                return Math.max(0, Math.round(Number(qs('#paidAmount')?.value) || 0));
+            }
+
+            function syncPaymentControls(grand, forceDefault = false) {
+                const total = Math.max(0, Math.round(Number(grand) || 0));
+                const method = selectedPaymentMethod();
+                const paidInput = qs('#paidAmount');
+
+                currentInvoiceGrand = total;
+                paidInput.max = total;
+
+                if (method === 'debt') {
+                    paidInput.value = 0;
+                    paidInput.disabled = true;
+                } else {
+                    paidInput.disabled = false;
+                    if (forceDefault || !paymentAmountTouched || selectedPaidAmount() > total) {
+                        paidInput.value = total;
+                    }
+                }
+
+                const remaining = Math.max(0, total - selectedPaidAmount());
+                $('#remainingAmount').text(money(remaining) + ' VND');
+                $('#bankAccountWrap').toggleClass('d-none', method !== 'bank_transfer');
+            }
+
+            function validatePaymentControls(grand) {
+                syncPaymentControls(grand);
+                const total = Math.max(0, Math.round(Number(grand) || 0));
+                const paid = selectedPaidAmount();
+                const remaining = total - paid;
+                const method = selectedPaymentMethod();
+
+                if (paid > total) {
+                    Swal.fire({ icon: 'error', title: 'Số tiền khách trả không được lớn hơn tổng đơn.' });
+                    return false;
+                }
+
+                if ((method === 'debt' && paid > 0) || (method !== 'debt' && paid === 0)) {
+                    Swal.fire({ icon: 'error', title: 'Phương thức thanh toán không khớp số tiền khách trả.' });
+                    return false;
+                }
+
+                if (remaining > 0 && !qs('#custId').value) {
+                    Swal.fire({ icon: 'error', title: 'Đơn còn công nợ bắt buộc phải chọn khách hàng.' });
+                    return false;
+                }
+
+                if (method === 'bank_transfer' && !qs('#bankAccountId').value) {
+                    Swal.fire({ icon: 'error', title: 'Vui lòng chọn tài khoản ngân hàng.' });
+                    return false;
+                }
+
+                return true;
             }
 
             function resetBankTransferInfo() {
@@ -1987,6 +2064,7 @@
                 subtotalEl.textContent = money(sub) + ' VND';
                 discountValueEl.textContent = '-' + money(discount) + ' VND';
                 grandTotalEl.textContent = money(grand) + ' VND';
+                syncPaymentControls(grand);
             }
 
             // Clear cart
@@ -2102,6 +2180,10 @@
                 const paymentMethod = selectedPaymentMethod();
                 currentInvoiceGrand = grand;
 
+                if (!validatePaymentControls(grand)) {
+                    return;
+                }
+
                 $('#invoice-subtotal').html(money(sub) + ' VND');
                 $('#invoice-discount').html('-' + money(discount) + ' VND');
                 $('#invoice-total').html(money(grand) + ' VND');
@@ -2143,6 +2225,11 @@
                         }
                         return sub - d;
                     })(),
+                    payment_method: paymentMethod,
+                    paid_amount: selectedPaidAmount(),
+                    bank_account_id: paymentMethod === 'bank_transfer'
+                        ? qs('#bankAccountId').value
+                        : null,
                     customer: {
                         id: qs('#custId').value || null,
                         name,
@@ -2272,9 +2359,17 @@
             })
 
             $('#paymentMethod').on('change', function() {
+                paymentAmountTouched = false;
+                syncPaymentControls(currentInvoiceGrand, true);
+
                 if ($('#invoiceModal').hasClass('show')) {
                     renderInvoicePayment(this.value, currentInvoiceGrand);
                 }
+            });
+
+            $('#paidAmount').on('input', function() {
+                paymentAmountTouched = true;
+                syncPaymentControls(currentInvoiceGrand);
             });
 
             $('#invoiceModal').on('hidden.bs.modal', function() {
@@ -2323,6 +2418,11 @@
                         }
                         return sub - d;
                     })(),
+                    payment_method: paymentMethod,
+                    paid_amount: selectedPaidAmount(),
+                    bank_account_id: paymentMethod === 'bank_transfer'
+                        ? qs('#bankAccountId').value
+                        : null,
                     customer: {
                         id: qs('#custId').value || null,
                         name: qs('#custName').value.trim(),
@@ -2333,6 +2433,11 @@
                         note: qs('#orderNote')?.value || ''
                     },
                 };
+
+                if (!validatePaymentControls(order.grand)) {
+                    payButton.prop('disabled', false);
+                    return;
+                }
 
                 $.ajax({
                     url: '/ban-hang/order',

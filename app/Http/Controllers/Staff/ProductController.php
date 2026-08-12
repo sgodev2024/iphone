@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Cart;
 use App\Models\Client;
@@ -55,6 +56,14 @@ class ProductController extends Controller
             ? 'Chưa cấu hình thông tin chuyển khoản.'
             : (! $config->bank ? 'Chưa cấu hình ngân hàng cho thông tin chuyển khoản.' : null);
         $clientgroup = $this->clientGroupService->getAllClientGroup();
+        $bankParentId = Account::query()->where('code', '112')->where('status', true)->value('id');
+        $bankAccounts = $bankParentId
+            ? Account::query()
+                ->where('parent_id', $bankParentId)
+                ->where('status', true)
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+            : collect();
         $cart = Cart::where('user_id', $user->id)->get();
         foreach ($cart as $key => $item) {
             $item->delete();
@@ -71,6 +80,7 @@ class ProductController extends Controller
             'config',
             'title',
             'clientgroup',
+            'bankAccounts',
             'missingConfigMessage',
             'saleStorages',
             'saleStorage',

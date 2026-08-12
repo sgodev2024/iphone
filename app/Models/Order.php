@@ -13,6 +13,18 @@ class Order extends Model
 {
     use HasFactory;
 
+    public const PAYMENT_METHOD_CASH = 'cash';
+
+    public const PAYMENT_METHOD_BANK_TRANSFER = 'bank_transfer';
+
+    public const PAYMENT_METHOD_DEBT = 'debt';
+
+    public const PAYMENT_STATUS_PAID = 'paid';
+
+    public const PAYMENT_STATUS_PARTIAL = 'partial';
+
+    public const PAYMENT_STATUS_DEBT = 'debt';
+
     protected $fillable = [
         'user_id',
         'client_id',
@@ -38,7 +50,10 @@ class Order extends Model
     ];
 
     protected $casts = [
-        'status' => 'boolean'
+        'status' => 'boolean',
+        'total_money' => 'integer',
+        'paid_amount' => 'integer',
+        'debt_amount' => 'integer',
     ];
 
     protected $appends = ['orderdetail'];

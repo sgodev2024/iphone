@@ -80,6 +80,7 @@ class DebtController extends Controller
                 $endingBalance = $openingBalance + $periodDebit - $periodCredit;
 
                 return (object) [
+                    'client_id' => (int) $client->id,
                     'client_code' => $client->code,
                     'client_name' => $client->name,
                     'client_phone' => $client->phone,

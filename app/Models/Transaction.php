@@ -25,6 +25,8 @@ class Transaction extends Model
         'attachment',
         'created_by',
         'status',
+        'idempotency_key',
+        'idempotency_hash',
     ];
 
     public function entries(): HasMany
