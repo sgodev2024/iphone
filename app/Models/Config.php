@@ -18,6 +18,7 @@ class Config extends Model
         'receiver',
         'logo',
         'qr',
+        
     ];
 
     public function bank()

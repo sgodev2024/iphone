@@ -24,7 +24,7 @@ class SaleService
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = $data['customer']['payment'];
             $client = null;
-            $branchId = auth()->user()->branch_id;
+            $branchId = auth()->user()->branchScopeId();
             if (! empty($data['customer']['id'])) {
                 $client = Client::query()->find($data['customer']['id']);
 

@@ -994,14 +994,14 @@
                         <div class="mb-3">
                             <label class="form-label">
                                 Họ tên
-                                <span class="text-danger fst-italic">(*) Không được để trống</span>
+                                <span class="text-danger fst-italic">(*)</span>
                             </label>
                             <input type="text" class="form-control" name="name" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">
                                 Số điện thoại
-                                <span class="text-danger fst-italic">(*) Không được để trống</span>
+                                <span class="text-danger fst-italic">(*)</span>
                             </label>
                             <input type="tel" class="form-control" name="phone" required>
                         </div>
@@ -1037,11 +1037,14 @@
                         <!-- Header -->
                         <div class="text-center invoice-header mb-4">
                             <h2 class="fw-bold text-uppercase">HÓA ĐƠN THANH TOÁN</h2>
-                            <h5 class="mt-2">Công ty: {{ $config?->user?->company_name ?? '' }} </h5>
-                            <h5 class="mt-2">Cửa hàng: {{ $config?->user?->store_name ?? '' }} </h5>
-                            <h5 class="mt-2">Địa chỉ: {{ $config?->user?->address ?? '' }} </h5>
-                            <h5 class="mt-2">Điện thoại: {{ $config?->user?->phone ?? '' }} &emsp;&emsp;Email:
-                                {{ $config?->user?->email ?? '' }}</h5>
+                            <p class="mt-0 mb-0">{{ $config?->user?->company_name ?? '' }} </p>
+                            @if (!empty($config?->user?->store_name))
+                                <p class="mt-0 mb-0">{{ $config->user->store_name }}</p>
+                            @endif
+                            <p class="mt-0 mb-0">Địa chỉ: {{ $config?->user?->address ?? '' }} </p>
+                            <p class="mt-0 mb-0">Điện thoại: {{ $config?->user?->phone ?? '' }} &emsp;&emsp;Email:
+                                {{ $config?->user?->email ?? '' }}
+                            </p>
                         </div>
 
                         <hr>
