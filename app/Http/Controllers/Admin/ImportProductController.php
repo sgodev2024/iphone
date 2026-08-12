@@ -11,11 +11,14 @@ use App\Services\CompanyService;
 use App\Services\ImportProductService;
 use App\Services\ProductService;
 use App\Services\StorageService;
+use App\Services\SupplierPaymentService;
 use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -91,12 +94,36 @@ class ImportProductController extends Controller
         }
     }
 
-    public function importdetail($id)
+    public function importdetail(Request $request, $id, SupplierPaymentService $supplierPaymentService)
     {
         $title = 'Thông tin hóa đơn';
-        $importdetail = $this->importProductService->getImportCouponByid($id, (int) request()->user()->ownerId());
+        $importdetail = $this->importProductService->getImportCouponByid(
+            $id,
+            (int) $request->user()->ownerId()
+        );
+        $paymentSummary = null;
+        $paymentUnavailable = null;
+        $bankAccounts = collect();
+        $paymentIdempotencyKey = (string) Str::uuid();
 
-        return view('admin.Importproduct.detail', compact('title', 'importdetail'));
+        try {
+            $paymentSummary = $supplierPaymentService->summary($request->user(), (int) $id);
+
+            if ($request->user()->hasPermission('expense.create') && $paymentSummary['remaining'] > 0) {
+                $bankAccounts = $supplierPaymentService->bankAccounts();
+            }
+        } catch (ValidationException $exception) {
+            $paymentUnavailable = $exception->validator->errors()->first();
+        }
+
+        return view('admin.Importproduct.detail', compact(
+            'title',
+            'importdetail',
+            'paymentSummary',
+            'paymentUnavailable',
+            'bankAccounts',
+            'paymentIdempotencyKey'
+        ));
     }
 
     public function add(Request $request)

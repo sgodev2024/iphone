@@ -99,16 +99,119 @@
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-money-bill-wave"></i> Đã trả</th>
-                                            <td>{{ number_format($importdetail->resolved_paid_amount, 0, ',', '.') }} đ
+                                            <td>{{ number_format($paymentSummary['paid_amount'] ?? $importdetail->resolved_paid_amount, 0, ',', '.') }} đ
                                             </td>
                                         </tr>
                                         <tr>
                                             <th scope="row"><i class="fas fa-file-invoice-dollar"></i> Còn nợ</th>
-                                            <td>{{ number_format($importdetail->resolved_debt_amount, 0, ',', '.') }} đ
+                                            <td>{{ number_format($paymentSummary['remaining'] ?? $importdetail->resolved_debt_amount, 0, ',', '.') }} đ
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div class="card border-primary">
+                                    <div class="card-header">
+                                        <h5 class="mb-0 text-primary"><b>Thanh toán nhà cung cấp theo phiếu nhập</b></h5>
+                                    </div>
+                                    <div class="card-body">
+                                        @if ($paymentUnavailable)
+                                            <div class="alert alert-warning mb-0">
+                                                Không thể thanh toán phiếu nhập này: {{ $paymentUnavailable }}
+                                            </div>
+                                        @elseif ($paymentSummary)
+                                            <div class="row mb-3">
+                                                <div class="col-md-4">
+                                                    <div class="text-muted">Tổng phiếu nhập</div>
+                                                    <strong>{{ number_format($paymentSummary['purchase_credit'], 0, ',', '.') }} đ</strong>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="text-muted">Đã trả theo ledger</div>
+                                                    <strong>{{ number_format($paymentSummary['paid_amount'], 0, ',', '.') }} đ</strong>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="text-muted">Còn phải trả</div>
+                                                    <strong>{{ number_format($paymentSummary['remaining'], 0, ',', '.') }} đ</strong>
+                                                </div>
+                                            </div>
+
+                                            @if ($paymentSummary['remaining'] === 0)
+                                                <div class="alert alert-success mb-0">Phiếu nhập đã được thanh toán đủ.</div>
+                                            @elseif (auth()->user()?->hasPermission('expense.create'))
+                                                <form method="POST"
+                                                    action="{{ route('admin.importproduct.payments.store', ['id' => $importdetail->id]) }}"
+                                                    id="supplier-payment-form">
+                                                    @csrf
+                                                    <input type="hidden" name="import_coupon_id" value="{{ $importdetail->id }}">
+                                                    <input type="hidden" name="idempotency_key"
+                                                        value="{{ old('idempotency_key', $paymentIdempotencyKey) }}">
+
+                                                    <div class="row">
+                                                        <div class="col-md-3 mb-3">
+                                                            <label for="supplier-payment-amount">Số tiền</label>
+                                                            <input type="number" min="1"
+                                                                max="{{ $paymentSummary['remaining'] }}"
+                                                                class="form-control @error('amount') is-invalid @enderror"
+                                                                id="supplier-payment-amount" name="amount"
+                                                                value="{{ old('amount', $paymentSummary['remaining']) }}" required>
+                                                            @error('amount')
+                                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="col-md-3 mb-3">
+                                                            <label for="supplier-payment-method">Phương thức</label>
+                                                            <select class="form-control @error('payment_method') is-invalid @enderror"
+                                                                id="supplier-payment-method" name="payment_method" required>
+                                                                <option value="cash" @selected(old('payment_method', 'cash') === 'cash')>Tiền mặt</option>
+                                                                <option value="bank_transfer" @selected(old('payment_method') === 'bank_transfer')>Chuyển khoản</option>
+                                                            </select>
+                                                            @error('payment_method')
+                                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="col-md-3 mb-3" id="supplier-bank-account-row">
+                                                            <label for="supplier-bank-account">Tài khoản ngân hàng</label>
+                                                            <select class="form-control @error('bank_account_id') is-invalid @enderror"
+                                                                id="supplier-bank-account" name="bank_account_id">
+                                                                <option value="">--- Chọn tài khoản con của 112 ---</option>
+                                                                @foreach ($bankAccounts as $bankAccount)
+                                                                    <option value="{{ $bankAccount->id }}" @selected((string) old('bank_account_id') === (string) $bankAccount->id)>
+                                                                        {{ $bankAccount->code }} - {{ $bankAccount->name }}
+                                                                    </option>
+                                                                @endforeach
+                                                            </select>
+                                                            @error('bank_account_id')
+                                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="col-md-3 mb-3">
+                                                            <label for="supplier-payment-date">Ngày trả</label>
+                                                            <input type="date"
+                                                                class="form-control @error('transaction_date') is-invalid @enderror"
+                                                                id="supplier-payment-date" name="transaction_date"
+                                                                min="{{ $paymentSummary['purchase_date'] }}"
+                                                                max="{{ now()->toDateString() }}"
+                                                                value="{{ old('transaction_date', now()->toDateString()) }}" required>
+                                                            @error('transaction_date')
+                                                                <div class="invalid-feedback">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                    </div>
+
+                                                    <button type="submit" class="btn btn-primary">
+                                                        <i class="fas fa-money-check-alt"></i> Thanh toán NCC
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <div class="alert alert-info mb-0">Bạn không có quyền tạo phiếu chi nhà cung cấp.</div>
+                                            @endif
+                                        @endif
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -202,4 +305,24 @@
             </div>
         </div>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const method = document.getElementById('supplier-payment-method');
+            const bankRow = document.getElementById('supplier-bank-account-row');
+            const bankAccount = document.getElementById('supplier-bank-account');
+
+            function syncSupplierBankAccount() {
+                if (!method || !bankRow || !bankAccount) return;
+
+                const isBank = method.value === 'bank_transfer';
+                bankRow.style.display = isBank ? '' : 'none';
+                bankAccount.required = isBank;
+
+                if (!isBank) bankAccount.value = '';
+            }
+
+            method?.addEventListener('change', syncSupplierBankAccount);
+            syncSupplierBankAccount();
+        });
+    </script>
 @endsection

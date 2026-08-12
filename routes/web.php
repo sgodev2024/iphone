@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReportdebtController;
 use App\Http\Controllers\Admin\StorageController;
 use App\Http\Controllers\Admin\SupplierController;
+use App\Http\Controllers\Admin\SupplierPaymentController;
 use App\Http\Controllers\Admin\SupportController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
@@ -904,6 +905,10 @@ Route::middleware(['auth'])
                     Route::get('/detail/{id}', [ImportProductController::class, 'importdetail'])
                         ->middleware('permission:import_product.detail')
                         ->name('importCoupon.detail');
+
+                    Route::post('/detail/{id}/payments', [SupplierPaymentController::class, 'store'])
+                        ->middleware('permission:expense.create')
+                        ->name('payments.store');
 
                     Route::get('/detail/{id}/barcodes', [ImportBarcodeController::class, 'index'])
                         ->middleware('permission:import_barcode.view')
