@@ -479,6 +479,7 @@ class ImportCouponController extends Controller
             'document_type' => 'import',
             'reference_number' => $importCoupon->coupon_code ?: 'IMP-' . now()->format('YmdHis'),
             'created_by' => $userId,
+            'status' => Transaction::STATUS_COMPLETED,
         ]);
 
         TransactionEntry::create([

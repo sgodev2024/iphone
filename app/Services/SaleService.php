@@ -566,6 +566,7 @@ class SaleService
             'document_type' => 'order',
             'reference_number' => (string) $order->id,
             'created_by' => $creator->id,
+            'status' => Transaction::STATUS_COMPLETED,
         ]);
 
         $transaction->entries()->create([
@@ -616,6 +617,7 @@ class SaleService
             'document_type' => 'order',
             'reference_number' => (string) $order->id,
             'created_by' => $creator->id,
+            'status' => Transaction::STATUS_COMPLETED,
         ]);
 
         $transaction->entries()->create([

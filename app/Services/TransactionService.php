@@ -83,7 +83,7 @@ class TransactionService
         try {
             $transaction = $this->transaction->create([
                 'amount' => $amount,
-                'status' => 1,
+                'status' => Transaction::STATUS_COMPLETED,
                 'user_id' => $userId,
                 'notification' => 1,
                 'description' => $data['description'],
@@ -113,7 +113,7 @@ class TransactionService
     {
         try {
             $transaction = $this->transaction->find($id);
-            $transaction->status = 1;
+            $transaction->status = Transaction::STATUS_COMPLETED;
             $transaction->notification = 2;
             $transaction->save();
             return $transaction;
@@ -127,7 +127,7 @@ class TransactionService
     {
         try {
             $transaction = $this->transaction->find($id);
-            $transaction->status = 2;
+            $transaction->status = Transaction::STATUS_FAILED;
             $transaction->notification = 2;
             $transaction->save();
             return $transaction;

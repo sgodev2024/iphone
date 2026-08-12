@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Transaction;
 use App\Services\CustomerSaleBackfillService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Schema\Blueprint;
@@ -90,6 +91,10 @@ class BackfillCustomerSalesCommandTest extends TestCase
         $this->assertSame($paymentCredit, $this->paymentCredit131());
         $this->assertSame(CustomerSaleBackfillService::EXPECTED_SALE_TOTAL, $this->saleDebit131());
         $this->assertSame(CustomerSaleBackfillService::EXPECTED_SALE_TOTAL, $this->saleCredit5111());
+        $this->assertSame(
+            15,
+            $this->saleTransactions()->where('status', Transaction::STATUS_COMPLETED)->count()
+        );
     }
 
     public function test_debt_order_creates_sale_without_payment(): void
@@ -245,7 +250,7 @@ class BackfillCustomerSalesCommandTest extends TestCase
             $this->assertNotNull($sale);
             $this->assertSame(28, (int) $sale->user_id);
             $this->assertSame(30, (int) $sale->created_by);
-            $this->assertSame('pending', $sale->status);
+            $this->assertSame(Transaction::STATUS_COMPLETED, $sale->status);
             $this->assertSame(substr($createdAt, 0, 10), substr($sale->transaction_date, 0, 10));
             $this->assertSame($total, $this->saleAmountForOrder($orderId, '131', 'debit_amount'));
             $this->assertSame($total, $this->saleAmountForOrder($orderId, '5111', 'credit_amount'));
@@ -567,6 +572,7 @@ class BackfillCustomerSalesCommandTest extends TestCase
             'type' => $bank ? 'credit_notice' : 'income',
             'document_type' => 'order',
             'created_by' => $createdBy,
+            'status' => Transaction::STATUS_COMPLETED,
             'created_at' => $createdAt,
             'updated_at' => $createdAt,
         ]);
@@ -613,6 +619,7 @@ class BackfillCustomerSalesCommandTest extends TestCase
             'type' => 'sale',
             'document_type' => 'order',
             'created_by' => $createdBy,
+            'status' => Transaction::STATUS_COMPLETED,
         ]);
 
         DB::table('transaction_entries')->insert([

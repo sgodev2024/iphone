@@ -246,6 +246,7 @@ class BankTransactionController extends Controller
                 'document_type'      => $credentials['document_type'] ?? null,
                 'attachment'         => $credentials['attachment'] ?? null,
                 'created_by'         => $credentials['created_by'],
+                'status'             => Transaction::STATUS_COMPLETED,
             ]);
 
             // Xác định đối tượng

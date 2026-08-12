@@ -130,6 +130,7 @@ class CustomerSaleBackfillService
                     'document_type' => 'order',
                     'reference_number' => (string) $order->id,
                     'created_by' => $analysis['batch']['sale_created_by'],
+                    'status' => Transaction::STATUS_COMPLETED,
                 ]);
 
                 $transaction->entries()->create([
@@ -452,7 +453,7 @@ class CustomerSaleBackfillService
             || (int) $transaction->created_by !== $batch['sale_created_by']
             || $transaction->transaction_date?->toDateString() !== $order->created_at?->toDateString()
             || (string) $transaction->description !== "Bán hàng theo đơn #{$order->id}"
-            || (string) $transaction->status !== 'pending'
+            || (string) $transaction->status !== Transaction::STATUS_COMPLETED
         ) {
             $errors[] = "{$prefix} has invalid metadata.";
         }
@@ -531,7 +532,7 @@ class CustomerSaleBackfillService
             || $transaction->transaction_date?->toDateString() !== $order->created_at?->toDateString()
             || $transaction->created_at?->toDateTimeString() !== $order->created_at?->toDateTimeString()
             || (string) $transaction->description !== "Thu tiền đơn hàng #{$order->id}"
-            || (string) $transaction->status !== 'pending'
+            || (string) $transaction->status !== Transaction::STATUS_COMPLETED
         ) {
             $errors[] = "Order #{$order->id} existing payment metadata is invalid.";
         }

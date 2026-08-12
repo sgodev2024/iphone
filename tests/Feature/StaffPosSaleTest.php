@@ -75,6 +75,7 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame('9', (string) $product->fresh()->quantity);
         $this->assertDatabaseCount('transactions', 2);
         $this->assertDatabaseCount('transaction_entries', 4);
+        $this->assertSame(2, Transaction::query()->where('status', Transaction::STATUS_COMPLETED)->count());
     }
 
     public function test_custom_unit_price_is_the_sale_snapshot_total_and_accounting_source(): void
@@ -497,6 +498,7 @@ class StaffPosSaleTest extends TestCase
         ]);
         $this->assertSame('order', $transaction->document_type);
         $this->assertSame((string) Order::firstOrFail()->id, $transaction->reference_number);
+        $this->assertSame(Transaction::STATUS_COMPLETED, $transaction->status);
         $this->assertTransactionIsBalanced($transaction);
     }
 
@@ -927,6 +929,8 @@ class StaffPosSaleTest extends TestCase
 
         $saleTransaction = Transaction::query()->where('type', 'sale')->firstOrFail();
         $transaction = Transaction::query()->where('type', 'credit_notice')->firstOrFail();
+        $this->assertSame(Transaction::STATUS_COMPLETED, $saleTransaction->status);
+        $this->assertSame(Transaction::STATUS_COMPLETED, $transaction->status);
         $this->assertDatabaseHas('transaction_entries', [
             'transaction_id' => $saleTransaction->id,
             'account_id' => $accounts['receivable']->id,
@@ -992,6 +996,8 @@ class StaffPosSaleTest extends TestCase
 
         $saleTransaction = Transaction::query()->where('type', 'sale')->firstOrFail();
         $paymentTransaction = Transaction::query()->where('type', 'income')->firstOrFail();
+        $this->assertSame(Transaction::STATUS_COMPLETED, $saleTransaction->status);
+        $this->assertSame(Transaction::STATUS_COMPLETED, $paymentTransaction->status);
         $this->assertDatabaseHas('orders', [
             'payment_method' => 'cash',
             'paid_amount' => 300000,
@@ -1966,6 +1972,7 @@ class StaffPosSaleTest extends TestCase
         $this->assertNull($order->name);
         $this->assertNull($order->phone);
         $this->assertSame('Khách lẻ', $order->customer_display_name);
+        $this->assertSame(2, Transaction::query()->where('status', Transaction::STATUS_COMPLETED)->count());
     }
 
     public function test_customer_with_outstanding_debt_cannot_be_deactivated(): void
@@ -2278,6 +2285,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('document_type')->nullable();
             $table->string('attachment')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
+            $table->string('status')->default(Transaction::STATUS_PENDING);
             $table->timestamps();
         });
 

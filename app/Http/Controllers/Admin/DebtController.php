@@ -246,6 +246,7 @@ class DebtController extends Controller
                 'type' => 'other', // phiếu công nợ đầu kỳ
                 'created_by' => Auth::id(),
                 'user_id' => Auth::id(),
+                'status' => Transaction::STATUS_COMPLETED,
             ]);
 
             // Xác định đối tượng (customer hoặc supplier)
