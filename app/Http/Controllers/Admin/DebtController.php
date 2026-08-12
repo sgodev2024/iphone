@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\Client;
 use App\Models\Customer;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -19,72 +21,80 @@ class DebtController extends Controller
     public function customer(Request $request)
     {
         $dateRange = $request->input('date_range');
-        $nameFilter = $request->input('name');
+        $nameFilter = trim((string) $request->input('name', ''));
 
         if ($dateRange) {
             [$start, $end] = explode(' - ', $dateRange);
-            $startDate = Carbon::createFromFormat('d/m/Y', $start)->startOfDay();
-            $endDate = Carbon::createFromFormat('d/m/Y', $end)->endOfDay();
+            $startDate = Carbon::createFromFormat('d/m/Y', trim($start))->toDateString();
+            $endDate = Carbon::createFromFormat('d/m/Y', trim($end))->toDateString();
         } else {
-            $endDate = Carbon::now();
-            $startDate = $endDate->copy()->subMonth()->startOfDay();
+            $endDate = Carbon::now()->toDateString();
+            $startDate = Carbon::now()->subMonth()->toDateString();
         }
 
-        $clientsQuery = DB::table('clients as c')
-            ->select('c.id', 'c.name', 'c.code', 'c.phone');
+        $receivableAccountId = Account::query()
+            ->where('code', '131')
+            ->where('status', true)
+            ->value('id');
 
-        if ($nameFilter) {
-            $clientsQuery->where('c.name', 'like', "%$nameFilter%");
+        if (! $receivableAccountId) {
+            Log::error('Không thể lập báo cáo công nợ khách hàng vì thiếu tài khoản 131 đang hoạt động.');
+
+            abort(500, 'Không tìm thấy tài khoản phải thu khách hàng (131) đang hoạt động.');
         }
 
-        $debtReports = $clientsQuery->get()
-            ->map(function ($client) use ($startDate, $endDate) {
-                $so_du_no_dau = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Client')
-                    ->where('te.tableable_id', $client->id)
-                    ->where('t.transaction_date', '<', $startDate)
-                    ->sum('te.debit_amount');
+        $ownerId = $request->user()->ownerId();
+        $debtReports = DB::table('clients as c')
+            ->join('transaction_entries as te', function ($join) use ($receivableAccountId) {
+                $join->on('te.tableable_id', '=', 'c.id')
+                    ->where('te.tableable_type', Client::class)
+                    ->where('te.account_id', $receivableAccountId);
+            })
+            ->join('transactions as t', 't.id', '=', 'te.transaction_id')
+            ->where('c.user_id', $ownerId)
+            ->where('t.transaction_date', '<=', $endDate)
+            ->when($nameFilter !== '', function ($query) use ($nameFilter) {
+                $query->where('c.name', 'like', "%{$nameFilter}%");
+            })
+            ->select('c.id', 'c.code', 'c.name', 'c.phone')
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount - te.credit_amount ELSE 0 END), 0) AS opening_balance',
+                [$startDate]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN t.transaction_date >= ? AND t.transaction_date <= ? THEN te.debit_amount ELSE 0 END), 0) AS period_debit',
+                [$startDate, $endDate]
+            )
+            ->selectRaw(
+                'COALESCE(SUM(CASE WHEN t.transaction_date >= ? AND t.transaction_date <= ? THEN te.credit_amount ELSE 0 END), 0) AS period_credit',
+                [$startDate, $endDate]
+            )
+            ->groupBy('c.id', 'c.code', 'c.name', 'c.phone')
+            ->orderBy('c.name')
+            ->orderBy('c.id')
+            ->get()
+            ->map(function ($client) {
+                $openingBalance = (float) $client->opening_balance;
+                $periodDebit = (float) $client->period_debit;
+                $periodCredit = (float) $client->period_credit;
+                $endingBalance = $openingBalance + $periodDebit - $periodCredit;
 
-                $so_du_co_dau = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Client')
-                    ->where('te.tableable_id', $client->id)
-                    ->where('t.transaction_date', '<', $startDate)
-                    ->sum('te.credit_amount');
-
-                $ghi_no = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Client')
-                    ->where('te.tableable_id', $client->id)
-                    ->whereBetween('t.transaction_date', [$startDate, $endDate])
-                    ->sum('te.debit_amount');
-
-                $ghi_co = DB::table('transaction_entries as te')
-                    ->join('transactions as t', 't.id', '=', 'te.transaction_id')
-                    ->where('te.tableable_type', 'App\\Models\\Client')
-                    ->where('te.tableable_id', $client->id)
-                    ->whereBetween('t.transaction_date', [$startDate, $endDate])
-                    ->sum('te.credit_amount');
-
-                $so_du_rong = ($so_du_no_dau + $ghi_no) - ($so_du_co_dau + $ghi_co);
-
-                return (object)[
+                return (object) [
                     'client_code' => $client->code,
                     'client_name' => $client->name,
                     'client_phone' => $client->phone,
-                    'opening_debit' => $so_du_no_dau,
-                    'opening_credit' => $so_du_co_dau,
-                    'period_debit' => $ghi_no,
-                    'period_credit' => $ghi_co,
-                    'ending_debit' => $so_du_rong > 0 ? $so_du_rong : 0,
-                    'ending_credit' => $so_du_rong < 0 ? abs($so_du_rong) : 0,
+                    'opening_debit' => max($openingBalance, 0),
+                    'opening_credit' => max(-$openingBalance, 0),
+                    'period_debit' => $periodDebit,
+                    'period_credit' => $periodCredit,
+                    'ending_debit' => max($endingBalance, 0),
+                    'ending_credit' => max(-$endingBalance, 0),
                 ];
             })
-            ->filter(
-                fn($i) =>
-                $i->opening_debit || $i->opening_credit || $i->period_debit || $i->period_credit
-            )
+            ->filter(fn ($item) => $item->opening_debit
+                || $item->opening_credit
+                || $item->period_debit
+                || $item->period_credit)
             ->values();
 
         if ($request->ajax()) {
