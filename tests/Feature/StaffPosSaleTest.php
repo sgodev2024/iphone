@@ -73,8 +73,8 @@ class StaffPosSaleTest extends TestCase
             'price' => 100000,
         ]);
         $this->assertSame('9', (string) $product->fresh()->quantity);
-        $this->assertDatabaseCount('transactions', 1);
-        $this->assertDatabaseCount('transaction_entries', 2);
+        $this->assertDatabaseCount('transactions', 2);
+        $this->assertDatabaseCount('transaction_entries', 4);
     }
 
     public function test_custom_unit_price_is_the_sale_snapshot_total_and_accounting_source(): void
@@ -436,9 +436,16 @@ class StaffPosSaleTest extends TestCase
         ]);
     }
 
-    public function test_debt_checkout_uses_custom_unit_price_and_net_total_without_cash_transaction(): void
+    public function test_debt_checkout_records_receivable_and_revenue_without_payment_transaction(): void
     {
-        [$storage, , $staff] = $this->createStaffContext();
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Nguyen Van A',
+            'phone' => '0912345678',
+            'address' => 'Ha Noi',
+        ]);
         $product = $this->createProduct([
             'quantity' => 5,
             'price' => 1500000,
@@ -454,7 +461,7 @@ class StaffPosSaleTest extends TestCase
             'id' => $product->id,
             'qty' => 2,
             'unit_price' => 1200000,
-        ]], 2300000, 'debt');
+        ]], 2300000, 'debt', $client->id);
         $payload['subtotal'] = 2400000;
         $payload['discountInput'] = 100000;
 
@@ -471,7 +478,26 @@ class StaffPosSaleTest extends TestCase
             'price' => 1200000,
             'quantity' => 2,
         ]);
-        $this->assertDatabaseCount('transactions', 0);
+        $transaction = Transaction::query()->where('type', 'sale')->firstOrFail();
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseCount('transaction_entries', 2);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $transaction->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 2300000,
+            'credit_amount' => 0,
+            'tableable_type' => Client::class,
+            'tableable_id' => $client->id,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $transaction->id,
+            'account_id' => $accounts['revenue']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 2300000,
+        ]);
+        $this->assertSame('order', $transaction->document_type);
+        $this->assertSame((string) Order::firstOrFail()->id, $transaction->reference_number);
+        $this->assertTransactionIsBalanced($transaction);
     }
 
     public function test_admin_uses_default_kho_a_and_storage_picker_is_hidden(): void
@@ -886,6 +912,9 @@ class StaffPosSaleTest extends TestCase
             'user_id' => $manager->id,
             'created_by' => $staff->id,
             'payment_method' => 'bank_transfer',
+            'paid_amount' => 300000,
+            'debt_amount' => 0,
+            'payment_status' => 'paid',
         ]);
         $this->assertDatabaseHas('transactions', [
             'user_id' => $manager->id,
@@ -896,7 +925,22 @@ class StaffPosSaleTest extends TestCase
             'document_type' => 'order',
         ]);
 
-        $transaction = Transaction::firstOrFail();
+        $saleTransaction = Transaction::query()->where('type', 'sale')->firstOrFail();
+        $transaction = Transaction::query()->where('type', 'credit_notice')->firstOrFail();
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $saleTransaction->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 300000,
+            'credit_amount' => 0,
+            'tableable_type' => Client::class,
+            'tableable_id' => $client->id,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $saleTransaction->id,
+            'account_id' => $accounts['revenue']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 300000,
+        ]);
         $this->assertDatabaseHas('transaction_entries', [
             'transaction_id' => $transaction->id,
             'account_id' => $accounts['bank']->id,
@@ -904,6 +948,8 @@ class StaffPosSaleTest extends TestCase
             'credit_amount' => 0,
             'note' => 'Chuyển khoản',
         ]);
+        $this->assertTransactionIsBalanced($saleTransaction);
+        $this->assertTransactionIsBalanced($transaction);
         $this->assertDatabaseHas('transaction_entries', [
             'transaction_id' => $transaction->id,
             'account_id' => $accounts['receivable']->id,
@@ -929,21 +975,60 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Nguyen Van A',
+            'phone' => '0912345678',
+            'address' => 'Ha Noi',
+        ]);
         $product = $this->createProduct(['quantity' => 12, 'price_buy' => 100000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
 
         $this->actingAs($staff)
             ->postJson('/ban-hang/order', $this->orderPayload([
                 ['id' => $product->id, 'qty' => 3],
-            ], 300000, 'cash'))
+            ], 300000, 'cash', $client->id))
             ->assertCreated();
 
+        $saleTransaction = Transaction::query()->where('type', 'sale')->firstOrFail();
+        $paymentTransaction = Transaction::query()->where('type', 'income')->firstOrFail();
+        $this->assertDatabaseHas('orders', [
+            'payment_method' => 'cash',
+            'paid_amount' => 300000,
+            'debt_amount' => 0,
+            'payment_status' => 'paid',
+        ]);
         $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $saleTransaction->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 300000,
+            'credit_amount' => 0,
+            'tableable_type' => Client::class,
+            'tableable_id' => $client->id,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $saleTransaction->id,
+            'account_id' => $accounts['revenue']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 300000,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $paymentTransaction->id,
             'account_id' => $accounts['cashParent']->id,
             'debit_amount' => 300000,
             'credit_amount' => 0,
             'note' => 'Tiền mặt',
         ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $paymentTransaction->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 300000,
+            'tableable_type' => Client::class,
+            'tableable_id' => $client->id,
+        ]);
+        $this->assertTransactionIsBalanced($saleTransaction);
+        $this->assertTransactionIsBalanced($paymentTransaction);
 
         $response = $this->actingAs($manager)
             ->getJson('/admin/transactions/bank/ajax/list');
@@ -972,10 +1057,10 @@ class StaffPosSaleTest extends TestCase
         $service = app(SaleService::class);
         $method = new \ReflectionMethod(SaleService::class, 'createAccountingEntries');
         $method->setAccessible(true);
-        $method->invoke($service, $order, 'bank_transfer', 300000, $staff, $manager->id);
+        $method->invoke($service, $order, $staff, $manager->id);
 
-        $this->assertDatabaseCount('transactions', 1);
-        $this->assertDatabaseCount('transaction_entries', 2);
+        $this->assertDatabaseCount('transactions', 2);
+        $this->assertDatabaseCount('transaction_entries', 4);
     }
 
     public function test_staff_index_renders_bank_transfer_info_from_config(): void
@@ -1146,6 +1231,7 @@ class StaffPosSaleTest extends TestCase
     {
         [$storage, , $staff] = $this->createStaffContext();
         Account::create(['code' => '131', 'name' => 'Receivable']);
+        Account::create(['code' => '5111', 'name' => 'Sale revenue']);
         $product = $this->createProduct(['quantity' => 5, 'price_buy' => 100000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 5]);
 
@@ -1673,6 +1759,7 @@ class StaffPosSaleTest extends TestCase
     {
         [$storage, , $staff] = $this->createStaffContext();
         Account::create(['code' => '131', 'name' => 'Receivable']);
+        Account::create(['code' => '5111', 'name' => 'Sale revenue']);
         $product = $this->createProduct([
             'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
             'quantity' => 1,
@@ -2308,6 +2395,17 @@ class StaffPosSaleTest extends TestCase
         }
 
         return $productImei->fresh();
+    }
+
+    private function assertTransactionIsBalanced(Transaction $transaction): void
+    {
+        $transaction->load('entries');
+
+        $this->assertEquals(
+            $transaction->entries->sum('debit_amount'),
+            $transaction->entries->sum('credit_amount'),
+            "Transaction #{$transaction->id} is not balanced."
+        );
     }
 
     private function seedAccounts(): array
