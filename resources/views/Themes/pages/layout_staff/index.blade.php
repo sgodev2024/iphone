@@ -2500,6 +2500,11 @@
 
                         bootstrap.Modal.getOrCreateInstance(qs('#addCustomerModal')).hide();
                         $('#addCustomerForm')[0].reset();
+                        fetchClients('');
+                        Toast.fire({
+        icon: "success",
+        title: message
+    });
 
                     },
                     error: (xhr) => {
