@@ -6,19 +6,135 @@ use App\Models\Account;
 use App\Models\Company;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Accounting\SupplierDebtSnapshotService;
 use App\Support\DecimalAmount;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class SupplierDebtReportService
 {
+    private bool $snapshotTablesAvailable;
+
+    public function __construct(private SupplierDebtSnapshotService $snapshotService)
+    {
+        $this->snapshotTablesAvailable = Schema::hasTable('supplier_debt_yearly_snapshots')
+            && Schema::hasTable('supplier_debt_snapshot_states');
+    }
+
     public function report(User $actor, string $fromDate, string $toDate, string $nameFilter = ''): Collection
     {
         $ownerId = (int) $actor->ownerId();
         $account331 = $this->resolvePayableAccount();
         $nameFilter = trim($nameFilter);
+
+        if (! $this->snapshotTablesAvailable) {
+            return $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331);
+        }
+
+        return $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331);
+    }
+
+    private function snapshotReport(
+        int $ownerId,
+        string $fromDate,
+        string $toDate,
+        string $nameFilter,
+        Account $account331
+    ): Collection {
+        $fiscalYear = (int) substr($fromDate, 0, 4);
+        $yearStart = $fiscalYear.'-01-01';
+        $openings = $this->snapshotService->reportOpenings($ownerId, $fiscalYear, 1000, $nameFilter === '' ? null : $nameFilter);
+        $companyBalances = [];
+
+        foreach ($openings as $opening) {
+            $companyBalances[(int) $opening->company_id] = [
+                'company_id' => (int) $opening->company_id,
+                'company_name' => '',
+                'company_phone' => null,
+                'opening_debit_raw' => (string) $opening->opening_debit,
+                'opening_credit_raw' => (string) $opening->opening_credit,
+                'period_debit_raw' => '0.00',
+                'period_credit_raw' => '0.00',
+            ];
+        }
+
+        if ($companyBalances === []) {
+            return collect();
+        }
+
+        $companies = DB::table('companies')
+            ->where('user_id', $ownerId)
+            ->when($nameFilter !== '', fn ($query) => $query->where('name', 'like', '%'.$nameFilter.'%'))
+            ->whereIn('id', array_keys($companyBalances))
+            ->get(['id', 'name', 'phone'])
+            ->keyBy('id');
+
+        foreach ($companies as $company) {
+            $companyId = (int) $company->id;
+            $companyBalances[$companyId]['company_name'] = (string) $company->name;
+            $companyBalances[$companyId]['company_phone'] = $company->phone;
+        }
+
+        $ledgerRows = DB::table('transaction_entries as te')
+            ->join('transactions as t', 't.id', '=', 'te.transaction_id')
+            ->join('companies as c', function (JoinClause $join) use ($ownerId): void {
+                $join->on('c.id', '=', 'te.tableable_id')
+                    ->where('c.user_id', $ownerId);
+            })
+            ->where('te.tableable_type', Company::class)
+            ->where('te.account_id', $account331->id)
+            ->whereIn('te.tableable_id', array_keys($companyBalances))
+            ->where('t.user_id', $ownerId)
+            ->where('t.status', Transaction::STATUS_COMPLETED)
+            ->where('t.transaction_date', '>=', $yearStart)
+            ->where('t.transaction_date', '<=', $toDate)
+            ->orderBy('te.tableable_id')
+            ->get([
+                'te.tableable_id as company_id',
+                't.transaction_date',
+                'te.debit_amount',
+                'te.credit_amount',
+            ]);
+
+        foreach ($ledgerRows as $row) {
+            $companyId = (int) $row->company_id;
+            if (! isset($companyBalances[$companyId])) {
+                continue;
+            }
+
+            $debit = DecimalAmount::normalize((string) $row->debit_amount);
+            $credit = DecimalAmount::normalize((string) $row->credit_amount);
+            $bucket = (string) $row->transaction_date < $fromDate
+                ? 'opening'
+                : 'period';
+            $companyBalances[$companyId][$bucket.'_debit_raw'] = DecimalAmount::add(
+                $companyBalances[$companyId][$bucket.'_debit_raw'],
+                $debit
+            );
+            $companyBalances[$companyId][$bucket.'_credit_raw'] = DecimalAmount::add(
+                $companyBalances[$companyId][$bucket.'_credit_raw'],
+                $credit
+            );
+        }
+
+        return collect($companyBalances)
+            ->filter(fn (array $row): bool => $row['company_name'] !== '')
+            ->map(fn (array $row): object => $this->normalizeRow((object) $row))
+            ->filter(fn (object $row): bool => $this->hasBalanceActivity($row))
+            ->sortBy('company_id')
+            ->values();
+    }
+
+    private function legacyReport(
+        int $ownerId,
+        string $fromDate,
+        string $toDate,
+        string $nameFilter,
+        Account $account331
+    ): Collection {
 
         $ledgerRows = DB::table('companies as c')
             ->leftJoin('transaction_entries as te', function (JoinClause $join) use ($account331): void {

@@ -8,6 +8,7 @@ use App\Models\ImportCoupon;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\SupplierPaymentService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -294,34 +295,43 @@ class SupplierPaymentServiceTest extends TestCase
 
     public function test_payment_date_must_be_between_purchase_date_and_today(): void
     {
-        $import = $this->createCanonicalImport(100000, 0, 'debt', '2026-08-01');
-        $before = Transaction::count();
+        Carbon::setTestNow(Carbon::create(2026, 8, 12, 12, 0, 0, 'Asia/Ho_Chi_Minh'));
 
-        $this->expectValidation(fn () => $this->service->pay($this->owner, $this->payload(
-            $import,
-            10000,
-            'cash',
-            '91111111-1111-4111-8111-111111111111',
-            '2026-07-31'
-        )));
-        $this->expectValidation(fn () => $this->service->pay($this->owner, $this->payload(
-            $import,
-            10000,
-            'cash',
-            '92222222-2222-4222-8222-222222222222',
-            '2026-08-13'
-        )));
+        try {
+            $import = $this->createCanonicalImport(100000, 0, 'debt', '2026-08-01');
+            $before = Transaction::count();
+            $beforePurchase = Carbon::parse('2026-08-01')->subDay()->toDateString();
+            $tomorrow = now()->addDay()->toDateString();
+            $validDate = now()->subDays(2)->toDateString();
 
-        $result = $this->service->pay($this->owner, $this->payload(
-            $import,
-            10000,
-            'cash',
-            '93333333-3333-4333-8333-333333333333',
-            '2026-08-10'
-        ));
+            $this->expectValidation(fn () => $this->service->pay($this->owner, $this->payload(
+                $import,
+                10000,
+                'cash',
+                '91111111-1111-4111-8111-111111111111',
+                $beforePurchase
+            )));
+            $this->expectValidation(fn () => $this->service->pay($this->owner, $this->payload(
+                $import,
+                10000,
+                'cash',
+                '92222222-2222-4222-8222-222222222222',
+                $tomorrow
+            )));
 
-        $this->assertSame($before + 1, Transaction::count());
-        $this->assertSame('2026-08-10', $result['transaction']->transaction_date->toDateString());
+            $result = $this->service->pay($this->owner, $this->payload(
+                $import,
+                10000,
+                'cash',
+                '93333333-3333-4333-8333-333333333333',
+                $validDate
+            ));
+
+            $this->assertSame($before + 1, Transaction::count());
+            $this->assertSame($validDate, $result['transaction']->transaction_date->toDateString());
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_missing_duplicate_mismatched_or_wrong_company_purchase_blocks_payment(): void

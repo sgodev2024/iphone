@@ -156,6 +156,10 @@ class DebtController extends Controller
 
         $credentials = $credentials->validate();
 
+        if ($credentials['object_type'] === 'supplier') {
+            abort(410, 'Tạo công nợ đầu kỳ nhà cung cấp qua luồng legacy đã được vô hiệu hóa.');
+        }
+
         return DB::transaction(function () use ($credentials) {
             $transaction = Transaction::create([
                 'transaction_date' => $credentials['transaction_date'],

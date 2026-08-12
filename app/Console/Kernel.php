@@ -16,6 +16,11 @@ class Kernel extends ConsoleKernel
             ->yearlyOn(1, 1, '00:05')
             ->timezone('Asia/Ho_Chi_Minh')
             ->withoutOverlapping();
+
+        $schedule->command('accounting:build-supplier-debt-snapshots')
+            ->yearlyOn(1, 1, '00:05')
+            ->timezone('Asia/Ho_Chi_Minh')
+            ->withoutOverlapping();
     }
 
     /**
