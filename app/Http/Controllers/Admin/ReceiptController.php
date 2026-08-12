@@ -80,11 +80,6 @@ class ReceiptController extends Controller
             'amount' => 0 - $request->amount_spent,
         ]);
         $this->debtKHService->updateClientDebt($update, $request->client);
-        $debtnew = $this->debtKHService->findClientDebtByClient($request->client);
-        if($debtnew->amount == 0){
-            ClientDebtsDetail::truncate();
-            $this->debtKHService->delete($request->client);
-        }
         return redirect()->route('admin.quanlythuchi.receipts.index')->with('success', 'Tạo phiếu thành công !');
     }
 
