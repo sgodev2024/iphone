@@ -101,104 +101,17 @@
 @push('script')
     <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script type="text/javascript"
+        src="{{ asset('global/js/debt-date-range-picker.js') }}?v={{ filemtime(public_path('global/js/debt-date-range-picker.js')) }}"></script>
     <script>
-        const initialStart = moment('{{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }}', 'DD/MM/YYYY');
-        const initialEnd = moment('{{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}', 'DD/MM/YYYY');
-
-        $('#dateFilter').daterangepicker({
-            startDate: initialStart,
-            endDate: initialEnd,
-            autoUpdateInput: false,
-            locale: {
-                format: 'DD/MM/YYYY',
-                separator: ' - ',
-                applyLabel: 'Áp dụng',
-                cancelLabel: 'Hủy',
-                fromLabel: 'Từ',
-                toLabel: 'Đến',
-                customRangeLabel: 'Tùy chọn',
-                daysOfWeek: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-                monthNames: [
-                    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-                    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
-                ],
-                firstDay: 1
-            }
-        });
-
-        const supplierDateInput = $('#dateFilter');
-        const supplierDatePicker = supplierDateInput.data('daterangepicker');
-        let appliedSupplierStart = initialStart.clone();
-        let appliedSupplierEnd = initialEnd.clone();
-
-        function supplierDateText(start, end = null) {
-            const startText = start.format('DD/MM/YYYY');
-
-            return end
-                ? `${startText} - ${end.format('DD/MM/YYYY')}`
-                : startText;
-        }
-
-        function renderSupplierPreview(picker) {
-            if (picker.startDate) {
-                supplierDateInput.val(supplierDateText(picker.startDate, picker.endDate));
-            }
-        }
-
-        function renderAppliedSupplierRange() {
-            supplierDateInput.val(supplierDateText(appliedSupplierStart, appliedSupplierEnd));
-        }
-
-        function syncSupplierHiddenDates() {
-            $('#fromDate').val(appliedSupplierStart.format('YYYY-MM-DD'));
-            $('#toDate').val(appliedSupplierEnd.format('YYYY-MM-DD'));
-        }
-
-        // daterangepicker 3.1 has no pre-Apply selection event. Its public
-        // date setters are used to mirror the picker state without intercepting DOM clicks.
-        const originalSupplierSetStartDate = supplierDatePicker.setStartDate.bind(supplierDatePicker);
-        const originalSupplierSetEndDate = supplierDatePicker.setEndDate.bind(supplierDatePicker);
-
-        supplierDatePicker.setStartDate = function(date) {
-            originalSupplierSetStartDate(date);
-            if (this.isShowing) {
-                renderSupplierPreview(this);
-            }
-        };
-
-        supplierDatePicker.setEndDate = function(date) {
-            originalSupplierSetEndDate(date);
-            if (this.isShowing) {
-                renderSupplierPreview(this);
-            }
-        };
-
-        renderAppliedSupplierRange();
-
-        supplierDateInput.on('show.daterangepicker', function(event, picker) {
-            picker.setStartDate(appliedSupplierStart.clone());
-            picker.setEndDate(appliedSupplierEnd.clone());
-            renderAppliedSupplierRange();
-        });
-
-        supplierDateInput.on('outsideClick.daterangepicker', function() {
-            renderAppliedSupplierRange();
-        });
-
-        supplierDateInput.on('cancel.daterangepicker', function() {
-            renderAppliedSupplierRange();
-        });
-
-        supplierDateInput.on('apply.daterangepicker', function(event, picker) {
-            appliedSupplierStart = picker.startDate.clone();
-            appliedSupplierEnd = picker.endDate.clone();
-            renderAppliedSupplierRange();
-            syncSupplierHiddenDates();
-            document.getElementById('supplierDebtFilterForm').submit();
-        });
-
-        $('#supplierDebtFilterForm').on('submit', function() {
-            syncSupplierHiddenDates();
+        initializeDebtDateRangePicker({
+            inputSelector: '#dateFilter',
+            formSelector: '#supplierDebtFilterForm',
+            fromSelector: '#fromDate',
+            toSelector: '#toDate',
+            initialStart: @json($startDate),
+            initialEnd: @json($endDate),
+            today: @json(now()->toDateString())
         });
     </script>
 @endpush

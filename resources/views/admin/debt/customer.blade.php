@@ -185,6 +185,8 @@
 @push('script')
     <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script type="text/javascript"
+        src="{{ asset('global/js/debt-date-range-picker.js') }}?v={{ filemtime(public_path('global/js/debt-date-range-picker.js')) }}"></script>
 
     <script>
         const canCollectDebt = @json($canCollectDebt);
@@ -193,125 +195,14 @@
         let debtPaymentOrders = [];
         let debtPaymentIdempotencyKey = null;
 
-        let start = moment('{{ $startDate }}', 'YYYY-MM-DD');
-        let end = moment('{{ $endDate }}', 'YYYY-MM-DD');
-
-        $('#dateFilter').daterangepicker({
-            startDate: start,
-            endDate: end,
-            autoUpdateInput: false,
-            locale: {
-                format: 'DD/MM/YYYY',
-                separator: ' - ',
-                applyLabel: 'Áp dụng',
-                cancelLabel: 'Hủy',
-                fromLabel: 'Từ',
-                toLabel: 'Đến',
-                customRangeLabel: 'Tùy chọn',
-                daysOfWeek: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-                monthNames: [
-                    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-                    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
-                ],
-                firstDay: 1
-            },
-            ranges: {
-                'Hôm nay': [moment(), moment()],
-                'Ngày mai': [moment().add(1, 'days'), moment().add(1, 'days')],
-                'Tuần này': [moment().startOf('week'), moment().endOf('week')],
-                'Tuần sau': [moment().add(1, 'week').startOf('week'), moment().add(1, 'week').endOf(
-                    'week')],
-                'Tháng này': [moment().startOf('month'), moment().endOf('month')],
-                'Tháng sau': [moment().add(1, 'month').startOf('month'), moment().add(1, 'month').endOf(
-                    'month')]
-            }
-        });
-
-        const customerDateInput = $('#dateFilter');
-        const customerDatePicker = customerDateInput.data('daterangepicker');
-        let appliedCustomerStart = start.clone();
-        let appliedCustomerEnd = end.clone();
-        let previewCustomerStart = appliedCustomerStart.clone();
-        let previewCustomerEnd = appliedCustomerEnd.clone();
-
-        function customerDateText(startDate, endDate = null) {
-            const startText = startDate.format('DD/MM/YYYY');
-
-            return endDate
-                ? `${startText} - ${endDate.format('DD/MM/YYYY')}`
-                : startText;
-        }
-
-        function renderCustomerPreview(picker) {
-            if (picker.startDate) {
-                previewCustomerStart = picker.startDate.clone();
-                previewCustomerEnd = picker.endDate ? picker.endDate.clone() : null;
-                customerDateInput.val(customerDateText(previewCustomerStart, previewCustomerEnd));
-            }
-        }
-
-        function renderAppliedCustomerRange() {
-            customerDateInput.val(customerDateText(appliedCustomerStart, appliedCustomerEnd));
-        }
-
-        function syncCustomerHiddenDates() {
-            $('#fromDate').val(appliedCustomerStart.format('YYYY-MM-DD'));
-            $('#toDate').val(appliedCustomerEnd.format('YYYY-MM-DD'));
-        }
-
-        // daterangepicker 3.1 has no pre-Apply selection event. Its public
-        // date setters are used to mirror the picker state without intercepting DOM clicks.
-        const originalCustomerSetStartDate = customerDatePicker.setStartDate.bind(customerDatePicker);
-        const originalCustomerSetEndDate = customerDatePicker.setEndDate.bind(customerDatePicker);
-
-        customerDatePicker.setStartDate = function(date) {
-            originalCustomerSetStartDate(date);
-            if (this.isShowing) {
-                renderCustomerPreview(this);
-            }
-        };
-
-        customerDatePicker.setEndDate = function(date) {
-            originalCustomerSetEndDate(date);
-            if (this.isShowing) {
-                renderCustomerPreview(this);
-            }
-        };
-
-        renderAppliedCustomerRange();
-
-        customerDateInput.on('show.daterangepicker', function(event, picker) {
-            previewCustomerStart = appliedCustomerStart.clone();
-            previewCustomerEnd = appliedCustomerEnd.clone();
-            picker.setStartDate(appliedCustomerStart.clone());
-            picker.setEndDate(appliedCustomerEnd.clone());
-            renderAppliedCustomerRange();
-        });
-
-        customerDateInput.on('outsideClick.daterangepicker', function() {
-            previewCustomerStart = appliedCustomerStart.clone();
-            previewCustomerEnd = appliedCustomerEnd.clone();
-            renderAppliedCustomerRange();
-        });
-
-        customerDateInput.on('cancel.daterangepicker', function() {
-            previewCustomerStart = appliedCustomerStart.clone();
-            previewCustomerEnd = appliedCustomerEnd.clone();
-            renderAppliedCustomerRange();
-        });
-
-        customerDateInput.on('apply.daterangepicker', function(event, picker) {
-            appliedCustomerStart = previewCustomerStart.clone();
-            appliedCustomerEnd = previewCustomerEnd
-                ? previewCustomerEnd.clone()
-                : picker.endDate.clone();
-            syncCustomerHiddenDates();
-            renderAppliedCustomerRange();
-            document.getElementById('customerDebtFilterForm').submit();
-        });
-
-        $('#customerDebtFilterForm').on('submit', function() {
-            syncCustomerHiddenDates();
+        initializeDebtDateRangePicker({
+            inputSelector: '#dateFilter',
+            formSelector: '#customerDebtFilterForm',
+            fromSelector: '#fromDate',
+            toSelector: '#toDate',
+            initialStart: @json($startDate),
+            initialEnd: @json($endDate),
+            today: @json(now()->toDateString())
         });
 
         function formatDebtPrice(amount) {
