@@ -271,6 +271,8 @@ class ImportImeiWorkflowTest extends TestCase
             ->assertSee('tối đa 50 ký tự', false)
             ->assertSee(".on('input.importQuantity', '.numberInput'", false)
             ->assertSee('function updateImportRowTotal(row, quantity, price)', false)
+            ->assertSee('const rowTotal = safeQuantity * unitPrice;', false)
+            ->assertSee('text(formatMoneyValue(rowTotal))', false)
             ->assertDontSee('MAX_IMPORT_QUANTITY', false);
     }
 
