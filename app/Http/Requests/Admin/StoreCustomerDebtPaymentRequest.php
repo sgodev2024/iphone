@@ -36,4 +36,13 @@ class StoreCustomerDebtPaymentRequest extends FormRequest
             'idempotency_key' => ['required', 'uuid'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'transaction_date.required' => 'Vui lòng chọn ngày thu.',
+            'transaction_date.date_format' => 'Ngày thu không đúng định dạng.',
+            'transaction_date.before_or_equal' => 'Ngày thu không được lớn hơn ngày hiện tại.',
+        ];
+    }
 }

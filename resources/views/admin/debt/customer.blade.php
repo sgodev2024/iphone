@@ -108,10 +108,14 @@
                             <td class="text-end money-cell">{{ formatExactMoney($debt->ending_debit) }}</td>
                             <td class="text-end money-cell">{{ formatExactMoney($debt->ending_credit) }}</td>
                             @if ($canCollectDebt)
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-primary collect-debt-button"
+                                @php($hasCollectibleDebt = \App\Support\DecimalAmount::compare((string) $debt->ending_debit, '0.00') > 0)
+                                <td class="customer-debt-action-cell">
+                                    <button type="button"
+                                        class="btn btn-sm {{ $hasCollectibleDebt ? 'btn-primary' : 'btn-secondary' }} collect-debt-button"
                                         data-client-id="{{ $debt->client_id }}"
-                                        data-client-name="{{ $debt->client_name }}">
+                                        data-client-name="{{ $debt->client_name }}"
+                                        @disabled(! $hasCollectibleDebt)
+                                        @if (! $hasCollectibleDebt) title="Khách hàng không còn công nợ phải thu" aria-disabled="true" @endif>
                                         Thu nợ
                                     </button>
                                 </td>
@@ -128,49 +132,52 @@
 
         @if ($canCollectDebt)
             <div class="modal fade" id="customerDebtPaymentModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Thu công nợ — <span id="debtPaymentClientName"></span></h5>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
                         </div>
                         <form id="customerDebtPaymentForm">
                             <div class="modal-body">
-                                <div class="form-group">
-                                    <label for="debtPaymentOrder">Đơn còn nợ</label>
-                                    <select id="debtPaymentOrder" class="form-control" required></select>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 form-group">
-                                        <label for="debtPaymentAmount">Số tiền thu</label>
-                                        <input id="debtPaymentAmount" type="number" min="1" step="1"
-                                            class="form-control" required>
-                                        <small id="debtPaymentRemaining" class="form-text text-muted"></small>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label" for="debtPaymentOrder">Đơn còn nợ</label>
+                                        <select id="debtPaymentOrder" class="form-control" required></select>
                                     </div>
-                                    <div class="col-md-6 form-group">
-                                        <label for="debtPaymentDate">Ngày thu</label>
-                                        <input id="debtPaymentDate" type="date" class="form-control" required>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="debtPaymentAmountDisplay">Số tiền thu</label>
+                                        <div class="input-group">
+                                            <input id="debtPaymentAmountDisplay" type="text" class="form-control text-end"
+                                                inputmode="numeric" autocomplete="off" required>
+                                            <span class="input-group-text">đ</span>
+                                        </div>
+                                        <input id="debtPaymentAmount" type="hidden">
                                     </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 form-group">
-                                        <label for="debtPaymentMethod">Phương thức</label>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="debtPaymentMethod">Phương thức</label>
                                         <select id="debtPaymentMethod" class="form-control" required>
                                             <option value="cash">Tiền mặt</option>
                                             <option value="bank_transfer">Chuyển khoản</option>
                                         </select>
                                     </div>
-                                    <div id="debtPaymentBankWrap" class="col-md-6 form-group d-none">
-                                        <label for="debtPaymentBank">Tài khoản ngân hàng</label>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="debtPaymentDate">Ngày thu</label>
+                                        <input id="debtPaymentDate" type="date" class="form-control"
+                                            value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required>
+                                    </div>
+                                    <div id="debtPaymentBankWrap" class="col-md-6 d-none">
+                                        <label class="form-label" for="debtPaymentBank">Tài khoản ngân hàng</label>
                                         <select id="debtPaymentBank" class="form-control"></select>
                                     </div>
+                                    <div class="col-12">
+                                        <small id="debtPaymentRemaining" class="form-text text-muted"></small>
+                                    </div>
                                 </div>
-                                <div id="debtPaymentError" class="alert alert-danger d-none mb-0"></div>
+                                <div id="debtPaymentError" class="alert alert-danger d-none mt-3 mb-0"></div>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Đóng</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
                                 <button id="debtPaymentSubmit" type="submit" class="btn btn-primary">Xác nhận thu</button>
                             </div>
                         </form>
@@ -194,6 +201,11 @@
         const debtPaymentStoreUrl = @json(route('admin.debts.customer.payments.store'));
         let debtPaymentOrders = [];
         let debtPaymentIdempotencyKey = null;
+        let debtPaymentToday = @json(now()->toDateString());
+        const customerDebtPaymentModalElement = document.getElementById('customerDebtPaymentModal');
+        const customerDebtPaymentModal = customerDebtPaymentModalElement
+            ? bootstrap.Modal.getOrCreateInstance(customerDebtPaymentModalElement)
+            : null;
 
         initializeDebtDateRangePicker({
             inputSelector: '#dateFilter',
@@ -243,14 +255,58 @@
             return debtPaymentOrders.find(order => Number(order.id) === orderId) || null;
         }
 
+        function moneyDigits(value) {
+            const digits = String(value ?? '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+
+            return digits || '';
+        }
+
+        function formatMoneyDigits(value) {
+            const digits = moneyDigits(value);
+
+            return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+        }
+
+        function compareMoneyDigits(left, right) {
+            const normalizedLeft = moneyDigits(left) || '0';
+            const normalizedRight = moneyDigits(right) || '0';
+
+            return normalizedLeft.length - normalizedRight.length || normalizedLeft.localeCompare(normalizedRight);
+        }
+
+        function syncDebtPaymentAmount() {
+            const display = $('#debtPaymentAmountDisplay');
+            const max = String(display.data('max') || '0');
+            let amount = moneyDigits(display.val());
+
+            if (amount && max !== '0' && compareMoneyDigits(amount, max) > 0) {
+                amount = max;
+            }
+
+            display.val(formatMoneyDigits(amount));
+            $('#debtPaymentAmount').val(amount);
+            $('#debtPaymentSubmit').prop('disabled', !amount || amount === '0');
+        }
+
         function syncDebtPaymentOrder() {
             const order = selectedDebtPaymentOrder();
-            const remaining = Number(order?.remaining || 0);
-            $('#debtPaymentAmount').attr('max', remaining).val(remaining || '');
-            $('#debtPaymentRemaining').text(order ? `Còn nợ theo ledger: ${formatDebtPrice(remaining)}` : '');
+            const remaining = moneyDigits(order?.remaining);
+            $('#debtPaymentAmountDisplay').data('max', remaining).val(formatMoneyDigits(remaining));
+            $('#debtPaymentAmount').val(remaining);
+            $('#debtPaymentRemaining').text(order ? `Còn nợ theo ledger: ${formatMoneyDigits(remaining)} đ` : '');
+            $('#debtPaymentSubmit').prop('disabled', !remaining || remaining === '0');
+        }
+
+        function syncDebtPaymentDate(today) {
+            debtPaymentToday = String(today || debtPaymentToday);
+            $('#debtPaymentDate').attr('max', debtPaymentToday).val(debtPaymentToday);
         }
 
         $(document).on('click', '.collect-debt-button', function() {
+            if (this.disabled || !customerDebtPaymentModal) {
+                return;
+            }
+
             const clientId = Number($(this).data('client-id'));
             debtPaymentIdempotencyKey = newDebtPaymentKey();
             $('#debtPaymentClientName').text($(this).data('client-name'));
@@ -266,17 +322,15 @@
                         (response.bank_accounts || []).map(account =>
                             `<option value="${Number(account.id)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`
                         ).join(''));
-                    $('#debtPaymentDate').val(response.today);
+                    syncDebtPaymentDate(response.today);
                     syncDebtPaymentOrder();
 
                     if (!debtPaymentOrders.length) {
-                        $('#debtPaymentError').removeClass('d-none').text('Khách hàng không có order hợp lệ còn công nợ.');
-                        $('#debtPaymentSubmit').prop('disabled', true);
-                    } else {
-                        $('#debtPaymentSubmit').prop('disabled', false);
+                        alert('Khách hàng không có order hợp lệ còn công nợ.');
+                        return;
                     }
 
-                    $('#customerDebtPaymentModal').modal('show');
+                    customerDebtPaymentModal.show();
                 })
                 .fail(function(xhr) {
                     alert(xhr.responseJSON?.message || 'Không thể tải danh sách order còn nợ.');
@@ -284,13 +338,41 @@
         });
 
         $('#debtPaymentOrder').on('change', syncDebtPaymentOrder);
+        $('#debtPaymentAmountDisplay').on('input', syncDebtPaymentAmount);
         $('#debtPaymentMethod').on('change', function() {
             $('#debtPaymentBankWrap').toggleClass('d-none', this.value !== 'bank_transfer');
         });
 
+        customerDebtPaymentModalElement?.addEventListener('hidden.bs.modal', function() {
+            debtPaymentOrders = [];
+            debtPaymentIdempotencyKey = null;
+            $('#customerDebtPaymentForm')[0].reset();
+            $('#debtPaymentAmount, #debtPaymentAmountDisplay, #debtPaymentRemaining').val('').text('');
+            $('#debtPaymentOrder, #debtPaymentBank').empty();
+            $('#debtPaymentBankWrap').addClass('d-none');
+            $('#debtPaymentError').addClass('d-none').text('');
+            $('#debtPaymentSubmit').prop('disabled', false);
+        });
+
         $('#customerDebtPaymentForm').on('submit', function(event) {
             event.preventDefault();
+            syncDebtPaymentAmount();
             const method = $('#debtPaymentMethod').val();
+            const amount = $('#debtPaymentAmount').val();
+            const transactionDate = $('#debtPaymentDate').val();
+            const latestAllowedDate = $('#debtPaymentDate').attr('max') || debtPaymentToday;
+            if (!amount || amount === '0') {
+                $('#debtPaymentError').removeClass('d-none').text('Vui lòng nhập số tiền thu hợp lệ.');
+                return;
+            }
+            if (!transactionDate) {
+                $('#debtPaymentError').removeClass('d-none').text('Vui lòng chọn ngày thu.');
+                return;
+            }
+            if (transactionDate > latestAllowedDate) {
+                $('#debtPaymentError').removeClass('d-none').text('Ngày thu không được lớn hơn ngày hiện tại.');
+                return;
+            }
             const submit = $('#debtPaymentSubmit').prop('disabled', true);
             $('#debtPaymentError').addClass('d-none').text('');
 
@@ -300,19 +382,21 @@
                 headers: { 'X-CSRF-TOKEN': @json(csrf_token()) },
                 data: {
                     order_id: Number($('#debtPaymentOrder').val()),
-                    amount: Number($('#debtPaymentAmount').val()),
+                    amount: amount,
                     payment_method: method,
                     bank_account_id: method === 'bank_transfer' ? Number($('#debtPaymentBank').val()) : null,
-                    transaction_date: $('#debtPaymentDate').val(),
+                    transaction_date: transactionDate,
                     idempotency_key: debtPaymentIdempotencyKey,
                 },
             }).done(function(response) {
-                $('#customerDebtPaymentModal').modal('hide');
+                customerDebtPaymentModal.hide();
                 alert(response.message);
                 window.location.reload();
             }).fail(function(xhr) {
                 $('#debtPaymentError').removeClass('d-none').text(
-                    xhr.responseJSON?.message || 'Không thể thu công nợ.'
+                    xhr.responseJSON?.errors?.transaction_date?.[0]
+                        || xhr.responseJSON?.message
+                        || 'Không thể thu công nợ.'
                 );
                 submit.prop('disabled', false);
             });
@@ -372,7 +456,7 @@
         .customer-debt-page .customer-debt-table {
             width: 100%;
             max-width: 100%;
-            table-layout: auto;
+            table-layout: fixed;
         }
 
         .customer-debt-page .customer-debt-table col.col-stt {
@@ -389,6 +473,11 @@
 
         .customer-debt-page .customer-debt-table col.col-ending {
             width: 240px;
+        }
+
+        .customer-debt-page .customer-debt-table col.col-action {
+            width: 120px !important;
+            max-width: 120px;
         }
 
         .customer-debt-page .customer-debt-table th,
@@ -428,6 +517,48 @@
 
         .customer-debt-page .money-cell {
             text-align: right;
+        }
+
+        .customer-debt-page .customer-debt-action-cell {
+            width: 120px;
+            min-width: 120px;
+            max-width: 120px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .customer-debt-page .collect-debt-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal .modal-content {
+            border: 0;
+            border-radius: 0.5rem;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal .modal-header,
+        .customer-debt-page #customerDebtPaymentModal .modal-footer {
+            padding: 1rem 1.25rem;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal .modal-body {
+            padding: 1.25rem;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal .form-label {
+            margin-bottom: 0.4rem;
+            font-weight: 600;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal .form-control,
+        .customer-debt-page #customerDebtPaymentModal .input-group-text {
+            min-height: 40px;
+        }
+
+        .customer-debt-page #customerDebtPaymentModal #debtPaymentRemaining {
+            display: block;
+            font-weight: 500;
         }
 
         .customer-debt-page .pagination {
@@ -520,6 +651,10 @@
             .customer-debt-page .customer-debt-table tbody td:nth-child(7),
             .customer-debt-page .customer-debt-table tbody td:nth-child(8) {
                 min-width: 240px;
+            }
+
+            .customer-debt-page .customer-debt-action-cell {
+                min-width: 120px;
             }
 
             .customer-debt-page nav[role="navigation"],

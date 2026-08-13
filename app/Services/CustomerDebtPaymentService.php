@@ -239,7 +239,13 @@ class CustomerDebtPaymentService
         $orderDate = $order->created_at?->toDateString();
         $today = now()->toDateString();
 
-        if (($orderDate && $transactionDate < $orderDate) || $transactionDate > $today) {
+        if ($transactionDate > $today) {
+            throw ValidationException::withMessages([
+                'transaction_date' => 'Ngày thu không được lớn hơn ngày hiện tại.',
+            ]);
+        }
+
+        if ($orderDate && $transactionDate < $orderDate) {
             throw ValidationException::withMessages([
                 'transaction_date' => 'Ngày thu phải từ ngày tạo đơn đến ngày hiện tại.',
             ]);

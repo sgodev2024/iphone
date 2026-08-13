@@ -2335,7 +2335,10 @@ class StaffPosSaleTest extends TestCase
                     'transaction_date' => '2026-08-21',
                 ]))
                 ->assertUnprocessable()
-                ->assertJsonValidationErrors('transaction_date');
+                ->assertJsonValidationErrors('transaction_date')
+                ->assertJsonPath('errors.transaction_date.0', 'Ngày thu không được lớn hơn ngày hiện tại.');
+            $this->assertSame(2, Transaction::query()->count());
+            $this->assertSame(4, DB::table('transaction_entries')->count());
 
             $first = $this->actingAs($manager)
                 ->postJson('/admin/debts/customer/payments', $request)
