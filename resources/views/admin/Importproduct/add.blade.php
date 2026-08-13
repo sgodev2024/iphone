@@ -568,8 +568,10 @@
                                                         <div class="import-confirm-row mt-3">
                                                             <div class="import-confirm-label">Tiền trả nhà cung cấp</div>
                                                             <div class="import-confirm-value">
-                                                                <div id="tientra" class="import-confirm-editable"
-                                                                    contenteditable="true"></div>
+                                                                <input type="text" id="tientra"
+                                                                    class="import-confirm-editable" inputmode="numeric"
+                                                                    autocomplete="off" value="{{ old('totalncc', '') }}"
+                                                                    aria-label="Tiền trả nhà cung cấp">
                                                                 <div class="import-confirm-note">Nhập số tiền thanh toán
                                                                     cho nhà cung cấp</div>
                                                             </div>
@@ -596,8 +598,8 @@
                                                         </div>
                                                     </div>
 
-                                                    <input type="text" id="payment" name="totalncc"
-                                                        style="display: none;">
+                                                    <input type="hidden" id="payment" name="totalncc"
+                                                        value="{{ old('totalncc', '') }}">
 
                                                     <div class="import-confirm-actions">
                                                         <button type="button" class="btn btn-primary"
@@ -707,6 +709,12 @@
                 const amount = Math.round(parseMoneyValue(value));
 
                 return `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`;
+            }
+
+            function formatPlainMoneyValue(value) {
+                return new Intl.NumberFormat('vi-VN', {
+                    maximumFractionDigits: 0,
+                }).format(Math.round(parseMoneyValue(value)));
             }
 
             $j(document).ready(function() {
@@ -1528,7 +1536,7 @@
                 }
 
                 if (paidElement) {
-                    paidElement.innerText = formatMoneyValue(paidAmount);
+                    paidElement.value = formatPlainMoneyValue(paidAmount);
                 }
 
                 return paidAmount;
@@ -1544,7 +1552,6 @@
                     : Math.min(currentPaidAmount, total);
 
                 if (paidElement) {
-                    paidElement.setAttribute('contenteditable', 'true');
                     paidElement.classList.remove('text-muted');
                     paidElement.title = 'Nhập 0 hoặc số tiền thanh toán một phần/đủ phiếu nhập';
                 }
@@ -1573,16 +1580,62 @@
 
             const paidSupplierElement = document.getElementById('tientra');
 
-            paidSupplierElement?.addEventListener('focus', function() {
-                this.innerText = String(Math.round(parseMoneyValue(this.innerText)));
-            });
+            function countDigitsBefore(value, position) {
+                return value.slice(0, position).replace(/\D/g, '').length;
+            }
+
+            function caretPositionForDigits(value, digitCount) {
+                if (digitCount <= 0) {
+                    return 0;
+                }
+
+                let seenDigits = 0;
+                for (let index = 0; index < value.length; index++) {
+                    if (/\d/.test(value[index])) {
+                        seenDigits++;
+                        if (seenDigits === digitCount) {
+                            return index + 1;
+                        }
+                    }
+                }
+
+                return value.length;
+            }
+
+            function formatPaidAmountInput(input) {
+                const currentValue = input.value;
+                const selectionStart = input.selectionStart ?? currentValue.length;
+                const selectionEnd = input.selectionEnd ?? selectionStart;
+                const digitsBeforeStart = countDigitsBefore(currentValue, selectionStart);
+                const digitsBeforeEnd = countDigitsBefore(currentValue, selectionEnd);
+                const digits = currentValue.replace(/\D/g, '');
+                const total = getImportPaymentTotal();
+                const paidAmount = Math.min(
+                    Math.max(Math.round(parseMoneyValue(digits)), 0),
+                    total
+                );
+                const formattedValue = digits === '' ? '' : formatPlainMoneyValue(paidAmount);
+
+                input.value = formattedValue;
+                document.getElementById('payment').value = paidAmount;
+
+                if (document.activeElement === input && typeof input.setSelectionRange === 'function') {
+                    const formattedDigitCount = formattedValue.replace(/\D/g, '').length;
+                    input.setSelectionRange(
+                        caretPositionForDigits(
+                            formattedValue,
+                            Math.min(digitsBeforeStart, formattedDigitCount)
+                        ),
+                        caretPositionForDigits(
+                            formattedValue,
+                            Math.min(digitsBeforeEnd, formattedDigitCount)
+                        )
+                    );
+                }
+            }
 
             paidSupplierElement?.addEventListener('input', function() {
-                this.innerText = this.innerText.replace(/\D/g, '');
-                document.getElementById('payment').value = Math.min(
-                    Math.round(parseMoneyValue(this.innerText)),
-                    getImportPaymentTotal()
-                );
+                formatPaidAmountInput(this);
             });
 
             paidSupplierElement?.addEventListener('blur', function() {

@@ -966,14 +966,14 @@
                                 <label class="form-label" for="paidAmount">Khách trả</label>
                                 <div class="input-group">
                                     <input id="paidAmount" type="text" inputmode="numeric" autocomplete="off"
-                                        class="form-control" value="0" aria-describedby="paidAmountUnit">
+                                        class="form-control text-end" value="0" aria-describedby="paidAmountUnit">
                                     <span class="input-group-text" id="paidAmountUnit">VND</span>
                                 </div>
                                 <input type="hidden" id="paidAmountRaw" name="paid_amount" value="0">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Còn nợ</label>
-                                <div id="remainingAmount" class="form-control bg-light">0 VND</div>
+                                <div id="remainingAmount" class="form-control bg-light text-end">0 VND</div>
                             </div>
                             <div id="bankAccountWrap" class="col-12 d-none">
                                 <label class="form-label" for="bankAccountId">Tài khoản ngân hàng</label>
