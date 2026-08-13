@@ -438,8 +438,16 @@ class SaleService
 
     private function resolveImeiStorageId(ProductImei $imei): ?int
     {
-        $storageId = $imei->importDetail?->import?->storage_id;
+        // $storageId = $imei->importDetail?->import?->storage_id;
 
+        // return $storageId ? (int) $storageId : null;
+
+        if ($imei->storage_id) {
+            return (int) $imei->storage_id;
+        }
+    
+        $storageId = $imei->importDetail?->import?->storage_id;
+    
         return $storageId ? (int) $storageId : null;
     }
 
