@@ -186,6 +186,66 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertSame('100', (string) $item->fresh()->quantity);
     }
 
+    public function test_import_quantity_update_calculates_total_for_common_quantities(): void
+    {
+        $item = $this->createImportItem(quantity: 1);
+        $item->update([
+            'price' => 3000000,
+            'total' => 3000000,
+        ]);
+
+        foreach ([1, 2, 5, 10] as $quantity) {
+            $expectedTotal = $quantity * 3000000;
+
+            $this->actingAs($this->admin)
+                ->postJson('/admin/importproduct/import/update', [
+                    'dataId' => $item->id,
+                    'value' => $quantity,
+                ])
+                ->assertOk()
+                ->assertJsonPath('import.0.quantity', $quantity)
+                ->assertJsonPath('import.0.total', $expectedTotal)
+                ->assertJsonPath('total', $expectedTotal);
+        }
+    }
+
+    public function test_confirmation_recalculates_total_from_quantity_and_price(): void
+    {
+        $item = $this->createImportItem(quantity: 2);
+        $item->update([
+            'price' => 3000000,
+            'total' => 3000000,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->post('/admin/importproduct/importCoupon', $this->validPayload($item, $this->makeImeis(2)));
+
+        $response->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertDatabaseHas('import_coupon', [
+            'total' => 6000000,
+        ]);
+        $this->assertDatabaseHas('import_detail', [
+            'quantity' => 2,
+            'price' => 3000000,
+        ]);
+    }
+
+    public function test_import_payload_recalculates_stale_line_total(): void
+    {
+        $item = $this->createImportItem(quantity: 2);
+        $item->update([
+            'price' => 3000000,
+            'total' => 3000000,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson('/admin/importproduct/import')
+            ->assertOk()
+            ->assertJsonPath('import.0.total', 6000000)
+            ->assertJsonPath('total', 6000000);
+    }
+
     public function test_quantity_tracked_product_can_update_quantity_above_imei_limit(): void
     {
         $item = $this->createImportItem(quantity: 1, product: $this->quantityProduct);
@@ -209,6 +269,8 @@ class ImportImeiWorkflowTest extends TestCase
             ->assertSee('const MAX_IMEI_LENGTH = 50;', false)
             ->assertSee('minlength="1" maxlength="${MAX_IMEI_LENGTH}"', false)
             ->assertSee('tối đa 50 ký tự', false)
+            ->assertSee(".on('input.importQuantity', '.numberInput'", false)
+            ->assertSee('function updateImportRowTotal(row, quantity, price)', false)
             ->assertDontSee('MAX_IMPORT_QUANTITY', false);
     }
 

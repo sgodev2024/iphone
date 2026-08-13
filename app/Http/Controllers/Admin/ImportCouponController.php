@@ -258,7 +258,14 @@ class ImportCouponController extends Controller
             ]);
         }
 
-        $total = (int) $imports->sum('total');
+        // Recalculate from the persisted quantity and unit price at save time.
+        // The hidden total field and the staging total are frontend-derived values.
+        $total = (int) $imports->sum(function (Import $import): int {
+            $quantity = max((int) $import->quantity, 0);
+            $price = max((float) $import->price, 0);
+
+            return (int) round($quantity * $price);
+        });
         $payment = $this->normalizePaymentData(
             (string) $request->validated('payment_method', ImportCoupon::PAYMENT_METHOD_CASH),
             (int) $request->validated('totalncc', 0),

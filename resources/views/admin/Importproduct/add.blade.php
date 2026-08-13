@@ -711,6 +711,7 @@
 
             $j(document).ready(function() {
                 const imeiValues = {};
+                const quantityRequestVersions = {};
                 Object.entries(initialImeiValues || {}).forEach(([importId, values]) => {
                     imeiValues[importId] = Array.isArray(values) ? values.map(value => String(value)) : [];
                 });
@@ -855,7 +856,6 @@
                         updateimport(data.import, data.total);
                         var category = $j('#checkboxForm_category');
                         category.empty();
-                        updateReceiptTotal(data.total);
                         var list_category = data.category || [];
                         categorySelection.allIds = new Set(list_category.map(function(item) {
                             return String(item.id).trim();
@@ -909,7 +909,6 @@
                             $j('#search').val('');
                             $j('#results').hide();
                             updateimport(data.import, data.total);
-                            updateReceiptTotal(data.total);
                         },
                         error: function(xhr) {
                             alert(xhr.responseJSON.error);
@@ -917,7 +916,26 @@
                     });
                 });
 
-                $j(document).on('change', '.numberInput', function(e) {
+                $j(document)
+                    .off('input.importQuantity', '.numberInput')
+                    .on('input.importQuantity', '.numberInput', function() {
+                        const row = $j(this).closest('tr');
+                        const dataId = row.data('id');
+                        const quantity = parseInt(this.value, 10);
+
+                        // Invalidate an older response while the user is still typing.
+                        quantityRequestVersions[dataId] = (quantityRequestVersions[dataId] || 0) + 1;
+                        if (Number.isInteger(quantity) && quantity > 0) {
+                            row.find('input[type="hidden"][name$="[quantity]"]').val(quantity);
+                        }
+
+                        updateImportRowTotal(row);
+                        refreshImportTotalFromDom();
+                    });
+
+                $j(document)
+                    .off('change.importQuantity', '.numberInput')
+                    .on('change.importQuantity', '.numberInput', function(e) {
                     e.preventDefault();
                     captureImeiValues();
 
@@ -931,6 +949,9 @@
 
                     if (!Number.isInteger(value) || value < 1) {
                         input.val(previousQuantity);
+                        tr.find('input[type="hidden"][name$="[quantity]"]').val(previousQuantity);
+                        updateImportRowTotal(tr, previousQuantity);
+                        refreshImportTotalFromDom();
                         alert('Số lượng nhập phải lớn hơn 0.');
                         return;
                     }
@@ -945,13 +966,23 @@
 
                         if (!shouldReduce) {
                             input.val(previousQuantity);
+                            tr.find('input[type="hidden"][name$="[quantity]"]').val(previousQuantity);
+                            updateImportRowTotal(tr, previousQuantity);
+                            refreshImportTotalFromDom();
                             return;
                         }
                     }
 
+                    updateImportRowTotal(tr, value);
+                    tr.find('input[type="hidden"][name$="[quantity]"]').val(value);
+                    refreshImportTotalFromDom();
+
                     if (isImeiProduct) {
                         imeiValues[dataId] = currentValues.slice(0, value);
                     }
+
+                    var requestVersion = (quantityRequestVersions[dataId] || 0) + 1;
+                    quantityRequestVersions[dataId] = requestVersion;
 
                     $j.ajax({
                         url: '{{ route('admin.importproduct.import.update') }}',
@@ -962,19 +993,27 @@
                             dataId: dataId
                         },
                         success: function(data) {
+                            if (quantityRequestVersions[dataId] !== requestVersion) {
+                                return;
+                            }
+
                             const updatedItem = (data.import || []).find(function(item) {
                                 return String(item.id) === String(dataId);
                             });
 
                             if (updatedItem) {
                                 updateImportQuantityRow(updatedItem);
+                                refreshImportTotalFromDom();
                             } else {
                                 updateimport(data.import, data.total);
                             }
-                            updateReceiptTotal(data.total);
 
                         },
                         error: function(xhr) {
+                            if (quantityRequestVersions[dataId] !== requestVersion) {
+                                return;
+                            }
+
                             const errors = xhr.responseJSON?.errors || {};
                             const firstError = Object.values(errors).reduce((message,
                                 fieldErrors) => {
@@ -983,6 +1022,9 @@
                             }, '');
 
                             input.val(previousQuantity);
+                            tr.find('input[type="hidden"][name$="[quantity]"]').val(previousQuantity);
+                            updateImportRowTotal(tr, previousQuantity);
+                            refreshImportTotalFromDom();
                             if (isImeiProduct) {
                                 imeiValues[dataId] = currentValues;
                             }
@@ -1076,7 +1118,6 @@
                         },
                         success: function(data) {
                             updateimport(data.import, data.total);
-                            updateReceiptTotal(data.total);
                         },
                         error: function(xhr) {
                             alert(xhr.responseJSON?.error ||
@@ -1125,21 +1166,32 @@
                         resetDraftSelection();
                     });
 
-                $j(document).on('focus', '.giaban', function() {
+                $j(document)
+                    .off('focus.importPrice', '.giaban')
+                    .on('focus.importPrice', '.giaban', function() {
                     $j(this).val(String(Math.round(parseMoneyValue($j(this).data('raw-value')))));
-                });
+                    });
 
-                $j(document).on('input', '.giaban', function() {
-                    this.value = this.value.replace(/\D/g, '');
-                });
+                $j(document)
+                    .off('input.importPrice', '.giaban')
+                    .on('input.importPrice', '.giaban', function() {
+                        this.value = this.value.replace(/\D/g, '');
+                        updateImportRowTotal($j(this).closest('tr'), undefined, this.value);
+                        refreshImportTotalFromDom();
+                    });
 
-                $j(document).on('change', '.giaban', function() {
+                $j(document)
+                    .off('change.importPrice', '.giaban')
+                    .on('change.importPrice', '.giaban', function() {
                     var input = $j(this);
-                    var dataId = input.closest('tr').data('id');
+                    var row = input.closest('tr');
+                    var dataId = row.data('id');
                     var value = Math.max(Math.round(parseMoneyValue(input.val())), 0);
 
                     input.data('raw-value', value);
                     input.val(formatMoneyValue(value));
+                    updateImportRowTotal(row, undefined, value);
+                    refreshImportTotalFromDom();
                     $j.ajax({
                         url: '{{ route('admin.importproduct.import.update.price') }}',
                         method: 'POST',
@@ -1150,16 +1202,60 @@
                         },
                         success: function(data) {
                             updateimport(data.import, data.total);
-                            updateReceiptTotal(data.total);
 
                         },
                     });
 
-                });
+                    });
 
                 $j(document).on('change', '#payment_method', function() {
                     syncPaymentAmount(true);
                 });
+
+                function updateImportRowTotal(row, quantity, price) {
+                    const $row = row && row.jquery ? row : $j(row);
+
+                    if (!$row.length) {
+                        return 0;
+                    }
+
+                    const parsedQuantity = parseInt(
+                        quantity === undefined ? $row.find('.numberInput').val() : quantity,
+                        10
+                    );
+                    const safeQuantity = Number.isInteger(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0;
+                    const priceInput = $row.find('.giaban');
+                    const rawPrice = price === undefined ? priceInput.val() : price;
+                    let unitPrice = Math.max(Math.round(parseMoneyValue(rawPrice)), 0);
+
+                    if (price === undefined && unitPrice === 0) {
+                        unitPrice = Math.max(Math.round(parseMoneyValue(priceInput.data('raw-value'))), 0);
+                    }
+
+                    const rowTotal = safeQuantity * unitPrice;
+                    $row.find('.total')
+                        .attr('data-raw-value', rowTotal)
+                        .text(formatMoneyValue(rowTotal));
+
+                    return rowTotal;
+                }
+
+                function getImportTotalFromDom() {
+                    let total = 0;
+
+                    $j('#import-data-product tr[data-id] .total').each(function() {
+                        total += Math.max(Math.round(parseMoneyValue($j(this).attr('data-raw-value'))), 0);
+                    });
+
+                    return total;
+                }
+
+                function refreshImportTotalFromDom() {
+                    const total = getImportTotalFromDom();
+                    updateReceiptTotal(total);
+
+                    return total;
+                }
 
                 function updateReceiptTotal(total) {
                     const rawTotal = Math.round(parseMoneyValue(total));
@@ -1173,7 +1269,6 @@
                     captureImeiValues();
                     var importhtml = $j('#import-data-product');
                     var tieptuc = $j('#tieptuc');
-                    updateReceiptTotal(total || 0);
 
                     const validIds = new Set((importproduct || []).map(item => String(item.id)));
                     Object.keys(imeiValues).forEach(id => {
@@ -1182,7 +1277,14 @@
                         }
                     });
 
-                    if (parseMoneyValue(total) <= 0 || !importproduct || importproduct.length === 0) {
+                    const calculatedTotal = (importproduct || []).reduce(function(sum, item) {
+                        const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
+                        const price = Math.max(Math.round(parseMoneyValue(item.price)), 0);
+
+                        return sum + (quantity * price);
+                    }, 0);
+
+                    if (calculatedTotal <= 0 || !importproduct || importproduct.length === 0) {
                         tieptuc.css('display', 'none');
                     } else {
                         tieptuc.css('display', 'block');
@@ -1204,7 +1306,8 @@
                             const productName = product.name || '';
                             const tracking = getInventoryTracking(item);
                             const price = parseMoneyValue(item.price);
-                            const rowTotal = parseMoneyValue(item.total);
+                            const quantity = Math.max(parseInt(item.quantity, 10) || 0, 0);
+                            const rowTotal = quantity * price;
                             var productHtml = `
             <tr data-id='${item.id}' data-product='${item.product_id ?? ""}' data-tracking="${tracking}">
                 <td class='text-center align-middle'>
@@ -1243,6 +1346,8 @@
                             updateImeiCounter(item.id);
                         });
                     }
+
+                    refreshImportTotalFromDom();
                 }
 
                 function buildImeiPanel(item) {
@@ -1369,8 +1474,10 @@
                     row.find('input[type="hidden"][name$="[quantity]"]')
                         .val(item.quantity);
                     row.find('.numberInput')
+                        .data('previous-quantity', item.quantity)
                         .attr('data-previous-quantity', item.quantity)
                         .val(item.quantity);
+                    updateImportRowTotal(row, item.quantity);
 
                     const detailRow = row.next('.imei-detail-row');
                     if (getInventoryTracking(item) === 'imei') {

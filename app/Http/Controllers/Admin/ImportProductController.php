@@ -317,11 +317,23 @@ class ImportProductController extends Controller
     private function currentImportPayload(): array
     {
         $imports = $this->stagingImportQuery()->get();
+        $imports->each(function (Import $import): void {
+            $import->setAttribute('total', $this->calculateImportTotal($import));
+        });
 
         return [
             'import' => $imports,
-            'total' => (float) $imports->sum(fn (Import $import) => (float) $import->total),
+            // Keep the payload correct even if an older staging row has a stale total.
+            'total' => (float) $imports->sum('total'),
         ];
+    }
+
+    private function calculateImportTotal(Import $import): int
+    {
+        $quantity = max((int) $import->quantity, 0);
+        $price = max((float) $import->price, 0);
+
+        return (int) round($quantity * $price);
     }
 
     private function clearCurrentImportItems(): void
