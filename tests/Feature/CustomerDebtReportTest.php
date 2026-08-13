@@ -260,6 +260,22 @@ class CustomerDebtReportTest extends TestCase
         $this->assertReport($this->report($staff), 'Deleted Client', [0, 0, 100, 0, 100, 0]);
     }
 
+    public function test_explicit_from_and_to_query_parameters_filter_customer_report(): void
+    {
+        [$owner, $staff] = $this->createOwnerAndStaff('explicit-query-range');
+        $clientId = $this->createClient($owner, 'Explicit Query Range');
+        $this->addLedgerEntry($clientId, '2026-08-09', 10, 0);
+        $this->addLedgerEntry($clientId, '2026-08-10', 20, 0);
+        $this->addLedgerEntry($clientId, '2026-08-20', 0, 5);
+        $this->addLedgerEntry($clientId, '2026-08-21', 100, 0);
+
+        $response = $this->actingAs($staff)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->getJson('/admin/debts/customer?from_date=2026-08-10&to_date=2026-08-20');
+
+        $this->assertReport($response, 'Explicit Query Range', [10, 0, 20, 5, 25, 0]);
+    }
+
     public function test_report_fails_clearly_when_active_account_131_is_missing(): void
     {
         [, $staff] = $this->createOwnerAndStaff('missing-131');

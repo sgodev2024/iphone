@@ -20,17 +20,8 @@ class DebtController extends Controller
 {
     public function customer(Request $request, CustomerDebtSnapshotService $snapshotService)
     {
-        $dateRange = $request->input('date_range');
+        [$startDate, $endDate] = $this->customerReportDates($request);
         $nameFilter = trim((string) $request->input('name', ''));
-
-        if ($dateRange) {
-            [$start, $end] = explode(' - ', $dateRange);
-            $startDate = Carbon::createFromFormat('d/m/Y', trim($start))->toDateString();
-            $endDate = Carbon::createFromFormat('d/m/Y', trim($end))->toDateString();
-        } else {
-            $endDate = Carbon::now()->toDateString();
-            $startDate = Carbon::now()->subMonth()->toDateString();
-        }
 
         try {
             $ownerId = $request->user()->ownerId();
@@ -55,6 +46,62 @@ class DebtController extends Controller
             'startDate' => $startDate,
             'endDate' => $endDate,
         ]);
+    }
+
+    private function customerReportDates(Request $request): array
+    {
+        $fromDate = trim((string) $request->query('from_date', ''));
+        $toDate = trim((string) $request->query('to_date', ''));
+
+        if ($fromDate !== '' || $toDate !== '') {
+            if ($fromDate === '' || $toDate === '') {
+                abort(422, 'Customer debt report requires both from_date and to_date.');
+            }
+
+            try {
+                $startDate = Carbon::createFromFormat('!Y-m-d', $fromDate)->toDateString();
+                $endDate = Carbon::createFromFormat('!Y-m-d', $toDate)->toDateString();
+            } catch (\Throwable $exception) {
+                abort(422, 'Invalid customer debt report date range.');
+            }
+
+            if ($startDate !== $fromDate || $endDate !== $toDate) {
+                abort(422, 'Invalid customer debt report date range.');
+            }
+
+            if ($startDate > $endDate) {
+                abort(422, 'Customer debt report start date must not be after end date.');
+            }
+
+            return [$startDate, $endDate];
+        }
+
+        $dateRange = trim((string) $request->input('date_range', ''));
+
+        if ($dateRange === '') {
+            $endDate = Carbon::now()->toDateString();
+
+            return [Carbon::now()->subMonth()->toDateString(), $endDate];
+        }
+
+        $parts = preg_split('/\s+-\s+/', $dateRange);
+
+        if (count($parts) !== 2) {
+            abort(422, 'Invalid customer debt report date range.');
+        }
+
+        try {
+            $startDate = Carbon::createFromFormat('d/m/Y', trim($parts[0]))->toDateString();
+            $endDate = Carbon::createFromFormat('d/m/Y', trim($parts[1]))->toDateString();
+        } catch (\Throwable $exception) {
+            abort(422, 'Invalid customer debt report date range.');
+        }
+
+        if ($startDate > $endDate) {
+            abort(422, 'Customer debt report start date must not be after end date.');
+        }
+
+        return [$startDate, $endDate];
     }
 
     public function supplier(Request $request, SupplierDebtReportService $reportService)

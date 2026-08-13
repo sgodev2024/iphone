@@ -21,20 +21,26 @@
         </div> --}}
 
         <div class="card customer-debt-filter-card p-3 mb-3 shadow-sm">
-            <div class="customer-debt-filter">
+            <form id="customerDebtFilterForm" class="customer-debt-filter" method="GET"
+                action="{{ route('admin.debts.customer') }}">
                 <!-- Lọc ngày sang trái -->
                 <div class="customer-debt-date">
-                    <input type="text" id="dateFilter" name="date_range" class="form-control" placeholder="Chọn khoảng ngày">
+                    <input type="text" id="dateFilter" class="form-control"
+                        value="{{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}"
+                        placeholder="Chọn khoảng ngày">
+                    <input type="hidden" id="fromDate" name="from_date" value="{{ $startDate }}">
+                    <input type="hidden" id="toDate" name="to_date" value="{{ $endDate }}">
                 </div>
 
                 <!-- Tên khách hàng và nút Lọc sang phải -->
                 <div class="customer-debt-search">
-                    <input type="text" class="form-control customer-debt-name" name="name" placeholder="Tên khách hàng">
-                    <button type="button" id="filter" class="btn btn-primary customer-debt-filter-button">
+                    <input type="text" class="form-control customer-debt-name" name="name"
+                        value="{{ request()->query('name', '') }}" placeholder="Tên khách hàng">
+                    <button type="submit" id="filter" class="btn btn-primary customer-debt-filter-button">
                         <i class="bi bi-search"></i> <span>Lọc</span>
                     </button>
                 </div>
-            </div>
+            </form>
         </div>
 
 
@@ -187,8 +193,8 @@
         let debtPaymentOrders = [];
         let debtPaymentIdempotencyKey = null;
 
-        let start = moment().subtract(1, 'month'); // 15/06/2025
-        let end = moment();
+        let start = moment('{{ $startDate }}', 'YYYY-MM-DD');
+        let end = moment('{{ $endDate }}', 'YYYY-MM-DD');
 
         $('#dateFilter').daterangepicker({
             startDate: start,
@@ -225,6 +231,8 @@
         const customerDatePicker = customerDateInput.data('daterangepicker');
         let appliedCustomerStart = start.clone();
         let appliedCustomerEnd = end.clone();
+        let previewCustomerStart = appliedCustomerStart.clone();
+        let previewCustomerEnd = appliedCustomerEnd.clone();
 
         function customerDateText(startDate, endDate = null) {
             const startText = startDate.format('DD/MM/YYYY');
@@ -236,12 +244,19 @@
 
         function renderCustomerPreview(picker) {
             if (picker.startDate) {
-                customerDateInput.val(customerDateText(picker.startDate, picker.endDate));
+                previewCustomerStart = picker.startDate.clone();
+                previewCustomerEnd = picker.endDate ? picker.endDate.clone() : null;
+                customerDateInput.val(customerDateText(previewCustomerStart, previewCustomerEnd));
             }
         }
 
         function renderAppliedCustomerRange() {
             customerDateInput.val(customerDateText(appliedCustomerStart, appliedCustomerEnd));
+        }
+
+        function syncCustomerHiddenDates() {
+            $('#fromDate').val(appliedCustomerStart.format('YYYY-MM-DD'));
+            $('#toDate').val(appliedCustomerEnd.format('YYYY-MM-DD'));
         }
 
         // daterangepicker 3.1 has no pre-Apply selection event. Its public
@@ -266,75 +281,38 @@
         renderAppliedCustomerRange();
 
         customerDateInput.on('show.daterangepicker', function(event, picker) {
+            previewCustomerStart = appliedCustomerStart.clone();
+            previewCustomerEnd = appliedCustomerEnd.clone();
             picker.setStartDate(appliedCustomerStart.clone());
             picker.setEndDate(appliedCustomerEnd.clone());
             renderAppliedCustomerRange();
         });
 
         customerDateInput.on('outsideClick.daterangepicker', function() {
+            previewCustomerStart = appliedCustomerStart.clone();
+            previewCustomerEnd = appliedCustomerEnd.clone();
             renderAppliedCustomerRange();
         });
 
         customerDateInput.on('cancel.daterangepicker', function() {
+            previewCustomerStart = appliedCustomerStart.clone();
+            previewCustomerEnd = appliedCustomerEnd.clone();
             renderAppliedCustomerRange();
         });
 
         customerDateInput.on('apply.daterangepicker', function(event, picker) {
-            appliedCustomerStart = picker.startDate.clone();
-            appliedCustomerEnd = picker.endDate.clone();
+            appliedCustomerStart = previewCustomerStart.clone();
+            appliedCustomerEnd = previewCustomerEnd
+                ? previewCustomerEnd.clone()
+                : picker.endDate.clone();
+            syncCustomerHiddenDates();
             renderAppliedCustomerRange();
+            document.getElementById('customerDebtFilterForm').submit();
         });
 
-        $('#filter').on('click', function() {
-            let date_range = customerDateText(appliedCustomerStart, appliedCustomerEnd);
-            let name = $('input[name="name"]').val();
-
-            $.ajax({
-                url: '',
-                type: "GET",
-                data: {
-                    date_range,
-                    name
-                },
-                success: function(response) {
-                    renderTable(response);
-                },
-                error: function() {
-                    alert("Có lỗi xảy ra, vui lòng thử lại.");
-                },
-            });
-        })
-
-        function renderTable(data) {
-            let tbody = '';
-
-            if (data.length === 0) {
-                tbody = `<tr><td colspan="${canCollectDebt ? 9 : 8}" class="text-center">Không có dữ liệu</td></tr>`;
-            } else {
-                data.forEach((debt, index) => {
-                    const clientName = escapeHtml(debt.client_name || '');
-                    const clientPhone = escapeHtml(debt.client_phone || '—');
-
-                    tbody += `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td class="text-start customer-cell">
-                        <span class="customer-name">${clientName}</span>
-                        <span class="customer-phone">SĐT: ${clientPhone}</span>
-                    </td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.opening_debit)}</td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.opening_credit)}</td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.period_debit)}</td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.period_credit)}</td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.ending_debit)}</td>
-                    <td class="text-end money-cell">${formatDebtPrice(debt.ending_credit)}</td>
-                    ${canCollectDebt ? `<td><button type="button" class="btn btn-sm btn-primary collect-debt-button" data-client-id="${Number(debt.client_id)}" data-client-name="${clientName}">Thu nợ</button></td>` : ''}
-                </tr>`;
-                });
-            }
-
-            $('#customerDebtTable tbody').html(tbody);
-        }
+        $('#customerDebtFilterForm').on('submit', function() {
+            syncCustomerHiddenDates();
+        });
 
         function formatDebtPrice(amount) {
             const match = String(amount ?? '0').trim().match(/^([+-]?)(\d+)(?:\.(\d{1,2}))?$/);
