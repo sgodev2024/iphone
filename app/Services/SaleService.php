@@ -77,13 +77,13 @@ class SaleService
                 ->get()
                 ->keyBy('product_id');
 
-            $existingImeiOrderDetails = $imeiIds->isEmpty()
-                ? collect()
-                : OrderDetail::query()
-                    ->whereIn('product_imei_id', $imeiIds->all())
-                    ->pluck('product_imei_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->flip();
+            // $existingImeiOrderDetails = $imeiIds->isEmpty()
+            //     ? collect()
+            //     : OrderDetail::query()
+            //         ->whereIn('product_imei_id', $imeiIds->all())
+            //         ->pluck('product_imei_id')
+            //         ->map(fn ($id) => (int) $id)
+            //         ->flip();
 
             $orderItems = collect();
             $requiredByProduct = collect();
@@ -95,8 +95,8 @@ class SaleService
                         $item,
                         $imeis,
                         $products,
-                        $storageId,
-                        $existingImeiOrderDetails
+                        $storageId
+                        // $existingImeiOrderDetails
                     )
                     : $this->prepareQuantityOrderItem($item, $products);
 
@@ -318,7 +318,7 @@ class SaleService
         Collection $imeis,
         Collection $products,
         int $storageId,
-        Collection $existingImeiOrderDetails
+        // Collection $existingImeiOrderDetails
     ): array {
         $imei = $imeis->get((int) $item['product_imei_id']);
         $product = $imei?->product;
@@ -361,11 +361,11 @@ class SaleService
             ]);
         }
 
-        if ($existingImeiOrderDetails->has((int) $imei->id)) {
-            throw ValidationException::withMessages([
-                'items' => 'Thiết bị đang được gắn với đơn hàng khác.',
-            ]);
-        }
+        // if ($existingImeiOrderDetails->has((int) $imei->id)) {
+        //     throw ValidationException::withMessages([
+        //         'items' => 'Thiết bị đang được gắn với đơn hàng khác.',
+        //     ]);
+        // }
 
         $price = (float) $item['unit_price'];
 
