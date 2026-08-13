@@ -211,6 +211,40 @@ class SupplierDebtReportTest extends TestCase
         $this->service->report($this->owner, '2026-08-01', '2026-08-31');
     }
 
+    public function test_date_filter_regression_matrix_respects_every_boundary(): void
+    {
+        $this->addLedgerEntry('2025-12-31', '0.00', '1.00', $this->company->id);
+        $this->addLedgerEntry('2026-01-01', '0.00', '2.00', $this->company->id);
+        $this->addLedgerEntry('2026-01-31', '0.50', '0.00', $this->company->id);
+        $this->addLedgerEntry('2026-06-14', '0.00', '3.00', $this->company->id);
+        $this->addLedgerEntry('2026-06-15', '0.00', '4.00', $this->company->id);
+        $this->addLedgerEntry('2026-12-31', '1.00', '0.00', $this->company->id);
+        $this->addLedgerEntry('2027-01-15', '0.00', '5.00', $this->company->id);
+        $this->addLedgerEntry('2027-01-16', '0.00', '99.00', $this->company->id);
+
+        $cases = [
+            ['2026-01-01', '2026-01-31', ['1.00', '0.50', '2.00', '2.50']],
+            ['2026-06-15', '2026-12-31', ['5.50', '1.00', '4.00', '8.50']],
+            ['2026-12-15', '2027-01-15', ['9.50', '1.00', '5.00', '13.50']],
+            ['2028-01-01', '2028-01-31', ['112.50', '0.00', '0.00', '112.50']],
+            ['2026-02-01', '2026-02-28', ['2.50', '0.00', '0.00', '2.50']],
+            ['2026-06-15', '2026-06-15', ['5.50', '0.00', '4.00', '9.50']],
+            ['2027-01-01', '2027-01-15', ['8.50', '0.00', '5.00', '13.50']],
+        ];
+
+        foreach ($cases as [$fromDate, $toDate, $expected]) {
+            $row = $this->service->report($this->owner, $fromDate, $toDate)->first();
+
+            $this->assertNotNull($row, "Missing report row for {$fromDate} to {$toDate}.");
+            $this->assertSame($expected, [
+                $row->opening_credit,
+                $row->period_debit,
+                $row->period_credit,
+                $row->ending_credit,
+            ], "Wrong date buckets for {$fromDate} to {$toDate}.");
+        }
+    }
+
     private function createSchema(): void
     {
         Schema::create('users', function (Blueprint $table): void {

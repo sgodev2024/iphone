@@ -5,21 +5,24 @@
         <x-breadcrumb :items="[['label' => 'CÔNG NỢ NHÀ CUNG CẤP']]" />
 
         <div class="card supplier-debt-filter-card p-3 mb-3 shadow-sm">
-            <div class="supplier-debt-filter">
+            <form id="supplierDebtFilterForm" class="supplier-debt-filter" method="GET"
+                action="{{ route('admin.debts.supplier') }}">
                 <div class="supplier-debt-date">
-                    <input type="text" id="dateFilter" name="date_range" class="form-control"
+                    <input type="text" id="dateFilter" class="form-control"
                         value="{{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}"
                         placeholder="Chọn khoảng ngày">
+                    <input type="hidden" id="fromDate" name="from_date" value="{{ $startDate }}">
+                    <input type="hidden" id="toDate" name="to_date" value="{{ $endDate }}">
                 </div>
 
                 <div class="supplier-debt-search">
                     <input type="text" class="form-control supplier-debt-name" name="name"
-                        placeholder="Tên công ty">
-                    <button type="button" id="filter" class="btn btn-primary supplier-debt-filter-button">
+                        value="{{ request()->query('name', '') }}" placeholder="Tên công ty">
+                    <button type="submit" id="filter" class="btn btn-primary supplier-debt-filter-button">
                         <i class="bi bi-search"></i> <span>Lọc</span>
                     </button>
                 </div>
-            </div>
+            </form>
         </div>
 
         <div class="small text-muted mb-2">
@@ -114,73 +117,19 @@
             }
         });
 
-        $('#filter').on('click', function() {
-            $.ajax({
-                url: '',
-                type: 'GET',
-                data: {
-                    date_range: $('input[name="date_range"]').val(),
-                    name: $('input[name="name"]').val()
-                },
-                success: renderTable,
-                error: function() {
-                    alert('Có lỗi xảy ra, vui lòng thử lại.');
-                }
-            });
+        function syncSupplierDebtDates(picker) {
+            $('#fromDate').val(picker.startDate.format('YYYY-MM-DD'));
+            $('#toDate').val(picker.endDate.format('YYYY-MM-DD'));
+        }
+
+        $('#supplierDebtFilterForm').on('submit', function() {
+            syncSupplierDebtDates($('#dateFilter').data('daterangepicker'));
         });
 
-        function renderTable(data) {
-            let tbody = '';
-
-            if (data.length === 0) {
-                tbody = '<tr><td colspan="8" class="text-center">Không có dữ liệu</td></tr>';
-            } else {
-                data.forEach((debt, index) => {
-                    const companyName = escapeHtml(debt.company_name || '');
-                    const companyPhone = escapeHtml(debt.company_phone || '—');
-
-                    tbody += `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td class="text-start supplier-cell">
-                                <span class="supplier-name">${companyName}</span>
-                                <span class="supplier-phone">SĐT: ${companyPhone}</span>
-                            </td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.opening_debit)}</td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.opening_credit)}</td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.period_debit)}</td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.period_credit)}</td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.ending_debit)}</td>
-                            <td class="text-end money-cell">${formatDebtPrice(debt.ending_credit)}</td>
-                        </tr>`;
-                });
-            }
-
-            $('#supplierDebtTable tbody').html(tbody);
-        }
-
-        function formatDebtPrice(amount) {
-            let value = String(amount ?? '0').trim();
-            const negative = value.startsWith('-');
-            value = value.replace(/^[+-]/, '');
-
-            let [whole, fraction = ''] = value.split('.');
-            whole = (whole || '0').replace(/^0+(?=\d)/, '');
-            fraction = fraction.padEnd(2, '0').slice(0, 2);
-            whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-
-            return `${negative && (whole !== '0' || fraction !== '00') ? '-' : ''}${whole}`
-                + (fraction === '00' ? '' : `,${fraction}`);
-        }
-
-        function escapeHtml(value) {
-            return String(value)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
+        $('#dateFilter').on('apply.daterangepicker', function(event, picker) {
+            syncSupplierDebtDates(picker);
+            document.getElementById('supplierDebtFilterForm').submit();
+        });
     </script>
 @endpush
 

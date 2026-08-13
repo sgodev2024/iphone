@@ -76,6 +76,32 @@ class DebtController extends Controller
 
     private function supplierReportDates(Request $request): array
     {
+        $fromDate = trim((string) $request->query('from_date', ''));
+        $toDate = trim((string) $request->query('to_date', ''));
+
+        if ($fromDate !== '' || $toDate !== '') {
+            if ($fromDate === '' || $toDate === '') {
+                abort(422, 'Supplier debt report requires both from_date and to_date.');
+            }
+
+            try {
+                $startDate = Carbon::createFromFormat('!Y-m-d', $fromDate)->toDateString();
+                $endDate = Carbon::createFromFormat('!Y-m-d', $toDate)->toDateString();
+            } catch (\Throwable $exception) {
+                abort(422, 'Invalid supplier debt report date range.');
+            }
+
+            if ($startDate !== $fromDate || $endDate !== $toDate) {
+                abort(422, 'Invalid supplier debt report date range.');
+            }
+
+            if ($startDate > $endDate) {
+                abort(422, 'Supplier debt report start date must not be after end date.');
+            }
+
+            return [$startDate, $endDate];
+        }
+
         $dateRange = trim((string) $request->input('date_range', ''));
 
         if ($dateRange === '') {

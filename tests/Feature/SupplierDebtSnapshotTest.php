@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\DebtController;
 use App\Models\Company;
 use App\Models\SupplierDebtYearlySnapshot;
 use App\Models\Transaction;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Services\Accounting\SupplierDebtSnapshotService;
 use App\Services\SupplierDebtReportService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -314,6 +316,49 @@ class SupplierDebtSnapshotTest extends TestCase
         $this->assertSame('0.00', $row->ending_debit);
         $this->assertSame('0.00', $row->ending_credit);
         $this->assertSame($beforeTransactions, DB::table('transactions')->count());
+    }
+
+    public function test_explicit_2027_date_filter_keeps_six_million_snapshot_out_of_empty_period(): void
+    {
+        $this->insertLedger('2026-08-12', '0.00', '66000000.00', $this->company->id);
+        $this->insertLedger('2026-08-13', '60000000.00', '0.00', $this->company->id);
+        $this->service->buildOwnerYear($this->owner->id, 2027);
+
+        $request = Request::create('/admin/debts/supplier', 'GET', [
+            'from_date' => '2027-01-01',
+            'to_date' => '2027-02-28',
+        ], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $request->setUserResolver(fn (): User => $this->owner);
+
+        $response = app(DebtController::class)->supplier(
+            $request,
+            app(SupplierDebtReportService::class)
+        );
+        $rows = $response->getData(true);
+        $snapshot = $this->snapshot(2027, $this->company->id);
+
+        $this->assertSame(0, DB::table('transactions')
+            ->whereBetween('transaction_date', ['2027-01-01', '2027-02-28'])
+            ->count());
+        $this->assertSame('0.00', (string) $snapshot->opening_debit);
+        $this->assertSame('6000000.00', (string) $snapshot->opening_credit);
+        $this->assertSame('2026-12-31', $snapshot->source_through_date->toDateString());
+        $this->assertCount(1, $rows);
+        $this->assertSame([
+            'opening_debit' => '0.00',
+            'opening_credit' => '6000000.00',
+            'period_debit' => '0.00',
+            'period_credit' => '0.00',
+            'ending_debit' => '0.00',
+            'ending_credit' => '6000000.00',
+        ], array_intersect_key($rows[0], array_flip([
+            'opening_debit',
+            'opening_credit',
+            'period_debit',
+            'period_credit',
+            'ending_debit',
+            'ending_credit',
+        ])));
     }
 
     public function test_reconcile_returns_zero_for_canonical_ledger(): void
