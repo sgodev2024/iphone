@@ -193,7 +193,7 @@
         $('#dateFilter').daterangepicker({
             startDate: start,
             endDate: end,
-            autoUpdateInput: true,
+            autoUpdateInput: false,
             locale: {
                 format: 'DD/MM/YYYY',
                 separator: ' - ',
@@ -221,20 +221,72 @@
             }
         });
 
-        // Hiển thị mặc định trên input khi load
-        $('#dateFilter').val(start.format('DD/MM/YYYY') + ' - ' + end.format('DD/MM/YYYY'));
+        const customerDateInput = $('#dateFilter');
+        const customerDatePicker = customerDateInput.data('daterangepicker');
+        let appliedCustomerStart = start.clone();
+        let appliedCustomerEnd = end.clone();
 
-        $('#dateFilter').on('apply.daterangepicker', function(ev, picker) {
-            $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format(
-                'DD/MM/YYYY'));
+        function customerDateText(startDate, endDate = null) {
+            const startText = startDate.format('DD/MM/YYYY');
+
+            return endDate
+                ? `${startText} - ${endDate.format('DD/MM/YYYY')}`
+                : startText;
+        }
+
+        function renderCustomerPreview(picker) {
+            if (picker.startDate) {
+                customerDateInput.val(customerDateText(picker.startDate, picker.endDate));
+            }
+        }
+
+        function renderAppliedCustomerRange() {
+            customerDateInput.val(customerDateText(appliedCustomerStart, appliedCustomerEnd));
+        }
+
+        // daterangepicker 3.1 has no pre-Apply selection event. Its public
+        // date setters are used to mirror the picker state without intercepting DOM clicks.
+        const originalCustomerSetStartDate = customerDatePicker.setStartDate.bind(customerDatePicker);
+        const originalCustomerSetEndDate = customerDatePicker.setEndDate.bind(customerDatePicker);
+
+        customerDatePicker.setStartDate = function(date) {
+            originalCustomerSetStartDate(date);
+            if (this.isShowing) {
+                renderCustomerPreview(this);
+            }
+        };
+
+        customerDatePicker.setEndDate = function(date) {
+            originalCustomerSetEndDate(date);
+            if (this.isShowing) {
+                renderCustomerPreview(this);
+            }
+        };
+
+        renderAppliedCustomerRange();
+
+        customerDateInput.on('show.daterangepicker', function(event, picker) {
+            picker.setStartDate(appliedCustomerStart.clone());
+            picker.setEndDate(appliedCustomerEnd.clone());
+            renderAppliedCustomerRange();
         });
 
-        // $('#dateFilter').on('cancel.daterangepicker', function(ev, picker) {
-        //     $(this).val('');
-        // });
+        customerDateInput.on('outsideClick.daterangepicker', function() {
+            renderAppliedCustomerRange();
+        });
+
+        customerDateInput.on('cancel.daterangepicker', function() {
+            renderAppliedCustomerRange();
+        });
+
+        customerDateInput.on('apply.daterangepicker', function(event, picker) {
+            appliedCustomerStart = picker.startDate.clone();
+            appliedCustomerEnd = picker.endDate.clone();
+            renderAppliedCustomerRange();
+        });
 
         $('#filter').on('click', function() {
-            let date_range = $('input[name="date_range"]').val();
+            let date_range = customerDateText(appliedCustomerStart, appliedCustomerEnd);
             let name = $('input[name="name"]').val();
 
             $.ajax({

@@ -108,7 +108,7 @@
         $('#dateFilter').daterangepicker({
             startDate: initialStart,
             endDate: initialEnd,
-            autoUpdateInput: true,
+            autoUpdateInput: false,
             locale: {
                 format: 'DD/MM/YYYY',
                 separator: ' - ',
@@ -126,18 +126,79 @@
             }
         });
 
-        function syncSupplierDebtDates(picker) {
-            $('#fromDate').val(picker.startDate.format('YYYY-MM-DD'));
-            $('#toDate').val(picker.endDate.format('YYYY-MM-DD'));
+        const supplierDateInput = $('#dateFilter');
+        const supplierDatePicker = supplierDateInput.data('daterangepicker');
+        let appliedSupplierStart = initialStart.clone();
+        let appliedSupplierEnd = initialEnd.clone();
+
+        function supplierDateText(start, end = null) {
+            const startText = start.format('DD/MM/YYYY');
+
+            return end
+                ? `${startText} - ${end.format('DD/MM/YYYY')}`
+                : startText;
         }
 
-        $('#supplierDebtFilterForm').on('submit', function() {
-            syncSupplierDebtDates($('#dateFilter').data('daterangepicker'));
+        function renderSupplierPreview(picker) {
+            if (picker.startDate) {
+                supplierDateInput.val(supplierDateText(picker.startDate, picker.endDate));
+            }
+        }
+
+        function renderAppliedSupplierRange() {
+            supplierDateInput.val(supplierDateText(appliedSupplierStart, appliedSupplierEnd));
+        }
+
+        function syncSupplierHiddenDates() {
+            $('#fromDate').val(appliedSupplierStart.format('YYYY-MM-DD'));
+            $('#toDate').val(appliedSupplierEnd.format('YYYY-MM-DD'));
+        }
+
+        // daterangepicker 3.1 has no pre-Apply selection event. Its public
+        // date setters are used to mirror the picker state without intercepting DOM clicks.
+        const originalSupplierSetStartDate = supplierDatePicker.setStartDate.bind(supplierDatePicker);
+        const originalSupplierSetEndDate = supplierDatePicker.setEndDate.bind(supplierDatePicker);
+
+        supplierDatePicker.setStartDate = function(date) {
+            originalSupplierSetStartDate(date);
+            if (this.isShowing) {
+                renderSupplierPreview(this);
+            }
+        };
+
+        supplierDatePicker.setEndDate = function(date) {
+            originalSupplierSetEndDate(date);
+            if (this.isShowing) {
+                renderSupplierPreview(this);
+            }
+        };
+
+        renderAppliedSupplierRange();
+
+        supplierDateInput.on('show.daterangepicker', function(event, picker) {
+            picker.setStartDate(appliedSupplierStart.clone());
+            picker.setEndDate(appliedSupplierEnd.clone());
+            renderAppliedSupplierRange();
         });
 
-        $('#dateFilter').on('apply.daterangepicker', function(event, picker) {
-            syncSupplierDebtDates(picker);
+        supplierDateInput.on('outsideClick.daterangepicker', function() {
+            renderAppliedSupplierRange();
+        });
+
+        supplierDateInput.on('cancel.daterangepicker', function() {
+            renderAppliedSupplierRange();
+        });
+
+        supplierDateInput.on('apply.daterangepicker', function(event, picker) {
+            appliedSupplierStart = picker.startDate.clone();
+            appliedSupplierEnd = picker.endDate.clone();
+            renderAppliedSupplierRange();
+            syncSupplierHiddenDates();
             document.getElementById('supplierDebtFilterForm').submit();
+        });
+
+        $('#supplierDebtFilterForm').on('submit', function() {
+            syncSupplierHiddenDates();
         });
     </script>
 @endpush
