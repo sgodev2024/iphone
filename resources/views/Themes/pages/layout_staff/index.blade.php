@@ -130,7 +130,8 @@
 
         .unit-price-input,
         .cart-controls .qty-input,
-        .cart-controls .imei-quantity {
+        .cart-controls .imei-quantity,
+        .cart-controls .sale-currency-field {
             height: 32px;
         }
 
@@ -153,6 +154,78 @@
         .cart-subtotal {
             min-width: 100px;
             text-align: right;
+        }
+
+        .sale-currency-field {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            min-width: 0;
+            height: 38px;
+            overflow: hidden;
+            border: 1px solid #ced4da;
+            border-radius: .375rem;
+            background: #fff;
+            font-size: .875rem;
+            transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+        }
+
+        .sale-currency-field:focus-within {
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25);
+        }
+
+        .sale-currency-field.sale-currency-field--readonly {
+            background: #f8f9fa;
+        }
+
+        .sale-currency-field .sale-currency-input,
+        .sale-currency-field .sale-currency-value {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 100%;
+            padding: .375rem .75rem;
+            border: 0;
+            color: #212529;
+            font-size: inherit;
+            line-height: 1.5;
+            text-align: right;
+        }
+
+        .sale-currency-field .sale-currency-input {
+            background: transparent;
+            box-shadow: none;
+            outline: 0;
+        }
+
+        .sale-currency-field .sale-currency-input:disabled {
+            background: transparent;
+            opacity: 1;
+            cursor: not-allowed;
+        }
+
+        .sale-currency-field .sale-currency-input.is-invalid {
+            border-color: transparent;
+            background-image: none;
+        }
+
+        .sale-currency-field.is-invalid {
+            border-color: #dc3545;
+        }
+
+        .sale-currency-field.is-invalid:focus-within {
+            border-color: #dc3545;
+            box-shadow: 0 0 0 .25rem rgba(220, 53, 69, .25);
+        }
+
+        .sale-currency-suffix {
+            flex: 0 0 auto;
+            padding: 0 .75rem 0 .25rem;
+            color: #64748b;
+            font-size: inherit;
+            line-height: 1;
+            white-space: nowrap;
         }
 
         .add-customer-btn {
@@ -964,16 +1037,20 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="paidAmount">Khách trả</label>
-                                <div class="input-group">
+                                <div class="sale-currency-field">
                                     <input id="paidAmount" type="text" inputmode="numeric" autocomplete="off"
-                                        class="form-control text-end" value="0" aria-describedby="paidAmountUnit">
-                                    <span class="input-group-text" id="paidAmountUnit">VND</span>
+                                        class="form-control sale-currency-input" value="0" aria-describedby="paidAmountUnit">
+                                    <span class="sale-currency-suffix" id="paidAmountUnit">VND</span>
                                 </div>
                                 <input type="hidden" id="paidAmountRaw" name="paid_amount" value="0">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Còn nợ</label>
-                                <div id="remainingAmount" class="form-control bg-light text-end">0 VND</div>
+                                <div id="remainingAmount" class="sale-currency-field sale-currency-field--readonly"
+                                    aria-live="polite">
+                                    <span id="remainingAmountValue" class="sale-currency-value">0</span>
+                                    <span class="sale-currency-suffix">VND</span>
+                                </div>
                             </div>
                             <div id="bankAccountWrap" class="col-12 d-none">
                                 <label class="form-label" for="bankAccountId">Tài khoản ngân hàng</label>
@@ -1398,7 +1475,7 @@
                 }
 
                 const remaining = Math.max(0, total - selectedPaidAmount());
-                $('#remainingAmount').text(money(remaining) + ' VND');
+                $('#remainingAmountValue').text(money(remaining));
                 $('#bankAccountWrap').toggleClass('d-none', method !== 'bank_transfer');
             }
 
@@ -2029,6 +2106,7 @@
                 cart.set(key, item);
                 const isValid = isValidUnitPrice(unitPrice);
                 input.classList.toggle('is-invalid', !isValid);
+                input.closest('.sale-currency-field')?.classList.toggle('is-invalid', !isValid);
                 input.setCustomValidity(isValid ? '' : 'Giá bán phải lớn hơn 0.');
                 renderCartTotals();
             }
@@ -2069,12 +2147,12 @@
                         <div class="cart-controls">
                             <div class="cart-field">
                             <label class="cart-field-label">Giá bán</label>
-                            <div class="input-group input-group-sm">
+                            <div class="sale-currency-field ${invalidUnitPrice ? 'is-invalid' : ''}">
                                 <input type="text" inputmode="numeric" autocomplete="off"
-                                    class="form-control unit-price-input ${invalidUnitPrice ? 'is-invalid' : ''}"
+                                    class="form-control unit-price-input sale-currency-input ${invalidUnitPrice ? 'is-invalid' : ''}"
                                     value="${money(product.unit_price)}" aria-label="Giá bán ${productName}"
                                     aria-describedby="unit-price-unit-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}">
-                                <span class="input-group-text" id="unit-price-unit-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}">VND</span>
+                                <span class="sale-currency-suffix" id="unit-price-unit-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}">VND</span>
                             </div>
                             </div>
                             <div class="cart-field cart-quantity-field">
