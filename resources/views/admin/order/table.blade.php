@@ -10,7 +10,7 @@
                 <th class="order-col-customer">Khách hàng</th>
                 <th class="text-center order-col-quantity">SL sản phẩm</th>
                 <th class="order-col-payment">Phương thức thanh toán</th>
-                <th class="order-col-status">Trạng thái</th>
+                <th class="order-col-status">Trạng thái thanh toán</th>
                 <th class="text-end order-col-total">Tổng tiền</th>
             </tr>
         </thead>
@@ -48,21 +48,15 @@
                     <td class="order-col-customer">{{ $customerName }}</td>
 
                     <td class="text-center order-col-quantity">
-                        {{ $order->order_details_count ?? 0 }}
+                        {{ (int) ($order->product_quantity ?? 0) }}
                     </td>
 
                     <td class="order-col-payment">{{ $paymentMethodLabel }}</td>
 
                     <td class="order-col-status">
-                        @if ((int) $order->status === 1)
-                            <span class="badge bg-success">
-                                Đã thanh toán
-                            </span>
-                        @else
-                            <span class="badge bg-danger">
-                                Công nợ
-                            </span>
-                        @endif
+                        <span class="badge {{ $order->paymentStatusBadgeClass() }}">
+                            {{ $order->paymentStatusLabel() }}
+                        </span>
                     </td>
 
                     <td class="text-end fw-semibold order-col-total">

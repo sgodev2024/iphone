@@ -29,7 +29,7 @@ class OrderController extends Controller
 
         $searchText = trim((string) $request->query('s', ''));
         $dateRange = trim((string) $request->query('date_range', ''));
-        $status = $request->query('status');
+        $paymentStatus = $request->query('payment_status');
         $paymentMethod = $request->query('payment_method');
 
         $startDate = null;
@@ -72,7 +72,7 @@ class OrderController extends Controller
                 'client',
                 'creator',
             ])
-            ->withCount('orderDetails')
+            ->withSum('orderDetails as product_quantity', 'quantity')
 
             ->when($searchText !== '', function ($query) use ($searchText) {
                 $query->where(function ($searchQuery) use ($searchText) {
@@ -99,9 +99,13 @@ class OrderController extends Controller
             })
 
             ->when(
-                in_array((string) $status, ['0', '1'], true),
-                function ($query) use ($status) {
-                    $query->where('status', (int) $status);
+                in_array($paymentStatus, [
+                    Order::PAYMENT_STATUS_PAID,
+                    Order::PAYMENT_STATUS_PARTIAL,
+                    Order::PAYMENT_STATUS_DEBT,
+                ], true),
+                function ($query) use ($paymentStatus) {
+                    $query->where('payment_status', $paymentStatus);
                 }
             )
 

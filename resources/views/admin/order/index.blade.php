@@ -13,10 +13,11 @@
                     </div>
 
                     <div class="col-xl-2 col-md-3 col-12 order-filter-status">
-                        <select id="filter-status" class="form-select">
-                            <option value="">-- Trạng thái --</option>
-                            <option value="1">Đã thanh toán</option>
-                            <option value="0">Công nợ</option>
+                        <select id="filter-payment-status" class="form-select">
+                            <option value="">-- Trạng thái thanh toán --</option>
+                            <option value="paid">Đã thanh toán</option>
+                            <option value="partial">Thanh toán một phần</option>
+                            <option value="debt">Còn nợ</option>
                         </select>
                     </div>
 
@@ -146,7 +147,7 @@
                     page: page,
                     s: $('#order-search').val().trim(),
                     date_range: $dateFilter.val().trim(),
-                    status: $('#filter-status').val(),
+                    payment_status: $('#filter-payment-status').val(),
                     payment_method: $('#filter-payment').val()
                 };
 
@@ -225,7 +226,7 @@
                 fetchOrders(1);
             }));
 
-            $('#filter-status, #filter-payment').on('change', function() {
+            $('#filter-payment-status, #filter-payment').on('change', function() {
                 fetchOrders(1);
             });
 
@@ -250,7 +251,7 @@
 
             $('#btn-reset').on('click', function() {
                 $('#order-search').val('');
-                $('#filter-status').val('');
+                $('#filter-payment-status').val('');
                 $('#filter-payment').val('');
                 $dateFilter.val('');
 
@@ -348,7 +349,7 @@
             }
 
             .order-page #dateFilter,
-            .order-page #filter-status,
+            .order-page #filter-payment-status,
             .order-page #filter-payment,
             .order-page #order-search,
             .order-page #btn-reset {
@@ -356,7 +357,7 @@
                 min-height: 40px;
             }
 
-            .order-page #filter-status,
+            .order-page #filter-payment-status,
             .order-page #filter-payment,
             .order-page #order-search,
             .order-page #dateFilter {

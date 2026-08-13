@@ -87,6 +87,26 @@ class Order extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function paymentStatusLabel(): string
+    {
+        return match ($this->payment_status) {
+            self::PAYMENT_STATUS_PAID => 'Đã thanh toán',
+            self::PAYMENT_STATUS_PARTIAL => 'Thanh toán một phần',
+            self::PAYMENT_STATUS_DEBT => 'Còn nợ',
+            default => 'Chưa xác định',
+        };
+    }
+
+    public function paymentStatusBadgeClass(): string
+    {
+        return match ($this->payment_status) {
+            self::PAYMENT_STATUS_PAID => 'bg-success',
+            self::PAYMENT_STATUS_PARTIAL => 'bg-warning text-dark',
+            self::PAYMENT_STATUS_DEBT => 'bg-danger',
+            default => 'bg-secondary',
+        };
+    }
+
     public function getCustomerDisplayNameAttribute(): string
     {
         $snapshotName = trim((string) ($this->attributes['name'] ?? ''));

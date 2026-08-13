@@ -51,8 +51,24 @@
                                     <td>{{ formatPrice($order->total_money) }} VND</td>
                                 </tr>
                                 <tr>
-                                    <th><i class="fas fa-hand-holding-usd"></i> Trạng thái</th>
+                                    <th><i class="fas fa-list-check"></i> Trạng thái đơn hàng</th>
                                     <td>{{ $order->status ? 'Đã hoàn thành' : 'Chưa hoàn thành' }}</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="fas fa-hand-holding-usd"></i> Trạng thái thanh toán</th>
+                                    <td>
+                                        <span class="badge {{ $order->paymentStatusBadgeClass() }}">
+                                            {{ $order->paymentStatusLabel() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th><i class="fas fa-coins"></i> Đã thanh toán</th>
+                                    <td>{{ formatPrice($order->paid_amount ?? 0) }} VND</td>
+                                </tr>
+                                <tr>
+                                    <th><i class="fas fa-file-invoice-dollar"></i> Còn nợ</th>
+                                    <td>{{ formatPrice($order->debt_amount ?? 0) }} VND</td>
                                 </tr>
                             </tbody>
                         </table>
