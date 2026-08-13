@@ -2,49 +2,71 @@
 
 @section('content')
     <div class="page-inner supplier-debt-page">
-        <div class="page-header">
-            <x-breadcrumb :items="[['label' => 'CÔNG NỢ NHÀ CUNG CẤP']]" />
-        </div>
+        <x-breadcrumb :items="[['label' => 'CÔNG NỢ NHÀ CUNG CẤP']]" />
 
-        <div class="card p-3 mb-3 shadow-sm">
-            <div class="d-flex justify-content-between align-items-center flex-wrap supplier-debt-filter">
-                <div class="d-flex align-items-center mb-2 supplier-debt-date">
+        <div class="card supplier-debt-filter-card p-3 mb-3 shadow-sm">
+            <div class="supplier-debt-filter">
+                <div class="supplier-debt-date">
                     <input type="text" id="dateFilter" name="date_range" class="form-control"
                         value="{{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}"
                         placeholder="Chọn khoảng ngày">
                 </div>
 
-                <div class="d-flex align-items-center mb-2 supplier-debt-search">
-                    <input type="text" class="form-control me-2 supplier-debt-name" name="name"
+                <div class="supplier-debt-search">
+                    <input type="text" class="form-control supplier-debt-name" name="name"
                         placeholder="Tên công ty">
-                    <button type="button" id="filter" class="btn btn-primary">
-                        <i class="bi bi-search"></i> Lọc
+                    <button type="button" id="filter" class="btn btn-primary supplier-debt-filter-button">
+                        <i class="bi bi-search"></i> <span>Lọc</span>
                     </button>
                 </div>
             </div>
         </div>
 
         <div class="small text-muted mb-2">
-            TK331: Có cuối kỳ là số còn phải trả nhà cung cấp; Nợ cuối kỳ là số ứng trước/trả thừa.
+            TK331: Có cuối kỳ = còn phải trả NCC; Nợ cuối kỳ = số đã ứng trước/trả thừa.
         </div>
 
         <div class="table-responsive supplier-debt-table-wrap">
-            <table class="table table-bordered table-hover align-middle text-center mb-0" id="supplierDebtTable">
+            <table class="table table-bordered table-hover align-middle text-center mb-0 supplier-debt-table" id="supplierDebtTable">
+                <colgroup>
+                    <col class="col-stt">
+                    <col class="col-supplier">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-money">
+                    <col class="col-ending">
+                    <col class="col-ending">
+                </colgroup>
                 <thead class="table-light align-middle">
                     <tr>
-                        <th rowspan="2" style="width: 50px;">#</th>
-                        <th rowspan="2">Công ty</th>
-                        <th colspan="2">Số dư đầu kỳ</th>
-                        <th colspan="2">Phát sinh trong kỳ</th>
-                        <th colspan="2">Số dư cuối kỳ</th>
+                        <th rowspan="3">#</th>
+                        <th rowspan="3">Công ty</th>
+                        <th colspan="2"><span class="heading-nowrap">Số dư đầu kỳ</span></th>
+                        <th colspan="2"><span class="heading-nowrap">Phát sinh trong kỳ</span></th>
+                        <th colspan="2"><span class="heading-nowrap">Số dư cuối kỳ</span></th>
                     </tr>
                     <tr>
-                        <th>Nợ đầu kỳ</th>
-                        <th>Có đầu kỳ</th>
-                        <th>Phát sinh Nợ</th>
-                        <th>Phát sinh Có</th>
-                        <th>Nợ cuối kỳ</th>
-                        <th>Có cuối kỳ</th>
+                        <th><span class="heading-nowrap">Nợ đầu kỳ</span><small class="header-help">Ứng trước NCC</small></th>
+                        <th><span class="heading-nowrap">Có đầu kỳ</span><small class="header-help">Còn phải trả NCC</small></th>
+                        <th><span class="heading-nowrap">Phát sinh Nợ</span><small class="header-help">Đã trả NCC</small></th>
+                        <th><span class="heading-nowrap">Phát sinh Có</span><small class="header-help">Tăng nợ do nhập hàng</small></th>
+                        <th>
+                            <span class="heading-nowrap">Nợ cuối kỳ</span>
+                            <span class="header-formula">3 + 5 - 4 - 6</span>
+                        </th>
+                        <th>
+                            <span class="heading-nowrap">Có cuối kỳ</span>
+                            <span class="header-formula">4 + 6 - 3 - 5</span>
+                        </th>
+                    </tr>
+                    <tr>
+                        <th>[3]</th>
+                        <th>[4]</th>
+                        <th>[5]</th>
+                        <th>[6]</th>
+                        <th>[7]</th>
+                        <th>[8]</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,7 +74,7 @@
                         <tr>
                             <td>{{ $index + 1 }}</td>
                             <td class="text-start supplier-cell">
-                                <span class="supplier-name">{{ $debt->company_name }}</span><br>
+                                <span class="supplier-name">{{ $debt->company_name }}</span>
                                 <span class="supplier-phone">SĐT: {{ $debt->company_phone ?: '—' }}</span>
                             </td>
                             <td class="text-end money-cell">{{ formatExactMoney((string) $debt->opening_debit) }}</td>
@@ -121,7 +143,7 @@
                         <tr>
                             <td>${index + 1}</td>
                             <td class="text-start supplier-cell">
-                                <span class="supplier-name">${companyName}</span><br>
+                                <span class="supplier-name">${companyName}</span>
                                 <span class="supplier-phone">SĐT: ${companyPhone}</span>
                             </td>
                             <td class="text-end money-cell">${formatDebtPrice(debt.opening_debit)}</td>
@@ -165,16 +187,200 @@
 @push('style')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
     <style>
-        .supplier-debt-table-wrap { overflow-x: auto; }
-        .supplier-debt-table-wrap .money-cell { white-space: nowrap; }
-        .supplier-cell { min-width: 220px; }
-        .supplier-name, .supplier-phone { white-space: nowrap; }
+        .supplier-debt-page,
+        .supplier-debt-page * {
+            box-sizing: border-box;
+        }
+
+        .supplier-debt-page {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .supplier-debt-page .supplier-debt-filter-card,
+        .supplier-debt-page .supplier-debt-table-wrap {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .supplier-debt-page .supplier-debt-filter {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .supplier-debt-page .supplier-debt-date,
+        .supplier-debt-page .supplier-debt-search {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .supplier-debt-page .supplier-debt-search {
+            gap: 8px;
+        }
+
+        .supplier-debt-page .supplier-debt-filter-button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        .supplier-debt-page .supplier-debt-table-wrap {
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .supplier-debt-page .supplier-debt-table {
+            width: 100%;
+            max-width: 100%;
+            table-layout: auto;
+        }
+
+        .supplier-debt-page .supplier-debt-table col.col-stt {
+            width: 50px;
+        }
+
+        .supplier-debt-page .supplier-debt-table col.col-supplier {
+            width: 210px;
+        }
+
+        .supplier-debt-page .supplier-debt-table col.col-money {
+            width: 140px;
+        }
+
+        .supplier-debt-page .supplier-debt-table col.col-ending {
+            width: 240px;
+        }
+
+        .supplier-debt-page .supplier-debt-table th,
+        .supplier-debt-page .supplier-debt-table td {
+            vertical-align: middle;
+            word-break: normal;
+            overflow-wrap: normal;
+        }
+
+        .supplier-debt-page .supplier-debt-table th {
+            text-align: center;
+        }
+
+        .supplier-debt-page .heading-nowrap,
+        .supplier-debt-page .header-formula,
+        .supplier-debt-page .money-cell {
+            white-space: nowrap;
+        }
+
+        .supplier-debt-page .header-help {
+            display: block;
+            margin-top: 2px;
+            color: #6c757d;
+            font-size: 0.72rem;
+            font-weight: 400;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .supplier-debt-page .header-formula {
+            display: block;
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
+        .supplier-debt-page .supplier-cell {
+            min-width: 190px;
+        }
+
+        .supplier-debt-page .supplier-name,
+        .supplier-debt-page .supplier-phone {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .supplier-debt-page .money-cell {
+            text-align: right;
+        }
+
         @media (max-width: 767.98px) {
-            .supplier-debt-page { padding: 0 10px; }
-            .supplier-debt-filter { gap: 8px; }
-            .supplier-debt-date, .supplier-debt-search { width: 100%; margin-bottom: 0 !important; }
-            .supplier-debt-search .supplier-debt-name { flex: 1 1 auto; min-width: 0; }
-            .supplier-debt-table { min-width: 1050px; }
+            .supplier-debt-page {
+                width: 100%;
+                max-width: 100%;
+                margin-right: auto;
+                margin-left: auto;
+                padding-right: 10px;
+                padding-left: 10px;
+            }
+
+            .supplier-debt-page .supplier-debt-filter {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .supplier-debt-page .supplier-debt-date,
+            .supplier-debt-page .supplier-debt-search {
+                width: 100%;
+                margin-bottom: 0;
+            }
+
+            .supplier-debt-page .supplier-debt-date .form-control,
+            .supplier-debt-page .supplier-debt-search .form-control,
+            .supplier-debt-page .supplier-debt-filter-button {
+                min-height: 40px;
+            }
+
+            .supplier-debt-page .supplier-debt-name {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .supplier-debt-page .supplier-debt-filter-button {
+                flex: 0 0 auto;
+                padding-right: 14px;
+                padding-left: 14px;
+            }
+
+            .supplier-debt-page .supplier-debt-table {
+                min-width: 1280px;
+            }
+
+            .supplier-debt-page .supplier-debt-table th,
+            .supplier-debt-page .supplier-debt-table td {
+                padding-right: 10px;
+                padding-left: 10px;
+            }
+
+            .supplier-debt-page .supplier-debt-table th:nth-child(1),
+            .supplier-debt-page .supplier-debt-table td:nth-child(1) {
+                min-width: 50px;
+            }
+
+            .supplier-debt-page .supplier-debt-table th:nth-child(2),
+            .supplier-debt-page .supplier-debt-table td:nth-child(2) {
+                min-width: 210px;
+            }
+
+            .supplier-debt-page .supplier-debt-table tbody td:nth-child(n+3) {
+                min-width: 140px;
+            }
+
+            .supplier-debt-page .supplier-debt-table tbody td:nth-child(7),
+            .supplier-debt-page .supplier-debt-table tbody td:nth-child(8) {
+                min-width: 240px;
+            }
+        }
+
+        @media (max-width: 340px) {
+            .supplier-debt-page .supplier-debt-search {
+                flex-wrap: wrap;
+            }
+
+            .supplier-debt-page .supplier-debt-filter-button {
+                width: 100%;
+            }
         }
     </style>
 @endpush
