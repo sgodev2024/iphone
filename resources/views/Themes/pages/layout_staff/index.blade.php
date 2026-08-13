@@ -964,7 +964,12 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="paidAmount">Khách trả</label>
-                                <input id="paidAmount" type="number" min="0" step="1" class="form-control" value="0">
+                                <div class="input-group">
+                                    <input id="paidAmount" type="text" inputmode="numeric" autocomplete="off"
+                                        class="form-control" value="0" aria-describedby="paidAmountUnit">
+                                    <span class="input-group-text" id="paidAmountUnit">VND</span>
+                                </div>
+                                <input type="hidden" id="paidAmountRaw" name="paid_amount" value="0">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Còn nợ</label>
@@ -1193,6 +1198,71 @@
             let orderSaved = false;
             let hasSaleStorage = @json((bool) $saleStorage);
             const saleStorageMessage = qs('#saleStorageMessage');
+            const invoiceModalElement = qs('#invoiceModal');
+            const invoiceModal = bootstrap.Modal.getOrCreateInstance(invoiceModalElement);
+
+            function normalizeMoneyDigits(value) {
+                return String(value ?? '')
+                    .replace(/[^0-9]/g, '')
+                    .replace(/^0+(?=\d)/, '');
+            }
+
+            function formatMoneyDigits(value, emptyValue = '0') {
+                const digits = normalizeMoneyDigits(value);
+
+                return digits === ''
+                    ? emptyValue
+                    : digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            }
+
+            function caretPositionAfterDigits(formattedValue, digitCount) {
+                if (digitCount <= 0) {
+                    return 0;
+                }
+
+                let seenDigits = 0;
+
+                for (let index = 0; index < formattedValue.length; index++) {
+                    if (/\d/.test(formattedValue[index])) {
+                        seenDigits++;
+
+                        if (seenDigits === digitCount) {
+                            return index + 1;
+                        }
+                    }
+                }
+
+                return formattedValue.length;
+            }
+
+            function formatMoneyInputValue(input, rawInput = null) {
+                const previousValue = input.value;
+                const previousCaret = input.selectionStart ?? previousValue.length;
+                const digitsBeforeCaret = previousValue.slice(0, previousCaret).replace(/[^0-9]/g, '').length;
+                const digits = normalizeMoneyDigits(previousValue);
+
+                input.value = formatMoneyDigits(digits, '');
+
+                if (rawInput) {
+                    rawInput.value = digits || '0';
+                }
+
+                if (document.activeElement === input) {
+                    const nextCaret = caretPositionAfterDigits(input.value, Math.min(digitsBeforeCaret, digits.length));
+                    input.setSelectionRange(nextCaret, nextCaret);
+                }
+
+                return digits;
+            }
+
+            function setPaidAmountValue(value) {
+                const paidInput = qs('#paidAmount');
+                const rawInput = qs('#paidAmountRaw');
+                const digits = normalizeMoneyDigits(value);
+
+                paidInput.value = formatMoneyDigits(digits);
+                rawInput.value = digits || '0';
+            }
 
             function setSaleStorageControlsEnabled(enabled) {
                 qsa('[data-sale-storage-control]').forEach((control) => {
@@ -1301,8 +1371,12 @@
                 return qs('#paymentMethod')?.value || '';
             }
 
+            function selectedPaidAmountRaw() {
+                return qs('#paidAmountRaw')?.value || '0';
+            }
+
             function selectedPaidAmount() {
-                return Math.max(0, Math.round(Number(qs('#paidAmount')?.value) || 0));
+                return Math.max(0, Math.round(Number(selectedPaidAmountRaw()) || 0));
             }
 
             function syncPaymentControls(grand, forceDefault = false) {
@@ -1314,12 +1388,12 @@
                 paidInput.max = total;
 
                 if (method === 'debt') {
-                    paidInput.value = 0;
+                    setPaidAmountValue(0);
                     paidInput.disabled = true;
                 } else {
                     paidInput.disabled = false;
                     if (forceDefault || !paymentAmountTouched || selectedPaidAmount() > total) {
-                        paidInput.value = total;
+                        setPaidAmountValue(total);
                     }
                 }
 
@@ -1394,8 +1468,8 @@
                             <td>${index + 1}</td>
                             <td class="text-start">${escapeHtml(item.name || '')}${imei}</td>
                             <td>${Number(item.quantity || 0)}</td>
-                            <td>${money(item.unit_price)}</td>
-                            <td>${money(item.line_total)}</td>
+                            <td>${money(item.unit_price)} VND</td>
+                            <td>${money(item.line_total)} VND</td>
                         </tr>`;
                 }).join('');
 
@@ -1898,7 +1972,7 @@
                     return null;
                 }
 
-                const digits = rawValue.replace(/[^0-9]/g, '');
+                const digits = normalizeMoneyDigits(rawValue);
 
                 if (digits === '') {
                     return 0;
@@ -1948,16 +2022,14 @@
                 const item = cart.get(key);
                 if (!item) return;
 
-                const unitPrice = parseMoneyInput(input.value);
+                const digits = formatMoneyInputValue(input);
+                const unitPrice = digits === '' ? 0 : parseMoneyInput(digits);
                 item.product.unit_price = unitPrice;
                 item.product.price = unitPrice;
                 cart.set(key, item);
                 const isValid = isValidUnitPrice(unitPrice);
                 input.classList.toggle('is-invalid', !isValid);
                 input.setCustomValidity(isValid ? '' : 'Giá bán phải lớn hơn 0.');
-                if (unitPrice !== null) {
-                    input.value = money(unitPrice);
-                }
                 renderCartTotals();
             }
 
@@ -1997,9 +2069,13 @@
                         <div class="cart-controls">
                             <div class="cart-field">
                             <label class="cart-field-label">Giá bán</label>
-                            <input type="text" inputmode="numeric" autocomplete="off"
-                                class="form-control form-control-sm unit-price-input ${invalidUnitPrice ? 'is-invalid' : ''}"
-                                value="${money(product.unit_price)}" aria-label="Giá bán ${productName}" />
+                            <div class="input-group input-group-sm">
+                                <input type="text" inputmode="numeric" autocomplete="off"
+                                    class="form-control unit-price-input ${invalidUnitPrice ? 'is-invalid' : ''}"
+                                    value="${money(product.unit_price)}" aria-label="Giá bán ${productName}"
+                                    aria-describedby="unit-price-unit-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}">
+                                <span class="input-group-text" id="unit-price-unit-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}">VND</span>
+                            </div>
                             </div>
                             <div class="cart-field cart-quantity-field">
                             <label class="cart-field-label">Số lượng</label>
@@ -2164,8 +2240,8 @@
                             <td>${index + 1}</td>
                             <td class="text-start">${itemName}</td>
                             <td>${qty}</td>
-                            <td> ${ money(product.unit_price) }</td>
-                            <td>${ money(product.unit_price * qty) }</td>
+                            <td> ${ money(product.unit_price) } VND</td>
+                            <td>${ money(product.unit_price * qty) } VND</td>
                         </tr>`;
                 })
 
@@ -2226,7 +2302,7 @@
                         return sub - d;
                     })(),
                     payment_method: paymentMethod,
-                    paid_amount: selectedPaidAmount(),
+                    paid_amount: selectedPaidAmountRaw(),
                     bank_account_id: paymentMethod === 'bank_transfer'
                         ? qs('#bankAccountId').value
                         : null,
@@ -2243,7 +2319,7 @@
 
                 renderInvoicePayment(paymentMethod, order.grand);
 
-                $('#invoiceModal').modal('show')
+                invoiceModal.show();
             });
 
             function fetchProducts(search = '') {
@@ -2344,7 +2420,7 @@
                         $('#custAddress').val(data.address)
                         $('#custId').val(data.id)
 
-                        $('#addCustomerModal').modal('hide');
+                        bootstrap.Modal.getOrCreateInstance(qs('#addCustomerModal')).hide();
                         $('#addCustomerForm')[0].reset();
 
                     },
@@ -2369,6 +2445,7 @@
 
             $('#paidAmount').on('input', function() {
                 paymentAmountTouched = true;
+                formatMoneyInputValue(this, qs('#paidAmountRaw'));
                 syncPaymentControls(currentInvoiceGrand);
             });
 
@@ -2419,7 +2496,7 @@
                         return sub - d;
                     })(),
                     payment_method: paymentMethod,
-                    paid_amount: selectedPaidAmount(),
+                    paid_amount: selectedPaidAmountRaw(),
                     bank_account_id: paymentMethod === 'bank_transfer'
                         ? qs('#bankAccountId').value
                         : null,
@@ -2454,6 +2531,7 @@
                             icon: "success",
                             title: res.message
                         });
+                        invoiceModal.hide();
 
                     },
                     error: (xhr) => {
