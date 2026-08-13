@@ -18,9 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 class SaleService
 {
-    public function createPosOrder(User $user, array $data, int $storageId): Order
+    public function createPosOrder(User $user, array $data, int $storageId, bool $createAccountingEntries = true): Order
     {
-        return DB::transaction(function () use ($user, $data, $storageId) {
+        return DB::transaction(function () use ($user, $data, $storageId,  $createAccountingEntries) {
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = $data['customer']['payment'];
             $client = null;
@@ -192,7 +192,15 @@ class SaleService
                 $this->syncProductTotalQuantity((int) $productId);
             }
 
-            $this->createAccountingEntries($order, $paymentMethod, $grand, $user, $ownerId);
+            if ($createAccountingEntries) {
+                $this->createAccountingEntries(
+                    $order,
+                    $paymentMethod,
+                    $grand,
+                    $user,
+                    $ownerId
+                );
+            }
 
             return $order;
         }, 3);
