@@ -24,9 +24,18 @@ class SaleService
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = (string) ($data['payment_method']
                 ?? data_get($data, 'customer.payment', Order::PAYMENT_METHOD_CASH));
-            $paidAmount = array_key_exists('paid_amount', $data)
+            $submittedPaidAmount = array_key_exists('paid_amount', $data)
+                && $data['paid_amount'] !== null
                 ? (int) $data['paid_amount']
-                : ($paymentMethod === Order::PAYMENT_METHOD_DEBT ? 0 : (int) ($data['grand'] ?? 0));
+                : null;
+            $cashTendered = array_key_exists('cash_tendered', $data)
+                && $data['cash_tendered'] !== null
+                ? (int) $data['cash_tendered']
+                : null;
+            $paidAmount = $paymentMethod === Order::PAYMENT_METHOD_CASH
+                ? 0
+                : ($submittedPaidAmount
+                    ?? ($paymentMethod === Order::PAYMENT_METHOD_DEBT ? 0 : (int) ($data['grand'] ?? 0)));
             $bankAccountId = isset($data['bank_account_id'])
                 ? (int) $data['bank_account_id']
                 : null;
@@ -135,13 +144,29 @@ class SaleService
                 ]);
             }
 
-            if ($paidAmount > $grand) {
+            if ($paymentMethod !== Order::PAYMENT_METHOD_CASH && $paidAmount < 0) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => 'Paid amount must not be negative.',
+                ]);
+            }
+
+            if ($paymentMethod !== Order::PAYMENT_METHOD_CASH && $paidAmount > $grand) {
                 throw ValidationException::withMessages([
                     'paid_amount' => 'Số tiền khách trả không được lớn hơn tổng tiền đơn hàng.',
                 ]);
             }
 
-            $debtAmount = (int) round($grand - $paidAmount);
+            if ($paymentMethod === Order::PAYMENT_METHOD_CASH) {
+                if ($cashTendered === null || $cashTendered < 0) {
+                    throw ValidationException::withMessages([
+                        'cash_tendered' => 'Cash tendered must be a non-negative integer.',
+                    ]);
+                }
+
+                $paidAmount = min($cashTendered, (int) round($grand));
+            }
+
+            $debtAmount = max(0, (int) round($grand - $paidAmount));
 
             if ($paidAmount === 0 && $paymentMethod !== Order::PAYMENT_METHOD_DEBT) {
                 throw ValidationException::withMessages([

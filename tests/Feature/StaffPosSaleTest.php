@@ -82,6 +82,115 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame(2, Transaction::query()->where('status', Transaction::STATUS_COMPLETED)->count());
     }
 
+    public function test_cash_over_tender_caps_applied_payment_and_accounting(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create([
+            'user_id' => $manager->id,
+            'name' => 'Cash Over Tender',
+        ]);
+        $product = $this->createProduct([
+            'quantity' => 1,
+            'price' => 1000000,
+            'price_buy' => 700000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $payload = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            1000000,
+            Order::PAYMENT_METHOD_CASH,
+            $client->id
+        );
+        $payload['cash_tendered'] = 2000000;
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertCreated();
+
+        $order = Order::query()->sole();
+        $payment = Transaction::query()->where('type', 'income')->sole();
+
+        $this->assertSame(1000000, (int) $order->paid_amount);
+        $this->assertSame(0, (int) $order->debt_amount);
+        $this->assertSame(Order::PAYMENT_STATUS_PAID, $order->payment_status);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['cashParent']->id,
+            'debit_amount' => 1000000,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['receivable']->id,
+            'credit_amount' => 1000000,
+        ]);
+        $this->assertDatabaseMissing('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'debit_amount' => 2000000,
+        ]);
+        $this->assertDatabaseMissing('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'credit_amount' => 2000000,
+        ]);
+    }
+
+    public function test_cash_tendered_negative_is_rejected_without_side_effects(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['quantity' => 1, 'price' => 1000000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $payload = $this->orderPayload([['id' => $product->id, 'qty' => 1]], 1000000);
+        $payload['cash_tendered'] = -100;
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertSame(1, (int) ProductStorage::query()->value('quantity'));
+    }
+
+    public function test_bank_overpayment_is_still_rejected_without_side_effects(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $client = Client::create(['user_id' => $manager->id, 'name' => 'Bank Overpayment']);
+        $product = $this->createProduct(['quantity' => 1, 'price' => 1000000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $payload = $this->orderPayload(
+            [['id' => $product->id, 'qty' => 1]],
+            1000000,
+            Order::PAYMENT_METHOD_BANK_TRANSFER,
+            $client->id
+        );
+        $payload['paid_amount'] = 2000000;
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $payload)
+            ->assertUnprocessable();
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('transactions', 0);
+        $this->assertSame(1, (int) ProductStorage::query()->value('quantity'));
+    }
+
     public function test_custom_unit_price_is_the_sale_snapshot_total_and_accounting_source(): void
     {
         $this->seedAccounts();
@@ -2069,7 +2178,7 @@ class StaffPosSaleTest extends TestCase
         $payload = $this->orderPayload([
             ['id' => $product->id, 'qty' => 1],
         ], 10000000, Order::PAYMENT_METHOD_CASH, $client->id);
-        $payload['paid_amount'] = 4000000;
+        $payload['cash_tendered'] = 4000000;
 
         $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
 
@@ -2211,7 +2320,7 @@ class StaffPosSaleTest extends TestCase
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 3]);
 
         $partial = $this->orderPayload([['id' => $product->id, 'qty' => 1]], 10000000);
-        $partial['paid_amount'] = 4000000;
+        $partial['cash_tendered'] = 4000000;
         $this->actingAs($staff)->postJson('/ban-hang/order', $partial)->assertUnprocessable();
 
         $debt = $this->orderPayload(
@@ -2299,7 +2408,7 @@ class StaffPosSaleTest extends TestCase
             Order::PAYMENT_METHOD_CASH,
             $client->id
         );
-        $payload['paid_amount'] = 4000000;
+        $payload['cash_tendered'] = 4000000;
         $this->actingAs($staff)->postJson('/ban-hang/order', $payload)->assertCreated();
 
         $order = Order::query()->sole();
@@ -2871,6 +2980,10 @@ class StaffPosSaleTest extends TestCase
             return $item;
         })->all();
 
+        $paymentFields = $payment === Order::PAYMENT_METHOD_CASH
+            ? ['cash_tendered' => $grand]
+            : ['paid_amount' => $payment === Order::PAYMENT_METHOD_DEBT ? 0 : $grand];
+
         return [
             'items' => $items,
             'subtotal' => $grand,
@@ -2878,7 +2991,7 @@ class StaffPosSaleTest extends TestCase
             'discountInput' => 0,
             'grand' => $grand,
             'payment_method' => $payment,
-            'paid_amount' => $payment === Order::PAYMENT_METHOD_DEBT ? 0 : $grand,
+            ...$paymentFields,
             'bank_account_id' => $payment === Order::PAYMENT_METHOD_BANK_TRANSFER
                 ? Account::query()->where('code', '112BANK')->value('id')
                 : null,

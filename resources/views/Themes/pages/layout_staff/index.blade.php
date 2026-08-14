@@ -1044,6 +1044,13 @@
                                 </div>
                                 <input type="hidden" id="paidAmountRaw" name="paid_amount" value="0">
                             </div>
+                            <div id="changeAmountWrap" class="col-md-6 d-none">
+                                <label class="form-label">Tr&#7843; l&#7841;i kh&#225;ch</label>
+                                <div class="sale-currency-field sale-currency-field--readonly" aria-live="polite">
+                                    <span id="changeAmountValue" class="sale-currency-value">0</span>
+                                    <span class="sale-currency-suffix">VND</span>
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label">Còn nợ</label>
                                 <div id="remainingAmount" class="sale-currency-field sale-currency-field--readonly"
@@ -1456,25 +1463,56 @@
                 return Math.max(0, Math.round(Number(selectedPaidAmountRaw()) || 0));
             }
 
+            function paymentPayloadFields(paymentMethod) {
+                return paymentMethod === 'cash'
+                    ? { cash_tendered: selectedPaidAmountRaw() }
+                    : { paid_amount: selectedPaidAmountRaw() };
+            }
+
             function syncPaymentControls(grand, forceDefault = false) {
                 const total = Math.max(0, Math.round(Number(grand) || 0));
                 const method = selectedPaymentMethod();
+                const isCash = method === 'cash';
                 const paidInput = qs('#paidAmount');
+                const paidField = paidInput?.parentElement?.parentElement;
+                const changeWrap = qs('#changeAmountWrap');
+                const paidLabel = document.querySelector('label[for="paidAmount"]');
 
                 currentInvoiceGrand = total;
-                paidInput.max = total;
+
+                if (isCash) {
+                    paidInput.removeAttribute('max');
+                    paidField?.classList.remove('col-md-6');
+                    paidField?.classList.add('col-12');
+                    changeWrap?.classList.remove('d-none');
+                    if (paidLabel) {
+                        paidLabel.textContent = '\u004b\u0068\u00e1\u0063\u0068 \u0111\u01b0\u0061';
+                    }
+                } else {
+                    paidInput.max = total;
+                    paidField?.classList.remove('col-12');
+                    paidField?.classList.add('col-md-6');
+                    changeWrap?.classList.add('d-none');
+                    if (paidLabel) {
+                        paidLabel.textContent = '\u004b\u0068\u00e1\u0063\u0068 \u0074\u0072\u1ea3';
+                    }
+                }
 
                 if (method === 'debt') {
                     setPaidAmountValue(0);
                     paidInput.disabled = true;
                 } else {
                     paidInput.disabled = false;
-                    if (forceDefault || !paymentAmountTouched || selectedPaidAmount() > total) {
+                    if (forceDefault || !paymentAmountTouched || (!isCash && selectedPaidAmount() > total)) {
                         setPaidAmountValue(total);
                     }
                 }
 
-                const remaining = Math.max(0, total - selectedPaidAmount());
+                const tendered = selectedPaidAmount();
+                const applied = isCash ? Math.min(tendered, total) : tendered;
+                const remaining = Math.max(0, total - applied);
+                const change = isCash ? Math.max(0, tendered - total) : 0;
+                $('#changeAmountValue').text(money(change));
                 $('#remainingAmountValue').text(money(remaining));
                 $('#bankAccountWrap').toggleClass('d-none', method !== 'bank_transfer');
             }
@@ -1483,10 +1521,11 @@
                 syncPaymentControls(grand);
                 const total = Math.max(0, Math.round(Number(grand) || 0));
                 const paid = selectedPaidAmount();
-                const remaining = total - paid;
                 const method = selectedPaymentMethod();
+                const applied = method === 'cash' ? Math.min(paid, total) : paid;
+                const remaining = Math.max(0, total - applied);
 
-                if (paid > total) {
+                if (method !== 'cash' && paid > total) {
                     Swal.fire({ icon: 'error', title: 'Số tiền khách trả không được lớn hơn tổng đơn.' });
                     return false;
                 }
@@ -2221,6 +2260,8 @@
                 syncPaymentControls(grand);
             }
 
+            syncPaymentControls(0, true);
+
             // Clear cart
             qs('#clearCartBtn').addEventListener('click', () => {
                 cart.clear();
@@ -2380,7 +2421,7 @@
                         return sub - d;
                     })(),
                     payment_method: paymentMethod,
-                    paid_amount: selectedPaidAmountRaw(),
+                    ...paymentPayloadFields(paymentMethod),
                     bank_account_id: paymentMethod === 'bank_transfer'
                         ? qs('#bankAccountId').value
                         : null,
@@ -2579,7 +2620,7 @@
                         return sub - d;
                     })(),
                     payment_method: paymentMethod,
-                    paid_amount: selectedPaidAmountRaw(),
+                    ...paymentPayloadFields(paymentMethod),
                     bank_account_id: paymentMethod === 'bank_transfer'
                         ? qs('#bankAccountId').value
                         : null,

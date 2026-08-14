@@ -34,7 +34,10 @@ class StoreOrderRequest extends FormRequest
         $paymentMethod = $this->input('payment_method', $legacyPaymentMethod);
         $paidAmount = $this->input('paid_amount');
 
-        if ($paidAmount === null && $paymentMethod !== null) {
+        if ($paidAmount === null
+            && $paymentMethod !== null
+            && $paymentMethod !== 'cash'
+        ) {
             $paidAmount = $paymentMethod === 'debt' ? 0 : $this->input('grand');
         }
 
@@ -42,6 +45,7 @@ class StoreOrderRequest extends FormRequest
             'items' => $items,
             'payment_method' => $paymentMethod,
             'paid_amount' => $paidAmount,
+            'cash_tendered' => $this->input('cash_tendered'),
         ]);
     }
 
@@ -74,7 +78,14 @@ class StoreOrderRequest extends FormRequest
             'grand' => ['required', 'numeric', 'min:0'],
 
             'payment_method' => ['required', 'in:cash,bank_transfer,debt'],
-            'paid_amount' => ['required', 'integer', 'min:0'],
+            'paid_amount' => ['nullable', 'integer', 'min:0', 'required_unless:payment_method,cash'],
+            'cash_tendered' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'required_if:payment_method,cash',
+                'prohibited_unless:payment_method,cash',
+            ],
             'bank_account_id' => [
                 'nullable',
                 'integer',
