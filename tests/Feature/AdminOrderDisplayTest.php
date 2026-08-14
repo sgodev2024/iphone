@@ -204,7 +204,117 @@ class AdminOrderDisplayTest extends TestCase
             '/IMEI-ORDER.*?order-col-quantity">\s*2\s*<\/td>/s',
             $html
         );
-        $this->assertLessThanOrEqual(6, count(DB::getQueryLog()), 'Order list query count must stay bounded.');
+        $this->assertLessThanOrEqual(7, count(DB::getQueryLog()), 'Order list query count must stay bounded.');
+    }
+
+    public function test_order_summary_counts_and_sums_total_money_without_ledger_duplication(): void
+    {
+        $first = $this->createOrder(
+            'SUMMARY-PAID',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            2000000,
+            0,
+            Order::PAYMENT_METHOD_CASH
+        );
+        $second = $this->createOrder(
+            'SUMMARY-PARTIAL',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            1500000,
+            1500000,
+            Order::PAYMENT_METHOD_BANK_TRANSFER
+        );
+        $third = $this->createOrder(
+            'SUMMARY-DEBT',
+            Order::PAYMENT_STATUS_DEBT,
+            true,
+            0,
+            5000000,
+            Order::PAYMENT_METHOD_DEBT
+        );
+
+        $this->createLedgerTransaction($first, 'sale', [
+            ['debit_amount' => 2000000],
+        ]);
+        foreach ([500000, 500000] as $amount) {
+            $this->createLedgerTransaction($first, 'income', [
+                ['credit_amount' => $amount],
+            ]);
+        }
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertStringContainsString('Tổng đơn hàng:', $html);
+        $this->assertStringContainsString('>3</strong>', $html);
+        $this->assertStringContainsString('Tổng doanh thu:', $html);
+        $this->assertStringContainsString('10.000.000 VND', $html);
+        $this->assertStringContainsString($first->code, $html);
+        $this->assertStringContainsString($second->code, $html);
+        $this->assertStringContainsString($third->code, $html);
+    }
+
+    public function test_order_summary_uses_the_same_filters_on_every_page(): void
+    {
+        for ($index = 1; $index <= 11; $index++) {
+            $order = $this->createOrder(
+                "SUMMARY-SCOPE-{$index}",
+                Order::PAYMENT_STATUS_PARTIAL,
+                true,
+                500000,
+                500000,
+                Order::PAYMENT_METHOD_CASH,
+                'Scoped customer',
+                '0909111111',
+                10,
+                '2026-08-13 10:00:00'
+            );
+
+            if ($index === 1) {
+                $this->createLedgerTransaction($order, 'sale', [
+                    ['debit_amount' => 1000000],
+                ]);
+                foreach ([250000, 250000] as $amount) {
+                    $this->createLedgerTransaction($order, 'income', [
+                        ['credit_amount' => $amount],
+                    ]);
+                }
+            }
+        }
+
+        $this->createOrder(
+            'SUMMARY-SCOPE-EXCLUDED',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            9000000,
+            0,
+            Order::PAYMENT_METHOD_BANK_TRANSFER,
+            'Scoped customer',
+            '0909111111',
+            10,
+            '2026-08-13 10:00:00'
+        );
+
+        $query = [
+            's' => 'Scoped customer',
+            'date_range' => '13/08/2026 - 13/08/2026',
+            'payment_status' => Order::PAYMENT_STATUS_PARTIAL,
+            'payment_method' => Order::PAYMENT_METHOD_CASH,
+        ];
+
+        $pageOne = $this->getOrderListHtml($query + ['page' => 1]);
+        $pageTwo = $this->getOrderListHtml($query + ['page' => 2]);
+
+        foreach ([$pageOne, $pageTwo] as $html) {
+            $this->assertStringContainsString('Tổng đơn hàng:', $html);
+            $this->assertStringContainsString('>11</strong>', $html);
+            $this->assertStringContainsString('11.000.000 VND', $html);
+        }
+
+        $this->assertStringContainsString('SUMMARY-SCOPE-1', $pageOne);
+        $this->assertStringContainsString('SUMMARY-SCOPE-11', $pageTwo);
+        $this->assertStringNotContainsString('SUMMARY-SCOPE-EXCLUDED', $pageOne);
+        $this->assertStringNotContainsString('SUMMARY-SCOPE-EXCLUDED', $pageTwo);
     }
 
     public function test_payment_status_filter_does_not_use_workflow_status_or_payment_method(): void

@@ -97,7 +97,7 @@ class OrderController extends Controller
             )
             ->groupBy('t.reference_number');
 
-        $orders = Order::query()
+        $baseOrdersQuery = Order::query()
             ->leftJoinSub($orderLedger, 'order_ledger', function ($join) {
                 $join->on(
                     'order_ledger.reference_number',
@@ -112,13 +112,6 @@ class OrderController extends Controller
                 'order_ledger.sale_entry_count_131',
             ])
             // Admin xem toàn bộ đơn nên không lọc user_id theo tài khoản đăng nhập
-            ->with([
-                'user',
-                'client',
-                'creator',
-            ])
-            ->withSum('orderDetails as product_quantity', 'quantity')
-
             ->when($searchText !== '', function ($query) use ($searchText) {
                 $query->where(function ($searchQuery) use ($searchText) {
                     $searchQuery
@@ -160,13 +153,32 @@ class OrderController extends Controller
                     $query->where('payment_method', $paymentMethod);
                 }
             )
-            ->where('orders.branch_id', auth()->user()->branch_id)
+            ->where('orders.branch_id', auth()->user()->branch_id);
+
+        $summary = (clone $baseOrdersQuery)
+            ->toBase()
+            ->select([])
+            ->selectRaw(
+                'COUNT(DISTINCT orders.id) AS total_orders, COALESCE(SUM(orders.total_money), 0) AS total_revenue'
+            )
+            ->first();
+
+        $totalOrders = (int) ($summary->total_orders ?? 0);
+        $totalRevenue = (float) ($summary->total_revenue ?? 0);
+
+        $orders = $baseOrdersQuery
+            ->with([
+                'user',
+                'client',
+                'creator',
+            ])
+            ->withSum('orderDetails as product_quantity', 'quantity')
             ->latest('orders.created_at')
             ->paginate(10)
             ->withQueryString();
 
         return response()->json([
-            'html' => view('admin.order.table', compact('orders'))->render(),
+            'html' => view('admin.order.table', compact('orders', 'totalOrders', 'totalRevenue'))->render(),
         ]);
     }
 

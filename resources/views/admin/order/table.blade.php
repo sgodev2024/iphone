@@ -1,3 +1,14 @@
+<div class="order-summary d-flex align-items-center gap-4 mb-3 text-nowrap">
+    <span>
+        <span class="fw-medium">Tổng đơn hàng:</span>
+        <strong>{{ number_format($totalOrders, 0, ',', '.') }}</strong>
+    </span>
+    <span>
+        <span class="fw-medium">Tổng doanh thu:</span>
+        <strong>{{ formatPrice($totalRevenue) }} VND</strong>
+    </span>
+</div>
+
 <div class="order-table-hint">Vuốt ngang để xem đầy đủ bảng</div>
 
 <div class="table-responsive order-table-scroll">

@@ -22,8 +22,13 @@
 
         <div class="container-fluid">
             <!-- Main Metrics -->
+            @php
+                $orderTodayUrl = route('admin.order.index');
+            @endphp
             <div class="row g-4 mb-4">
                 <div class="col-xl-3 col-md-6">
+                    <a href="{{ $orderTodayUrl }}"
+                        class="text-decoration-none text-reset">
                     <div class="metric-card">
                         <div class="metric-icon revenue">
                             <i class="fas fa-coins"></i>
@@ -50,11 +55,12 @@
                             </div>
                         @endif
                     </div>
+                    </a>
 
                 </div>
 
                 <div class="col-xl-3 col-md-6">
-                    <a href="{{ route('admin.order.index') }}"
+                    <a href="{{ $orderTodayUrl }}"
                     class="text-decoration-none text-reset">
                     <div class="metric-card">
                         <div class="metric-icon orders">
