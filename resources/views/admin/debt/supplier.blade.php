@@ -179,7 +179,8 @@
 
         .supplier-debt-page .supplier-debt-table {
             width: 100%;
-            max-width: 100%;
+            min-width: 1150px;
+            max-width: none;
             table-layout: auto;
         }
 
@@ -188,7 +189,7 @@
         }
 
         .supplier-debt-page .supplier-debt-table col.col-supplier {
-            width: 210px;
+            width: 220px;
         }
 
         .supplier-debt-page .supplier-debt-table col.col-money {
@@ -196,7 +197,7 @@
         }
 
         .supplier-debt-page .supplier-debt-table col.col-ending {
-            width: 240px;
+            width: 160px;
         }
 
         .supplier-debt-page .supplier-debt-table th,
@@ -204,6 +205,8 @@
             vertical-align: middle;
             word-break: normal;
             overflow-wrap: normal;
+            padding-top: 0.45rem;
+            padding-bottom: 0.45rem;
         }
 
         .supplier-debt-page .supplier-debt-table th {
@@ -233,15 +236,24 @@
         }
 
         .supplier-debt-page .supplier-cell {
-            min-width: 190px;
+            min-width: 220px;
+            white-space: nowrap;
         }
 
         .supplier-debt-page .supplier-name,
         .supplier-debt-page .supplier-phone {
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            display: inline;
+            white-space: inherit;
+        }
+
+        .supplier-debt-page .supplier-name {
+            font-weight: 600;
+        }
+
+        .supplier-debt-page .supplier-phone {
+            margin-left: 0.75rem;
+            color: #6c757d;
+            font-weight: 400;
         }
 
         .supplier-debt-page .money-cell {
@@ -295,7 +307,7 @@
             }
 
             .supplier-debt-page .supplier-debt-table {
-                min-width: 1280px;
+                min-width: 1150px;
             }
 
             .supplier-debt-page .supplier-debt-table th,
@@ -311,7 +323,7 @@
 
             .supplier-debt-page .supplier-debt-table th:nth-child(2),
             .supplier-debt-page .supplier-debt-table td:nth-child(2) {
-                min-width: 210px;
+                min-width: 220px;
             }
 
             .supplier-debt-page .supplier-debt-table tbody td:nth-child(n+3) {
@@ -320,7 +332,7 @@
 
             .supplier-debt-page .supplier-debt-table tbody td:nth-child(7),
             .supplier-debt-page .supplier-debt-table tbody td:nth-child(8) {
-                min-width: 240px;
+                min-width: 160px;
             }
         }
 

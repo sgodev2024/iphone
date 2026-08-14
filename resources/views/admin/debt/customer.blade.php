@@ -470,7 +470,8 @@
 
         .customer-debt-page .customer-debt-table {
             width: 100%;
-            max-width: 100%;
+            min-width: 1270px;
+            max-width: none;
             table-layout: fixed;
         }
 
@@ -479,7 +480,7 @@
         }
 
         .customer-debt-page .customer-debt-table col.col-customer {
-            width: 210px;
+            width: 220px;
         }
 
         .customer-debt-page .customer-debt-table col.col-money {
@@ -487,7 +488,7 @@
         }
 
         .customer-debt-page .customer-debt-table col.col-ending {
-            width: 240px;
+            width: 160px;
         }
 
         .customer-debt-page .customer-debt-table col.col-action {
@@ -500,6 +501,8 @@
             vertical-align: middle;
             word-break: normal;
             overflow-wrap: normal;
+            padding-top: 0.45rem;
+            padding-bottom: 0.45rem;
         }
 
         .customer-debt-page .customer-debt-table th {
@@ -519,15 +522,24 @@
         }
 
         .customer-debt-page .customer-cell {
-            min-width: 190px;
+            min-width: 220px;
+            white-space: nowrap;
         }
 
         .customer-debt-page .customer-name,
         .customer-debt-page .customer-phone {
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            display: inline;
+            white-space: inherit;
+        }
+
+        .customer-debt-page .customer-name {
+            font-weight: 600;
+        }
+
+        .customer-debt-page .customer-phone {
+            margin-left: 0.75rem;
+            color: #6c757d;
+            font-weight: 400;
         }
 
         .customer-debt-page .money-cell {
@@ -552,6 +564,10 @@
         .customer-debt-page .collect-debt-button:disabled {
             cursor: not-allowed;
             opacity: 0.55;
+        }
+
+        .customer-debt-page .collect-debt-button {
+            white-space: nowrap;
         }
 
         .customer-debt-page #customerDebtPaymentModal .modal-content {
@@ -647,7 +663,7 @@
             }
 
             .customer-debt-page .customer-debt-table {
-                min-width: 1280px;
+                min-width: 1270px;
             }
 
             .customer-debt-page .customer-debt-table th,
@@ -663,7 +679,7 @@
 
             .customer-debt-page .customer-debt-table th:nth-child(2),
             .customer-debt-page .customer-debt-table td:nth-child(2) {
-                min-width: 210px;
+                min-width: 220px;
             }
 
             .customer-debt-page .customer-debt-table tbody td:nth-child(n+3) {
@@ -672,7 +688,7 @@
 
             .customer-debt-page .customer-debt-table tbody td:nth-child(7),
             .customer-debt-page .customer-debt-table tbody td:nth-child(8) {
-                min-width: 240px;
+                min-width: 160px;
             }
 
             .customer-debt-page .customer-debt-action-cell {
