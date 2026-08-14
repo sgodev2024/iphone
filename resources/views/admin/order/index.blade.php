@@ -450,7 +450,8 @@
             .order-page .order-col-quantity,
             .order-page .order-col-payment,
             .order-page .order-col-status,
-            .order-page .order-col-total {
+            .order-page .order-col-total,
+            .order-page .order-col-debt {
                 white-space: nowrap;
             }
 
@@ -467,7 +468,8 @@
                 text-align: center !important;
             }
 
-            .order-page .order-col-total {
+            .order-page .order-col-total,
+            .order-page .order-col-debt {
                 text-align: right !important;
             }
 
@@ -499,7 +501,8 @@
                 min-width: 140px;
             }
 
-            .order-page .order-col-total {
+            .order-page .order-col-total,
+            .order-page .order-col-debt {
                 min-width: 150px;
             }
 

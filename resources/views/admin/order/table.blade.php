@@ -12,6 +12,7 @@
                 <th class="order-col-payment">Phương thức thanh toán</th>
                 <th class="order-col-status">Trạng thái thanh toán</th>
                 <th class="text-end order-col-total">Tổng tiền</th>
+                <th class="text-end order-col-debt">CÒN NỢ</th>
             </tr>
         </thead>
 
@@ -28,6 +29,11 @@
                     $employeeName = $order->creator?->name ?? ($order->user?->name ?? '---');
 
                     $customerName = $order->customer_display_name;
+
+                    $saleDebit131 = (float) ($order->sale_debit_131 ?? 0);
+                    $paymentCredit131 = (float) ($order->payment_credit_131 ?? 0);
+                    $remainingDebt = $saleDebit131 - $paymentCredit131;
+                    $hasSaleAccountingEntry = (int) ($order->sale_entry_count_131 ?? 0) > 0;
                 @endphp
 
                 <tr>
@@ -62,10 +68,16 @@
                     <td class="text-end fw-semibold order-col-total">
                         {{ formatPrice($order->total_money ?? 0) }} VND
                     </td>
+
+                    <td class="text-end fw-semibold order-col-debt">
+                        @if ($hasSaleAccountingEntry && $remainingDebt > 0)
+                            <span class="text-danger">{{ formatPrice($remainingDebt) }} VND</span>
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td class="text-center py-4" colspan="8">
+                    <td class="text-center py-4" colspan="9">
                         Không có đơn hàng nào
                     </td>
                 </tr>

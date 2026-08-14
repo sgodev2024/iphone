@@ -15,6 +15,8 @@ class AdminOrderDisplayTest extends TestCase
 {
     private User $admin;
 
+    private int $receivableAccountId;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -82,12 +84,47 @@ class AdminOrderDisplayTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('accounts', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code');
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('transactions', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->date('transaction_date')->nullable();
+            $table->string('description')->nullable();
+            $table->string('reference_number')->nullable();
+            $table->string('type')->nullable();
+            $table->string('document_type')->nullable();
+            $table->string('status')->default('pending');
+            $table->timestamps();
+        });
+
+        Schema::create('transaction_entries', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('transaction_id');
+            $table->unsignedBigInteger('account_id');
+            $table->decimal('debit_amount', 15, 2)->default(0);
+            $table->decimal('credit_amount', 15, 2)->default(0);
+            $table->timestamps();
+        });
+
         $this->admin = User::create([
             'name' => 'Admin order test',
             'email' => 'admin-order@example.test',
             'password' => 'password',
             'role_id' => 2,
             'branch_id' => 10,
+        ]);
+
+        $this->receivableAccountId = DB::table('accounts')->insertGetId([
+            'code' => '131',
+            'name' => 'Phải thu khách hàng',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
@@ -197,17 +234,261 @@ class AdminOrderDisplayTest extends TestCase
         $this->assertSame(Order::PAYMENT_STATUS_PARTIAL, $detailView->getData()['order']->payment_status);
     }
 
+    public function test_remaining_debt_uses_sale_debit_from_tk131_for_unpaid_order(): void
+    {
+        $order = $this->createOrder('LEDGER-UNPAID', Order::PAYMENT_STATUS_DEBT, true, 0, 999);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 3000000],
+        ]);
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertStringContainsString('CÒN NỢ', $html);
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-UNPAID.*?order-col-debt">\s*<span class="text-danger">3\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_remaining_debt_subtracts_completed_partial_payment_from_tk131(): void
+    {
+        $order = $this->createOrder('LEDGER-PARTIAL', Order::PAYMENT_STATUS_PARTIAL, true, 7000000, 3000000);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+        $this->createLedgerTransaction($order, 'income', [
+            ['credit_amount' => 7000000],
+        ]);
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-PARTIAL.*?order-col-debt">\s*<span class="text-danger">3\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_fully_paid_order_has_a_blank_remaining_debt_cell(): void
+    {
+        $order = $this->createOrder('LEDGER-PAID', Order::PAYMENT_STATUS_PAID, true, 10000000, 0);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+        $this->createLedgerTransaction($order, 'credit_notice', [
+            ['credit_amount' => 10000000],
+        ]);
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-PAID.*?<td class="text-end fw-semibold order-col-debt">\s*<\/td>/s',
+            $html
+        );
+        $this->assertStringNotContainsString('<span class="text-danger">10.000.000 VND</span>', $html);
+    }
+
+    public function test_multi_payment_sums_all_completed_payment_credits(): void
+    {
+        $order = $this->createOrder('LEDGER-MULTI-PAYMENT', Order::PAYMENT_STATUS_PARTIAL, true, 7000000, 3000000);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+
+        foreach ([4000000, 2000000, 1000000] as $amount) {
+            $this->createLedgerTransaction($order, 'income', [
+                ['credit_amount' => $amount],
+            ]);
+        }
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-MULTI-PAYMENT.*?order-col-debt">\s*<span class="text-danger">3\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_non_completed_payment_does_not_reduce_remaining_debt(): void
+    {
+        $order = $this->createOrder('LEDGER-PENDING-PAYMENT', Order::PAYMENT_STATUS_PARTIAL, true, 7000000, 3000000);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+        $this->createLedgerTransaction($order, 'income', [
+            ['credit_amount' => 7000000],
+        ]);
+        $this->createLedgerTransaction($order, 'income', [
+            ['credit_amount' => 3000000],
+        ], 'pending');
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-PENDING-PAYMENT.*?order-col-debt">\s*<span class="text-danger">3\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_ledger_transactions_with_wrong_document_type_are_ignored(): void
+    {
+        $order = $this->createOrder('LEDGER-WRONG-DOCUMENT', Order::PAYMENT_STATUS_PARTIAL, true, 7000000, 3000000);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+        $this->createLedgerTransaction($order, 'income', [
+            ['credit_amount' => 7000000],
+        ], 'completed', 'invoice');
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-WRONG-DOCUMENT.*?order-col-debt">\s*<span class="text-danger">10\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_ledger_transactions_with_invalid_type_or_account_are_ignored(): void
+    {
+        $order = $this->createOrder('LEDGER-WRONG-TYPE-ACCOUNT', Order::PAYMENT_STATUS_PARTIAL, true, 7000000, 3000000);
+        $this->createLedgerTransaction($order, 'sale', [
+            ['debit_amount' => 10000000],
+        ]);
+        $this->createLedgerTransaction($order, 'expense', [
+            ['credit_amount' => 4000000],
+        ]);
+        $wrongAccountId = $this->createAccount('5111');
+        $this->createLedgerTransaction($order, 'income', [
+            ['account_id' => $wrongAccountId, 'credit_amount' => 3000000],
+        ]);
+        $this->createLedgerTransaction($order, 'income', [
+            ['credit_amount' => 3000000],
+        ], 'completed', 'order', (string) ($order->id + 100));
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertMatchesRegularExpression(
+            '/LEDGER-WRONG-TYPE-ACCOUNT.*?order-col-debt">\s*<span class="text-danger">10\.000\.000 VND<\/span>/s',
+            $html
+        );
+    }
+
+    public function test_missing_sale_and_negative_remaining_debt_are_left_blank_as_anomalies(): void
+    {
+        $missingSale = $this->createOrder('LEDGER-MISSING-SALE', Order::PAYMENT_STATUS_PAID, true, 1000000, 0);
+        $this->createLedgerTransaction($missingSale, 'income', [
+            ['credit_amount' => 1000000],
+        ]);
+
+        $negative = $this->createOrder('LEDGER-NEGATIVE', Order::PAYMENT_STATUS_PAID, true, 2000000, 0);
+        $this->createLedgerTransaction($negative, 'sale', [
+            ['debit_amount' => 1000000],
+        ]);
+        $this->createLedgerTransaction($negative, 'income', [
+            ['credit_amount' => 2000000],
+        ]);
+
+        $html = $this->getOrderListHtml();
+
+        foreach (['LEDGER-MISSING-SALE', 'LEDGER-NEGATIVE'] as $code) {
+            $this->assertMatchesRegularExpression(
+                "/{$code}.*?<td class=\"text-end fw-semibold order-col-debt\">\\s*<\\/td>/s",
+                $html
+            );
+        }
+    }
+
+    public function test_ledger_aggregation_does_not_duplicate_orders_and_pagination_stays_at_ten_rows(): void
+    {
+        for ($index = 1; $index <= 11; $index++) {
+            $order = $this->createOrder(
+                "LEDGER-PAGE-{$index}",
+                Order::PAYMENT_STATUS_PARTIAL,
+                true,
+                7000000,
+                3000000
+            );
+            $this->createLedgerTransaction($order, 'sale', [
+                ['debit_amount' => 10000000],
+            ]);
+
+            foreach ([4000000, 2000000, 1000000] as $amount) {
+                $this->createLedgerTransaction($order, 'income', [
+                    ['credit_amount' => $amount],
+                ]);
+            }
+        }
+
+        $html = $this->getOrderListHtml(['s' => 'LEDGER-PAGE']);
+
+        $this->assertSame(10, substr_count($html, '<td class="text-end fw-semibold order-col-debt">'));
+        $this->assertStringContainsString('Trang 1 / 2', $html);
+        $this->assertStringContainsString('s=LEDGER-PAGE', html_entity_decode($html));
+    }
+
+    public function test_search_date_payment_method_and_branch_filters_remain_intact(): void
+    {
+        $this->createOrder(
+            'FILTER-CUSTOMER',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Customer Searchable',
+            '0909000000',
+            10,
+            '2026-08-05 10:00:00'
+        );
+        $this->createOrder(
+            'FILTER-OTHER-BRANCH',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Customer Searchable',
+            '0909000000',
+            99,
+            '2026-08-05 10:00:00'
+        );
+        $this->createOrder(
+            'FILTER-OLD',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            Order::PAYMENT_METHOD_BANK_TRANSFER,
+            'Old Customer',
+            '0888000000',
+            10,
+            '2026-07-01 10:00:00'
+        );
+
+        $this->assertStringContainsString('FILTER-CUSTOMER', $this->getOrderListHtml(['s' => 'Customer Searchable']));
+        $this->assertStringNotContainsString('FILTER-OTHER-BRANCH', $this->getOrderListHtml(['s' => 'Customer Searchable']));
+        $this->assertStringContainsString('FILTER-CUSTOMER', $this->getOrderListHtml(['s' => '0909000000']));
+        $this->assertStringContainsString('FILTER-CUSTOMER', $this->getOrderListHtml(['date_range' => '01/08/2026 - 10/08/2026']));
+        $this->assertStringNotContainsString('FILTER-OLD', $this->getOrderListHtml(['date_range' => '01/08/2026 - 10/08/2026']));
+        $this->assertStringContainsString('FILTER-CUSTOMER', $this->getOrderListHtml(['payment_method' => Order::PAYMENT_METHOD_CASH]));
+        $this->assertStringNotContainsString('FILTER-OLD', $this->getOrderListHtml(['payment_method' => Order::PAYMENT_METHOD_CASH]));
+        $this->assertSame(1, substr_count($this->getOrderListHtml(), 'FILTER-CUSTOMER'));
+    }
+
     private function createOrder(
         string $code,
         string $paymentStatus,
         bool $workflowStatus,
         int $paidAmount,
         int $debtAmount,
-        string $paymentMethod = Order::PAYMENT_METHOD_DEBT
+        string $paymentMethod = Order::PAYMENT_METHOD_DEBT,
+        ?string $name = null,
+        ?string $phone = null,
+        ?int $branchId = null,
+        ?string $createdAt = null
     ): Order {
-        return Order::create([
+        $order = Order::create([
             'user_id' => $this->admin->id,
-            'branch_id' => $this->admin->branch_id,
+            'branch_id' => $branchId ?? $this->admin->branch_id,
             'code' => $code,
             'name' => 'Khách kiểm thử',
             'total_money' => $paidAmount + $debtAmount,
@@ -218,6 +499,75 @@ class AdminOrderDisplayTest extends TestCase
             'status' => $workflowStatus,
             'created_by' => $this->admin->id,
         ]);
+
+        if ($name !== null || $phone !== null || $createdAt !== null) {
+            $order->forceFill(array_filter([
+                'name' => $name,
+                'phone' => $phone,
+                'created_at' => $createdAt !== null ? \Carbon\Carbon::parse($createdAt) : null,
+            ], static fn ($value): bool => $value !== null));
+            $order->saveQuietly();
+        }
+
+        return $order;
+    }
+
+    private function getOrderListHtml(array $query = []): string
+    {
+        $queryString = $query === [] ? '' : '?'.http_build_query($query);
+
+        $response = $this->withoutMiddleware()
+            ->actingAs($this->admin)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->getJson('/admin/order'.$queryString);
+
+        $response->assertOk();
+
+        return (string) $response->json('html');
+    }
+
+    private function createAccount(string $code): int
+    {
+        return (int) DB::table('accounts')->insertGetId([
+            'code' => $code,
+            'name' => "Account {$code}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function createLedgerTransaction(
+        Order $order,
+        string $type,
+        array $entries,
+        string $status = 'completed',
+        string $documentType = 'order',
+        ?string $referenceNumber = null
+    ): int {
+        $transactionId = (int) DB::table('transactions')->insertGetId([
+            'user_id' => $this->admin->id,
+            'transaction_date' => now()->toDateString(),
+            'description' => "Ledger test for order {$order->id}",
+            'reference_number' => $referenceNumber ?? (string) $order->id,
+            'type' => $type,
+            'document_type' => $documentType,
+            'status' => $status,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ($entries as $entry) {
+            DB::table('transaction_entries')->insert([
+                'transaction_id' => $transactionId,
+                'account_id' => $entry['account_id'] ?? $this->receivableAccountId,
+                'debit_amount' => $entry['debit_amount'] ?? 0,
+                'credit_amount' => $entry['credit_amount'] ?? 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $transactionId;
     }
 
     private function addQuantities(Order $order, array $quantities): void

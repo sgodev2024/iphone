@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Order;
+use App\Models\Transaction;
 use App\Services\OrderService;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
@@ -65,7 +67,42 @@ class OrderController extends Controller
             }
         }
 
+        $orderLedger = DB::table('transactions as t')
+            ->join('transaction_entries as te', 'te.transaction_id', '=', 't.id')
+            ->join('accounts as a', 'a.id', '=', 'te.account_id')
+            ->where('t.status', Transaction::STATUS_COMPLETED)
+            ->where('t.document_type', 'order')
+            ->whereIn('t.type', ['sale', 'income', 'credit_notice'])
+            ->where('a.code', '131')
+            ->select('t.reference_number')
+            ->selectRaw(
+                'SUM(CASE WHEN t.type = ? THEN COALESCE(te.debit_amount, 0) ELSE 0 END) AS sale_debit_131',
+                ['sale']
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN t.type IN (?, ?) THEN COALESCE(te.credit_amount, 0) ELSE 0 END) AS payment_credit_131',
+                ['income', 'credit_notice']
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN t.type = ? THEN 1 ELSE 0 END) AS sale_entry_count_131',
+                ['sale']
+            )
+            ->groupBy('t.reference_number');
+
         $orders = Order::query()
+            ->leftJoinSub($orderLedger, 'order_ledger', function ($join) {
+                $join->on(
+                    'order_ledger.reference_number',
+                    '=',
+                    DB::raw('CAST(orders.id AS CHAR)')
+                );
+            })
+            ->select([
+                'orders.*',
+                'order_ledger.sale_debit_131',
+                'order_ledger.payment_credit_131',
+                'order_ledger.sale_entry_count_131',
+            ])
             // Admin xem toàn bộ đơn nên không lọc user_id theo tài khoản đăng nhập
             ->with([
                 'user',
@@ -115,8 +152,8 @@ class OrderController extends Controller
                     $query->where('payment_method', $paymentMethod);
                 }
             )
-            ->where('branch_id', auth()->user()->branch_id)
-            ->latest('created_at')
+            ->where('orders.branch_id', auth()->user()->branch_id)
+            ->latest('orders.created_at')
             ->paginate(10)
             ->withQueryString();
 
