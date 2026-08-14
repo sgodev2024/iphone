@@ -34,6 +34,7 @@ class DashboardController extends Controller
         $lowStockProducts   = $this->getLowStockProducts();
         $latestOrders = $this->getLatestOrders();
         $newCustomers       = $this->getNewCustomers($startDate, $endDate);
+        $returnStats = $this->getReturnStats();
         return view('welcome', compact(
             'stats',
             'orderStats',
@@ -43,7 +44,8 @@ class DashboardController extends Controller
             'topSellingProducts',
             'lowStockProducts',
             'latestOrders',
-            'newCustomers'
+            'newCustomers',
+            "returnStats"
         ));
     }
 
@@ -272,6 +274,200 @@ class DashboardController extends Controller
             'today_new'      => $todayCount,
             'yesterday_new'  => $yesterdayCount,
             'percent_change' => $percentChange,
+        ];
+    }
+
+    private function getReturnStats(): array
+    {
+        /*
+     |--------------------------------------------------------------------------
+     | SỐ ĐƠN GỐC CÓ PHÁT SINH ĐỔI / TRẢ
+     |--------------------------------------------------------------------------
+     |
+     | Một đơn có thể:
+     |
+     | ODR001
+     |   ├── RTN001
+     |   ├── RTN002
+     |   └── RTN003
+     |
+     | Nhưng dashboard chỉ tính là:
+     |
+     | 1 đơn hàng có phát sinh hoàn trả.
+     |
+     */
+
+        $returnedOrders = DB::table('order_returns')
+            ->where('status', 'completed')
+            ->distinct()
+            ->count('original_order_id');
+
+
+        /*
+     |--------------------------------------------------------------------------
+     | TỔNG ĐƠN BÁN THỰC
+     |--------------------------------------------------------------------------
+     |
+     | Không tính order được sinh ra từ nghiệp vụ exchange.
+     |
+     | Ví dụ:
+     |
+     | ODR001 → RTN001 → ODR050
+     |
+     | ODR050 là đơn thay thế, không nên làm mẫu số tăng thêm.
+     |
+     | Dùng exchange_order_id để nhận diện thay vì dựa vào
+     | payment_method = exchange.
+     |
+     */
+
+        $totalSaleOrders = DB::table('orders as o')
+            ->where('o.status', 1)
+
+            ->whereNotExists(function ($query) {
+                $query
+                    ->select(DB::raw(1))
+                    ->from('order_returns as r')
+                    ->whereColumn(
+                        'r.exchange_order_id',
+                        'o.id'
+                    )
+                    ->where(
+                        'r.status',
+                        'completed'
+                    );
+            })
+
+            ->count();
+
+
+        /*
+     |--------------------------------------------------------------------------
+     | TỶ LỆ ĐƠN CÓ HOÀN TRẢ
+     |--------------------------------------------------------------------------
+     */
+
+        $returnRate = $totalSaleOrders > 0
+            ? round(
+                ($returnedOrders / $totalSaleOrders) * 100,
+                1
+            )
+            : 0;
+
+
+        /*
+     |--------------------------------------------------------------------------
+     | THỐNG KÊ CHI TIẾT
+     |--------------------------------------------------------------------------
+     |
+     | Card hiện tại chưa cần dùng hết.
+     | Nhưng chuẩn bị sẵn để sau này làm trang báo cáo đổi / trả.
+     |
+     */
+
+        $financialStats = DB::table('order_returns')
+            ->where('status', 'completed')
+            ->selectRaw('
+            COUNT(*) AS return_transactions,
+
+            SUM(
+                CASE
+                    WHEN exchange_order_id IS NULL
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS pure_return_transactions,
+
+            SUM(
+                CASE
+                    WHEN exchange_order_id IS NOT NULL
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS exchange_transactions,
+
+            COALESCE(SUM(return_amount), 0)
+                AS return_amount,
+
+            COALESCE(SUM(exchange_amount), 0)
+                AS exchange_amount,
+
+            COALESCE(SUM(fee_amount), 0)
+                AS fee_amount,
+
+            COALESCE(SUM(refund_amount), 0)
+                AS refund_amount,
+
+            COALESCE(SUM(additional_payment), 0)
+                AS additional_payment
+        ')
+            ->first();
+
+
+        return [
+            /*
+         * Card dashboard đang dùng.
+         */
+            'returned_orders'
+            => (int) $returnedOrders,
+
+            'total_sale_orders'
+            => (int) $totalSaleOrders,
+
+            'return_rate'
+            => (float) $returnRate,
+
+
+            /*
+         * Dùng cho báo cáo sau này.
+         */
+            'return_transactions'
+            => (int) (
+                $financialStats->return_transactions
+                ?? 0
+            ),
+
+            'pure_return_transactions'
+            => (int) (
+                $financialStats->pure_return_transactions
+                ?? 0
+            ),
+
+            'exchange_transactions'
+            => (int) (
+                $financialStats->exchange_transactions
+                ?? 0
+            ),
+
+            'return_amount'
+            => (int) (
+                $financialStats->return_amount
+                ?? 0
+            ),
+
+            'exchange_amount'
+            => (int) (
+                $financialStats->exchange_amount
+                ?? 0
+            ),
+
+            'fee_amount'
+            => (int) (
+                $financialStats->fee_amount
+                ?? 0
+            ),
+
+            'refund_amount'
+            => (int) (
+                $financialStats->refund_amount
+                ?? 0
+            ),
+
+            'additional_payment'
+            => (int) (
+                $financialStats->additional_payment
+                ?? 0
+            ),
         ];
     }
 }
