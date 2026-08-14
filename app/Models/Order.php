@@ -122,4 +122,14 @@ class Order extends Model
 
         return $clientValue !== '' ? $clientValue : null;
     }
+
+    public function returns()
+{
+    return $this->hasMany(OrderReturn::class, 'original_order_id');
+}
+
+public function exchangeReturn()
+{
+    return $this->hasOne(OrderReturn::class, 'exchange_order_id');
+}
 }
