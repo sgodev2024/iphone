@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\Order;
 use App\Models\Transaction;
+use App\Services\OrderPaymentHistoryService;
 use App\Services\OrderService;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -18,10 +19,17 @@ class OrderController extends Controller
 {
     protected $orderService;
     protected $order;
-    public function __construct(OrderService $orderService, Order $order)
+    protected $orderPaymentHistoryService;
+
+    public function __construct(
+        OrderService $orderService,
+        Order $order,
+        OrderPaymentHistoryService $orderPaymentHistoryService
+    )
     {
         $this->orderService = $orderService;
         $this->order = $order;
+        $this->orderPaymentHistoryService = $orderPaymentHistoryService;
     }
     public function index(Request $request)
     {
@@ -175,7 +183,8 @@ class OrderController extends Controller
             ->findOrFail($id);
 
         $title = 'Chi tiết đơn hàng - ' . ($order->code ?? $order->id);
+        $paymentHistory = $this->orderPaymentHistoryService->forOrder($order);
 
-        return view('admin.order.detail', compact('title', 'order'));
+        return view('admin.order.detail', compact('title', 'order', 'paymentHistory'));
     }
 }

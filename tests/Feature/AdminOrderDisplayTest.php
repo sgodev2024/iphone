@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\User;
+use App\Services\OrderPaymentHistoryService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +17,12 @@ class AdminOrderDisplayTest extends TestCase
     private User $admin;
 
     private int $receivableAccountId;
+
+    private int $cashAccountId;
+
+    private int $bankParentAccountId;
+
+    private int $bankAccountId;
 
     protected function setUp(): void
     {
@@ -30,6 +37,13 @@ class AdminOrderDisplayTest extends TestCase
             $table->boolean('status')->default(true);
             $table->unsignedBigInteger('role_id')->nullable();
             $table->unsignedBigInteger('branch_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('user_info', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
             $table->timestamps();
         });
 
@@ -88,12 +102,14 @@ class AdminOrderDisplayTest extends TestCase
             $table->id();
             $table->string('code');
             $table->string('name');
+            $table->unsignedBigInteger('parent_id')->nullable();
             $table->timestamps();
         });
 
         Schema::create('transactions', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
             $table->date('transaction_date')->nullable();
             $table->string('description')->nullable();
             $table->string('reference_number')->nullable();
@@ -126,6 +142,15 @@ class AdminOrderDisplayTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $this->seedPaymentAccounts();
+    }
+
+    private function seedPaymentAccounts(): void
+    {
+        $this->cashAccountId = $this->createAccount('111', 'Cash');
+        $this->bankParentAccountId = $this->createAccount('112', 'Bank');
+        $this->bankAccountId = $this->createAccount('112TEST', 'Test bank', $this->bankParentAccountId);
     }
 
     public function test_list_uses_canonical_payment_badges_and_summed_product_quantity(): void
@@ -474,6 +499,375 @@ class AdminOrderDisplayTest extends TestCase
         $this->assertSame(1, substr_count($this->getOrderListHtml(), 'FILTER-CUSTOMER'));
     }
 
+    public function test_detail_renders_checkout_partial_payment_from_tk131(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-PAYMENT-19',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            1000000,
+            1000000
+        );
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'Thu tiền đơn hàng #19',
+            createdBy: $this->admin->id,
+            transactionDate: '2026-08-13'
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertSame(1, substr_count($html, 'payment-history-row'));
+        $this->assertStringContainsString('LỊCH SỬ THANH TOÁN', $html);
+        $this->assertStringContainsString('13/08/2026', $html);
+        $this->assertStringContainsString('1.000.000 VND', $html);
+        $this->assertStringContainsString('Tiền mặt', $html);
+        $this->assertStringContainsString('Admin order test', $html);
+        $this->assertStringContainsString('Thu tiền đơn hàng #19', $html);
+    }
+
+    public function test_debt_order_without_payment_shows_empty_state(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-WITHOUT-PAYMENT',
+            Order::PAYMENT_STATUS_DEBT,
+            true,
+            0,
+            2000000
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertStringContainsString('LỊCH SỬ THANH TOÁN', $html);
+        $this->assertStringContainsString('Chưa có lịch sử thanh toán', $html);
+        $this->assertSame(0, substr_count($html, 'payment-history-row'));
+    }
+
+    public function test_fully_paid_order_keeps_payment_history_visible(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-FULLY-PAID',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            3000000,
+            0
+        );
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 3000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 3000000],
+            ],
+            'Thanh toán đủ',
+            createdBy: $this->admin->id
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+
+        $response->assertOk();
+        $this->assertSame(1, substr_count($response->getContent(), 'payment-history-row'));
+    }
+
+    public function test_multi_payment_renders_one_row_per_transaction_and_maps_methods_from_accounts(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-MULTI-PAYMENT',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            10000000,
+            0
+        );
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 2000000],
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 2000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 4000000],
+            ],
+            'Payment 1',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'credit_notice',
+            [
+                ['account_id' => $this->bankAccountId, 'debit_amount' => 2000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 2000000],
+            ],
+            'Payment 2',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 4000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 4000000],
+            ],
+            'Payment 3',
+            createdBy: $this->admin->id
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertSame(3, substr_count($html, 'payment-history-row'));
+        $this->assertSame(2, substr_count($html, 'Tiền mặt'));
+        $this->assertSame(1, substr_count($html, 'Chuyển khoản'));
+        $this->assertStringContainsString('Payment 1', $html);
+        $this->assertStringContainsString('Payment 2', $html);
+        $this->assertStringContainsString('Payment 3', $html);
+    }
+
+    public function test_payment_history_excludes_non_canonical_transactions_and_wrong_owner(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-PAYMENT-FILTERS',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            1000000,
+            1000000
+        );
+        $revenueAccountId = $this->createAccount('5111', 'Revenue');
+        $otherOwner = User::create([
+            'name' => 'Other owner',
+            'email' => 'other-owner@example.test',
+            'password' => 'password',
+        ]);
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'VALID PAYMENT',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'PENDING PAYMENT',
+            status: 'pending',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'FAILED PAYMENT',
+            status: 'failed',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'sale',
+            [
+                ['account_id' => $this->receivableAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $revenueAccountId, 'credit_amount' => 1000000],
+            ],
+            'SALE TRANSACTION',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'WRONG DOCUMENT',
+            documentType: 'invoice',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'WRONG OWNER',
+            userId: $otherOwner->id,
+            createdBy: $otherOwner->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $revenueAccountId, 'credit_amount' => 1000000],
+            ],
+            'NO CREDIT 131',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $revenueAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'NO DEBIT 111 OR 112',
+            createdBy: $this->admin->id
+        );
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 999999],
+            ],
+            'UNBALANCED PAYMENT',
+            createdBy: $this->admin->id
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+        $html = $response->getContent();
+
+        $response->assertOk();
+        $this->assertSame(1, substr_count($html, 'payment-history-row'));
+        $this->assertStringContainsString('VALID PAYMENT', $html);
+        foreach ([
+            'PENDING PAYMENT',
+            'FAILED PAYMENT',
+            'SALE TRANSACTION',
+            'WRONG DOCUMENT',
+            'WRONG OWNER',
+            'NO CREDIT 131',
+            'NO DEBIT 111 OR 112',
+            'UNBALANCED PAYMENT',
+        ] as $excludedDescription) {
+            $this->assertStringNotContainsString($excludedDescription, $html);
+        }
+    }
+
+    public function test_payment_history_does_not_crash_when_created_by_is_null(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-MISSING-CREATOR',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            500000,
+            500000
+        );
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 500000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 500000],
+            ],
+            'PAYMENT WITHOUT CREATOR'
+        );
+
+        $response = $this->getOrderDetailResponse($order);
+
+        $response->assertOk();
+        $this->assertStringContainsString('Không xác định', $response->getContent());
+    }
+
+    public function test_payment_history_uses_one_aggregate_query_for_all_payment_rows(): void
+    {
+        $order = $this->createOrder(
+            'ORDER-QUERY-COUNT',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000000,
+            0
+        );
+
+        $this->createPaymentTransaction(
+            $order,
+            'income',
+            [
+                ['account_id' => $this->cashAccountId, 'debit_amount' => 1000000],
+                ['account_id' => $this->receivableAccountId, 'credit_amount' => 1000000],
+            ],
+            'QUERY COUNT PAYMENT',
+            createdBy: $this->admin->id
+        );
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $history = app(OrderPaymentHistoryService::class)->forOrder($order);
+        $paymentQueries = collect(DB::getQueryLog())
+            ->filter(static fn (array $query): bool => str_contains($query['query'], 'transactions'));
+
+        $this->assertCount(1, $paymentQueries);
+        $this->assertCount(1, $history);
+    }
+
+    private function getOrderDetailResponse(Order $order)
+    {
+        return $this->withoutMiddleware()
+            ->actingAs($this->admin)
+            ->get('/admin/order/'.$order->id);
+    }
+
+    private function createPaymentTransaction(
+        Order $order,
+        string $type,
+        array $entries,
+        string $description,
+        string $status = 'completed',
+        string $documentType = 'order',
+        ?int $userId = null,
+        ?int $createdBy = null,
+        ?string $transactionDate = null
+    ): int {
+        $transactionId = (int) DB::table('transactions')->insertGetId([
+            'user_id' => $userId ?? $order->user_id,
+            'created_by' => $createdBy,
+            'transaction_date' => $transactionDate ?? now()->toDateString(),
+            'description' => $description,
+            'reference_number' => (string) $order->id,
+            'type' => $type,
+            'document_type' => $documentType,
+            'status' => $status,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ($entries as $entry) {
+            DB::table('transaction_entries')->insert([
+                'transaction_id' => $transactionId,
+                'account_id' => $entry['account_id'],
+                'debit_amount' => $entry['debit_amount'] ?? 0,
+                'credit_amount' => $entry['credit_amount'] ?? 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $transactionId;
+    }
+
     private function createOrder(
         string $code,
         string $paymentStatus,
@@ -526,11 +920,12 @@ class AdminOrderDisplayTest extends TestCase
         return (string) $response->json('html');
     }
 
-    private function createAccount(string $code): int
+    private function createAccount(string $code, ?string $name = null, ?int $parentId = null): int
     {
         return (int) DB::table('accounts')->insertGetId([
             'code' => $code,
-            'name' => "Account {$code}",
+            'name' => $name ?? "Account {$code}",
+            'parent_id' => $parentId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

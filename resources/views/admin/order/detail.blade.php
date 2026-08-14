@@ -80,6 +80,44 @@
 
         <div class="card">
             <div class="card-header">
+                <h5 class="text-center text-primary mb-0"><b>LỊCH SỬ THANH TOÁN</b></h5>
+            </div>
+            <div class="card-body">
+                @if ($paymentHistory->isEmpty())
+                    <p class="mb-0 text-muted">Chưa có lịch sử thanh toán</p>
+                @else
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>NGÀY THU</th>
+                                    <th>SỐ TIỀN</th>
+                                    <th>PHƯƠNG THỨC</th>
+                                    <th>NHÂN VIÊN</th>
+                                    <th>GHI CHÚ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($paymentHistory as $payment)
+                                    <tr class="payment-history-row">
+                                        <td>{{ $loop->iteration }}</td>
+                                        <td>{{ $payment['transaction_date'] }}</td>
+                                        <td>{{ formatPrice($payment['amount']) }} VND</td>
+                                        <td>{{ $payment['payment_method'] }}</td>
+                                        <td>{{ $payment['creator_name'] }}</td>
+                                        <td>{{ $payment['description'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
                 <h5 class="text-center text-primary mb-0"><b>Danh sách sản phẩm</b></h5>
             </div>
             <div class="card-body">
