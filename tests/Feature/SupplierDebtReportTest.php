@@ -2,13 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\DebtController;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\SupplierDebtReportService;
 use App\Support\DecimalAmount;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\View;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -32,6 +37,7 @@ class SupplierDebtReportTest extends TestCase
 
         Schema::dropAllTables();
         $this->createSchema();
+        $this->createAuthorizationTablesForTests();
         $this->service = app(SupplierDebtReportService::class);
         $this->owner = $this->createUser('owner@example.com');
         $this->otherOwner = $this->createUser('other@example.com');
@@ -245,6 +251,68 @@ class SupplierDebtReportTest extends TestCase
         }
     }
 
+    public function test_supplier_footer_sums_filtered_rows_without_cross_entity_netting(): void
+    {
+        $debitCompany = Company::create([
+            'user_id' => $this->owner->id,
+            'name' => 'Footer Supplier Debit',
+            'status' => true,
+        ]);
+        $creditCompany = Company::create([
+            'user_id' => $this->owner->id,
+            'name' => 'Footer Supplier Credit',
+            'status' => true,
+        ]);
+        $excludedCompany = Company::create([
+            'user_id' => $this->owner->id,
+            'name' => 'Excluded Supplier',
+            'status' => true,
+        ]);
+
+        $this->addLedgerEntry('2026-08-15', '10000000.00', '0.00', $debitCompany->id);
+        $this->addLedgerEntry('2026-08-15', '0.00', '4000000.00', $creditCompany->id);
+        $this->addLedgerEntry('2026-08-15', '90000000.00', '0.00', $excludedCompany->id);
+
+        $request = Request::create('/admin/debts/supplier', 'GET', [
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-20',
+            'name' => 'Footer Supplier',
+        ]);
+        $request->setUserResolver(fn (): User => $this->owner);
+        $this->actingAs($this->owner);
+        $this->disableAdminLayoutComposers();
+
+        $view = app(DebtController::class)->supplier($request, $this->service);
+        $footer = Str::between($view->render(), '<tfoot>', '</tfoot>');
+
+        $this->assertStringContainsString('TỔNG CỘNG', $footer);
+        $this->assertStringContainsString('10.000.000', $footer);
+        $this->assertStringContainsString('4.000.000', $footer);
+        $this->assertStringNotContainsString('90.000.000', $footer);
+        $this->assertSame(7, substr_count($footer, '<td'));
+        $this->assertSame(1, substr_count($footer, '<th'));
+    }
+
+    public function test_supplier_footer_renders_six_zero_totals_for_empty_result(): void
+    {
+        $request = Request::create('/admin/debts/supplier', 'GET', [
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-20',
+            'name' => 'No matching supplier',
+        ]);
+        $request->setUserResolver(fn (): User => $this->owner);
+        $this->actingAs($this->owner);
+        $this->disableAdminLayoutComposers();
+
+        $view = app(DebtController::class)->supplier($request, $this->service);
+        $footer = Str::between($view->render(), '<tfoot>', '</tfoot>');
+
+        $this->assertStringContainsString('TỔNG CỘNG', $footer);
+        $this->assertSame(6, substr_count($footer, '<td class="text-end money-cell">0</td>'));
+        $this->assertSame(7, substr_count($footer, '<td'));
+        $this->assertSame(1, substr_count($footer, '<th'));
+    }
+
     private function createSchema(): void
     {
         Schema::create('users', function (Blueprint $table): void {
@@ -307,6 +375,15 @@ class SupplierDebtReportTest extends TestCase
             'role_id' => 1,
             'status' => 'active',
         ]);
+    }
+
+    private function disableAdminLayoutComposers(): void
+    {
+        Event::forget('composing: *');
+        Event::forget('composing: admin.layout.header');
+        View::share('config', null);
+        View::share('notifications', collect());
+        auth()->user()?->setRelation('userInfo', null);
     }
 
     private function addLedgerEntry(

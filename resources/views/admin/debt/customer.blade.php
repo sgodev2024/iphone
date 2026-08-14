@@ -127,6 +127,21 @@
                         </tr>
                     @endforelse
                 </tbody>
+                <tfoot>
+                    <tr class="debt-total-row">
+                        <td></td>
+                        <th scope="row" class="text-start">TỔNG CỘNG</th>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['opening_debit']) }}</td>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['opening_credit']) }}</td>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['period_debit']) }}</td>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['period_credit']) }}</td>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['ending_debit']) }}</td>
+                        <td class="text-end money-cell">{{ formatExactMoney($totals['ending_credit']) }}</td>
+                        @if ($canCollectDebt)
+                            <td></td>
+                        @endif
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -517,6 +532,13 @@
 
         .customer-debt-page .money-cell {
             text-align: right;
+        }
+
+        .customer-debt-page .debt-total-row th,
+        .customer-debt-page .debt-total-row td {
+            background-color: #f3f4f6;
+            border-top: 2px solid #adb5bd;
+            font-weight: 700;
         }
 
         .customer-debt-page .customer-debt-action-cell {

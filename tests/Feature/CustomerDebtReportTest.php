@@ -6,7 +6,10 @@ use App\Models\Client;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class CustomerDebtReportTest extends TestCase
@@ -81,6 +84,7 @@ class CustomerDebtReportTest extends TestCase
             $table->string('type')->nullable();
             $table->string('document_type')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
+            $table->string('status')->default('completed');
             $table->timestamps();
         });
 
@@ -260,6 +264,82 @@ class CustomerDebtReportTest extends TestCase
         $this->assertReport($this->report($staff), 'Deleted Client', [0, 0, 100, 0, 100, 0]);
     }
 
+    public function test_only_completed_customer_transactions_are_reported(): void
+    {
+        [$owner, $staff] = $this->createOwnerAndStaff('status-filter');
+        $clientId = $this->createClient($owner, 'Status Filter');
+
+        $this->addLedgerEntry($clientId, '2026-08-09', 100, 0, null, 'completed');
+        $this->addLedgerEntry($clientId, '2026-08-09', 200, 0, null, 'pending');
+        $this->addLedgerEntry($clientId, '2026-08-09', 0, 300, null, 'failed');
+        $this->addLedgerEntry($clientId, '2026-08-10', 40, 0, null, 'completed');
+        $this->addLedgerEntry($clientId, '2026-08-10', 0, 10, null, 'completed');
+        $this->addLedgerEntry($clientId, '2026-08-10', 0, 30, null, 'pending');
+        $this->addLedgerEntry($clientId, '2026-08-10', 20, 0, null, 'failed');
+
+        $this->assertReport($this->report($staff), 'Status Filter', [100, 0, 40, 10, 130, 0]);
+    }
+
+    public function test_customer_footer_sums_filtered_rows_without_cross_entity_netting(): void
+    {
+        [$owner, $staff] = $this->createOwnerAndStaff('footer');
+        $debitClient = $this->createClient($owner, 'Footer Debit');
+        $creditClient = $this->createClient($owner, 'Footer Credit');
+        $excludedClient = $this->createClient($owner, 'Excluded Customer');
+
+        $this->addLedgerEntry($debitClient, '2026-08-15', 10000000, 0);
+        $this->addLedgerEntry($creditClient, '2026-08-15', 0, 4000000);
+        $this->addLedgerEntry($excludedClient, '2026-08-15', 90000000, 0);
+
+        $query = http_build_query([
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-20',
+            'name' => 'Footer',
+        ]);
+        $this->actingAs($staff);
+        $this->disableAdminLayoutComposers();
+        $response = $this->get('/admin/debts/customer?'.$query);
+
+        $response->assertOk();
+        $footer = Str::between($response->getContent(), '<tfoot>', '</tfoot>');
+
+        $this->assertStringContainsString('TỔNG CỘNG', $footer);
+        $this->assertStringContainsString('10.000.000', $footer);
+        $this->assertStringContainsString('4.000.000', $footer);
+        $this->assertStringNotContainsString('90.000.000', $footer);
+        $this->assertSame(8, substr_count($footer, '<td'));
+        $this->assertSame(1, substr_count($footer, '<th'));
+    }
+
+    public function test_customer_footer_renders_six_zero_totals_without_action_column_for_empty_result(): void
+    {
+        [, $staff] = $this->createOwnerAndStaff('footer-empty');
+        $receiptPermissionId = DB::table('permissions')
+            ->where('permission_key', 'receipt.create')
+            ->value('id');
+        DB::table('role_permission')
+            ->where('role_id', 3)
+            ->where('permission_id', $receiptPermissionId)
+            ->delete();
+
+        $query = http_build_query([
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-20',
+            'name' => 'No matching customer',
+        ]);
+        $this->actingAs($staff);
+        $this->disableAdminLayoutComposers();
+        $response = $this->get('/admin/debts/customer?'.$query);
+
+        $response->assertOk();
+        $footer = Str::between($response->getContent(), '<tfoot>', '</tfoot>');
+
+        $this->assertStringContainsString('TỔNG CỘNG', $footer);
+        $this->assertSame(6, substr_count($footer, '<td class="text-end money-cell">0</td>'));
+        $this->assertSame(7, substr_count($footer, '<td'));
+        $this->assertSame(1, substr_count($footer, '<th'));
+    }
+
     public function test_explicit_from_and_to_query_parameters_filter_customer_report(): void
     {
         [$owner, $staff] = $this->createOwnerAndStaff('explicit-query-range');
@@ -334,6 +414,15 @@ class CustomerDebtReportTest extends TestCase
         return [$owner, $staff];
     }
 
+    private function disableAdminLayoutComposers(): void
+    {
+        Event::forget('composing: *');
+        Event::forget('composing: admin.layout.header');
+        View::share('config', null);
+        View::share('notifications', collect());
+        auth()->user()?->setRelation('userInfo', null);
+    }
+
     private function createClient(User $owner, string $name): int
     {
         $sequence = DB::table('clients')->count() + 1;
@@ -366,20 +455,22 @@ class CustomerDebtReportTest extends TestCase
         string $date,
         float $debit,
         float $credit,
-        ?int $accountId = null
+        ?int $accountId = null,
+        string $status = 'completed'
     ): void {
         $this->addTransaction($date, [
             $this->entry($clientId, $accountId ?? $this->receivableAccountId, $debit, $credit),
-        ]);
+        ], $status);
     }
 
-    private function addTransaction(string $date, array $entries): void
+    private function addTransaction(string $date, array $entries, string $status = 'completed'): void
     {
         $transactionId = DB::table('transactions')->insertGetId([
             'transaction_date' => $date,
             'description' => 'Debt report test',
             'type' => 'test',
             'document_type' => 'order',
+            'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

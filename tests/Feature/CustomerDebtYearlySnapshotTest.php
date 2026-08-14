@@ -141,6 +141,21 @@ class CustomerDebtYearlySnapshotTest extends TestCase
         $this->assertSame('0.00', $zero->opening_credit);
     }
 
+    public function test_snapshot_opening_uses_only_completed_customer_transactions(): void
+    {
+        $owner = $this->owner('status-filter');
+        $client = $this->client($owner, 'Status Filter');
+        $this->rawEntry($owner, $client, '2026-01-01', '100.00', '0.00', 'completed');
+        $this->rawEntry($owner, $client, '2026-01-02', '0.00', '25.00', 'completed');
+        $this->rawEntry($owner, $client, '2026-01-03', '200.00', '0.00', 'pending');
+        $this->rawEntry($owner, $client, '2026-01-04', '0.00', '300.00', 'failed');
+
+        $snapshot = app(CustomerDebtSnapshotService::class)->getOrBuild($owner, $client, 2027);
+
+        $this->assertSame('75.00', $snapshot->opening_debit);
+        $this->assertSame('0.00', $snapshot->opening_credit);
+    }
+
     public function test_historical_create_marks_dirty_and_lazy_rebuilds(): void
     {
         $owner = $this->owner('historical');
@@ -385,13 +400,14 @@ class CustomerDebtYearlySnapshotTest extends TestCase
         int $clientId,
         string $date,
         string $debit,
-        string $credit
+        string $credit,
+        string $status = 'completed'
     ): void {
         $transactionId = DB::table('transactions')->insertGetId([
             'user_id' => $ownerId,
             'transaction_date' => $date,
             'type' => 'other',
-            'status' => 'completed',
+            'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -414,6 +430,7 @@ class CustomerDebtYearlySnapshotTest extends TestCase
             ->where('te.account_id', $this->receivableAccountId)
             ->where('te.tableable_type', Client::class)
             ->where('te.tableable_id', $clientId)
+            ->where('t.status', 'completed')
             ->where('t.transaction_date', '<=', $toDate)
             ->selectRaw(
                 'COALESCE(SUM(CASE WHEN t.transaction_date < ? THEN te.debit_amount ELSE 0 END), 0) opening_debit_total',

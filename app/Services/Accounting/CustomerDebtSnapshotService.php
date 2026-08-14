@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\CustomerDebtSnapshotState;
 use App\Models\CustomerDebtYearlySnapshot;
+use App\Models\Transaction;
 use App\Support\DecimalAmount;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
@@ -36,6 +37,7 @@ class CustomerDebtSnapshotService
             })
             ->where('te.account_id', $accountId)
             ->where('te.tableable_type', Client::class)
+            ->where('t.status', Transaction::STATUS_COMPLETED)
             ->where('t.transaction_date', '>=', $yearStart)
             ->where('t.transaction_date', '<=', $toDate)
             ->groupBy('te.tableable_id')
@@ -471,6 +473,7 @@ class CustomerDebtSnapshotService
             ->where('te.account_id', $accountId)
             ->where('te.tableable_type', Client::class)
             ->whereIn('te.tableable_id', $clientIds)
+            ->where('t.status', Transaction::STATUS_COMPLETED)
             ->when($fromInclusive !== null, fn ($query) => $query->where('t.transaction_date', '>=', $fromInclusive))
             ->where('t.transaction_date', '<', $toExclusive)
             ->groupBy('te.tableable_id')

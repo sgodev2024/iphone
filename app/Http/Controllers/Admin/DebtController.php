@@ -8,8 +8,10 @@ use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\Accounting\CustomerDebtSnapshotService;
 use App\Services\SupplierDebtReportService;
+use App\Support\DecimalAmount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -37,6 +39,8 @@ class DebtController extends Controller
             abort(500, $exception->getMessage());
         }
 
+        $totals = $this->debtReportTotals($debtReports);
+
         if ($request->ajax()) {
             return response()->json($debtReports);
         }
@@ -45,6 +49,7 @@ class DebtController extends Controller
             'clientDebts' => $debtReports,
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'totals' => $totals,
         ]);
     }
 
@@ -113,12 +118,13 @@ class DebtController extends Controller
             $endDate,
             (string) $request->input('name', '')
         );
+        $totals = $this->debtReportTotals($supplierDebts);
 
         if ($request->ajax()) {
             return response()->json($supplierDebts);
         }
 
-        return view('admin.debt.supplier', compact('supplierDebts', 'startDate', 'endDate'));
+        return view('admin.debt.supplier', compact('supplierDebts', 'startDate', 'endDate', 'totals'));
     }
 
     private function supplierReportDates(Request $request): array
@@ -175,6 +181,30 @@ class DebtController extends Controller
         }
 
         return [$startDate, $endDate];
+    }
+
+    private function debtReportTotals(Collection $rows): array
+    {
+        $fields = [
+            'opening_debit',
+            'opening_credit',
+            'period_debit',
+            'period_credit',
+            'ending_debit',
+            'ending_credit',
+        ];
+        $totals = array_fill_keys($fields, '0.00');
+
+        foreach ($rows as $row) {
+            foreach ($fields as $field) {
+                $totals[$field] = DecimalAmount::add(
+                    $totals[$field],
+                    (string) ($row->{$field} ?? '0.00')
+                );
+            }
+        }
+
+        return $totals;
     }
 
     public function create()
