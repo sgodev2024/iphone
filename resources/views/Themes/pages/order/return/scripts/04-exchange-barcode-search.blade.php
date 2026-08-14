@@ -193,6 +193,46 @@
                 }
             });
         }
+        /*
+ |--------------------------------------------------------------------------
+ | BARCODE / IMEI EVENTS
+ |--------------------------------------------------------------------------
+ */
+
+/*
+ * Quét barcode scanner thường kết thúc bằng Enter.
+ */
+exchangeBarcodeInput
+    ?.addEventListener(
+        'keydown',
+        function(event) {
+
+            if (event.key !== 'Enter') {
+                return;
+            }
+
+            event.preventDefault();
+
+            resolveExchangeBarcode(
+                exchangeBarcodeInput.value
+            );
+        }
+    );
+
+
+/*
+ * Cho phép nhập thủ công rồi bấm nút Thêm.
+ */
+exchangeBarcodeAddBtn
+    ?.addEventListener(
+        'click',
+        function() {
+
+            resolveExchangeBarcode(
+                exchangeBarcodeInput.value
+            );
+        }
+    );
 
         function fetchExchangeProducts(
             search = ''
