@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Bank;
 use App\Models\Client;
-use App\Models\ClientDebt;
 use App\Models\Config;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
@@ -13,7 +12,6 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
-use App\Models\Receipts;
 use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
@@ -1986,32 +1984,11 @@ class StaffPosSaleTest extends TestCase
         $client->update(['name' => 'Tên mới']);
         $this->assertSame('Tên tại thời điểm bán', $order->fresh()->customer_display_name);
 
-        $clientDebt = ClientDebt::create([
-            'client_id' => $client->id,
-            'amount' => 0,
-            'description' => 'Đã thanh toán hết',
-        ]);
-        DB::table('customer_debts_detail')->insert([
-            'customer_debts_id' => $clientDebt->id,
-            'content' => 'Lịch sử công nợ',
-            'amount' => 0,
-        ]);
-        DB::table('receipts')->insert([
-            'client_id' => $client->id,
-            'content' => 'Lịch sử thu',
-            'amount_spent' => 100000,
-            'date_spent' => now()->toDateString(),
-            'receipt_code' => 'PT000001',
-        ]);
-
         $countsBeforeDeactivate = [
             'orders' => DB::table('orders')->count(),
             'order_details' => DB::table('order_details')->count(),
             'transactions' => DB::table('transactions')->count(),
             'transaction_entries' => DB::table('transaction_entries')->count(),
-            'customer_debts' => DB::table('customer_debts')->count(),
-            'customer_debts_detail' => DB::table('customer_debts_detail')->count(),
-            'receipts' => DB::table('receipts')->count(),
             'product_storage' => DB::table('product_storage')->count(),
             'product_imeis' => DB::table('product_imeis')->count(),
         ];
@@ -2036,15 +2013,10 @@ class StaffPosSaleTest extends TestCase
                 'order_details' => DB::table('order_details')->count(),
                 'transactions' => DB::table('transactions')->count(),
                 'transaction_entries' => DB::table('transaction_entries')->count(),
-                'customer_debts' => DB::table('customer_debts')->count(),
-                'customer_debts_detail' => DB::table('customer_debts_detail')->count(),
-                'receipts' => DB::table('receipts')->count(),
                 'product_storage' => DB::table('product_storage')->count(),
                 'product_imeis' => DB::table('product_imeis')->count(),
             ]
         );
-        $this->assertSame('Tên mới', ClientDebt::firstOrFail()->client->name);
-        $this->assertSame('Tên mới', Receipts::firstOrFail()->client->name);
 
         $this->actingAs($staff)
             ->getJson('/ban-hang/get-clients?searchText=Tên')
@@ -2096,10 +2068,15 @@ class StaffPosSaleTest extends TestCase
             'name' => 'Khách còn nợ',
             'phone' => '0999888777',
         ]);
-        ClientDebt::create([
+        Order::create([
+            'user_id' => $manager->id,
             'client_id' => $client->id,
-            'amount' => 500000,
-            'description' => 'Còn nợ',
+            'code' => 'DEBT-DEACTIVATE',
+            'total_money' => 500000,
+            'paid_amount' => 0,
+            'debt_amount' => 500000,
+            'payment_status' => Order::PAYMENT_STATUS_DEBT,
+            'status' => true,
         ]);
 
         $this->actingAs($staff)
@@ -2113,9 +2090,9 @@ class StaffPosSaleTest extends TestCase
             ]);
 
         $this->assertNotNull(Client::find($client->id));
-        $this->assertDatabaseHas('customer_debts', [
+        $this->assertDatabaseHas('orders', [
             'client_id' => $client->id,
-            'amount' => 500000,
+            'debt_amount' => 500000,
         ]);
     }
 
@@ -2391,10 +2368,10 @@ class StaffPosSaleTest extends TestCase
         ])->assertStatus(410);
         $this->actingAs($manager)
             ->postJson('/admin/quanlythuchi/receipts/add', ['client_id' => $client->id, 'amount' => 1000000])
-            ->assertStatus(410);
+            ->assertNotFound();
         $this->actingAs($manager)
             ->postJson('/admin/quanlythuchi/receipts/debt', ['client_id' => $client->id, 'amount' => 1000000])
-            ->assertStatus(410);
+            ->assertNotFound();
         $this->assertSame($beforeTransactions, Transaction::query()->count());
         $this->assertSame($beforeEntries, DB::table('transaction_entries')->count());
     }
@@ -2720,33 +2697,6 @@ class StaffPosSaleTest extends TestCase
             $table->boolean('status')->default(true);
             $table->string('note')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
-            $table->timestamps();
-        });
-
-        Schema::create('customer_debts', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('client_id');
-            $table->decimal('amount', 15, 2)->default(0);
-            $table->string('description')->nullable();
-            $table->string('code')->nullable();
-            $table->timestamps();
-        });
-
-        Schema::create('customer_debts_detail', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('customer_debts_id');
-            $table->string('content');
-            $table->decimal('amount', 15, 2)->default(0);
-            $table->timestamps();
-        });
-
-        Schema::create('receipts', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('client_id');
-            $table->string('content')->nullable();
-            $table->decimal('amount_spent', 15, 2)->default(0);
-            $table->date('date_spent')->nullable();
-            $table->string('receipt_code')->nullable();
             $table->timestamps();
         });
 

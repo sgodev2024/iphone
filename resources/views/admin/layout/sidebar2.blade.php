@@ -105,30 +105,6 @@
                     </div>
                 </li>
 
-                {{-- <li
-                    class="nav-item {{ request()->routeIs('admin.quanlythuchi.receipts.index', 'admin.quanlythuchi.expense.index') ? 'active' : '' }}">
-                <a data-bs-toggle="collapse" href="#sidebarthuchi">
-                    <i class="fas fa-coins"></i>
-                    <p>Quản lý thu chi</p>
-                    <span class="caret"></span>
-                </a>
-                <div class="collapse {{ request()->routeIs('admin.quanlythuchi.receipts.index', 'admin.quanlythuchi.expense.index') ? 'show' : '' }}"
-                    id="sidebarthuchi">
-                    <ul class="nav nav-collapse">
-                        <li class="{{ request()->routeIs('admin.quanlythuchi.receipts.index') ? 'active' : '' }}">
-                            <a href="{{ route('admin.quanlythuchi.receipts.index') }}">
-                                <span class="sub-item">Phiếu thu</span>
-                            </a>
-                        </li>
-                        <li class="{{ request()->routeIs('admin.quanlythuchi.expense.index') ? 'active' : '' }}">
-                            <a href="{{ route('admin.quanlythuchi.expense.index') }}">
-                                <span class="sub-item">Phiếu chi</span>
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-                </li> --}}
-
                 <li
                     class="nav-item {{ request()->routeIs(
                         'admin.order.index',
@@ -219,7 +195,7 @@
                 <span class="sub-item">Kế toán</span>
                 <span class="caret"></span>
             </a>
-            <div class="collapse {{ request()->routeIs('admin.accounts.index', 'admin.transactions.cash.index', 'admin.transactions.bank.index', 'admin.accounts.balance', 'admin.debts.customer', 'admin.debts.supplier', 'admin.debts.beginning', 'admin.journal-entries.index') ? 'show' : '' }}"
+            <div class="collapse {{ request()->routeIs('admin.accounts.index', 'admin.transactions.cash.index', 'admin.transactions.bank.index', 'admin.accounts.balance', 'admin.debts.customer', 'admin.debts.supplier', 'admin.journal-entries.index') ? 'show' : '' }}"
                 id="receipt">
                 <ul class="nav nav-collapse">
                     <li class="{{ request()->routeIs('admin.transactions.cash.index') ? 'active' : '' }}">
@@ -240,11 +216,6 @@
                     <li class="{{ request()->routeIs('admin.debts.supplier') ? 'active' : '' }}">
                         <a href="{{ route('admin.debts.supplier') }}">
                             <span class="sub-item">Công nợ nhà cung cấp</span>
-                        </a>
-                    </li>
-                    <li class="{{ request()->routeIs('admin.debts.beginning') ? 'active' : '' }}">
-                        <a href="{{ route('admin.debts.beginning') }}">
-                            <span class="sub-item">Nhập công nợ đầu kỳ</span>
                         </a>
                     </li>
                     <li class="{{ request()->routeIs('admin.accounts.index') ? 'active' : '' }}">

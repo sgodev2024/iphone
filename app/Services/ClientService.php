@@ -3,13 +3,11 @@
 namespace App\Services;
 
 use App\Models\Client;
-use App\Models\ClientDebt;
 use App\Models\Order;
 use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class ClientService
 {
@@ -119,22 +117,10 @@ class ClientService
                 throw new DomainException('Khách hàng không tồn tại hoặc đã ngừng hoạt động.');
             }
 
-            $legacyDebtClientIds = Schema::hasTable('customer_debts')
-                ? ClientDebt::query()
-                    ->whereIn('client_id', $ids->all())
-                    ->where('amount', '>', 0)
-                    ->pluck('client_id')
-                : collect();
-
-            $orderDebtClientIds = Schema::hasColumn('orders', 'debt_amount')
-                ? Order::query()
-                    ->whereIn('client_id', $ids->all())
-                    ->where('debt_amount', '>', 0)
-                    ->pluck('client_id')
-                : collect();
-
-            $debtClientIds = $legacyDebtClientIds
-                ->merge($orderDebtClientIds)
+            $debtClientIds = Order::query()
+                ->whereIn('client_id', $ids->all())
+                ->where('debt_amount', '>', 0)
+                ->pluck('client_id')
                 ->map(fn ($id) => (int) $id)
                 ->unique();
 

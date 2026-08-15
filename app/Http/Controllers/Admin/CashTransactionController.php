@@ -181,9 +181,7 @@ class CashTransactionController extends Controller
 
             // Tự xác định tài khoản đối ứng theo type + obj_type
             $contraCode = match ([$credentials['type'], $credentials['obj_type']]) {
-                ['income', 'client']  => '131',
                 ['income', 'supplier']  => '331',
-                ['expense', 'client'] => '131',
                 ['expense', 'supplier'] => '331',
             };
 
@@ -387,9 +385,7 @@ class CashTransactionController extends Controller
 
             // Tự xác định tài khoản đối ứng dựa vào type + obj_type
             $contraCode = match ([$credentials['type'], $credentials['obj_type']]) {
-                ['income', 'client']  => '131',
                 ['income', 'supplier']  => '331',
-                ['expense', 'client'] => '131',
                 ['expense', 'supplier'] => '331',
             };
 

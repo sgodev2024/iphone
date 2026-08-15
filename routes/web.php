@@ -16,7 +16,6 @@ use App\Http\Controllers\Admin\CustomerDebtCollectionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\DailyReportController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\DebtClientController;
 use App\Http\Controllers\Admin\DebtController;
 use App\Http\Controllers\Admin\DebtNccController;
 use App\Http\Controllers\Admin\EmployeeController;
@@ -28,7 +27,6 @@ use App\Http\Controllers\Admin\JournalEntryController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductImeiController;
-use App\Http\Controllers\Admin\ReceiptController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReportdebtController;
 use App\Http\Controllers\Admin\StorageController;
@@ -601,37 +599,6 @@ Route::middleware(['auth'])
 
                     /*
                     |--------------------------------------------------------------
-                    | RECEIPT
-                    |--------------------------------------------------------------
-                    */
-
-                    Route::prefix('receipts')
-                        ->name('receipts.')
-                        ->group(function () {
-
-                            Route::get('/', [ReceiptController::class, 'index'])
-                                ->middleware('permission:receipt.view')
-                                ->name('index');
-
-                            Route::get('/detail/{id}', [ReceiptController::class, 'detail'])
-                                ->middleware('permission:receipt.detail')
-                                ->name('detail');
-
-                            Route::get('/add', [CustomerDebtPaymentController::class, 'legacyReceiptRedirect'])
-                                ->middleware('permission:receipt.create')
-                                ->name('add');
-
-                            Route::post('/add', [CustomerDebtPaymentController::class, 'legacyWriteDisabled'])
-                                ->middleware('permission:receipt.create')
-                                ->name('addSubmit');
-
-                            Route::post('/debt', [CustomerDebtPaymentController::class, 'legacyWriteDisabled'])
-                                ->middleware('permission:receipt.debt')
-                                ->name('debt');
-                        });
-
-                    /*
-                    |--------------------------------------------------------------
                     | EXPENSE
                     |--------------------------------------------------------------
                     */
@@ -1006,10 +973,6 @@ Route::middleware(['auth'])
                     Route::get('supplier', 'supplier')
                         ->middleware('permission:debt.supplier.view')
                         ->name('supplier');
-
-                    Route::get('beginning', 'create')
-                        ->middleware('permission:debt.beginning.view')
-                        ->name('beginning');
 
                     Route::post('beginning', 'store')
                         ->middleware('permission:debt.beginning.create')

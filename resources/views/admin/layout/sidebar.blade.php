@@ -342,7 +342,6 @@
                     'bank_transaction.view',
                     'debt.customer.view',
                     'debt.supplier.view',
-                    'debt.beginning.view',
                     'account.view',
                     'journal_entry.view',
                 ])
@@ -352,7 +351,6 @@
                             'admin.transactions.bank.*',
                             'admin.debts.customer*',
                             'admin.debts.supplier*',
-                            'admin.debts.beginning*',
                             'admin.accounts.*',
                             'admin.journal-entries.*'
                         ) ? 'active' : '' }}"
@@ -366,7 +364,6 @@
                                 'admin.transactions.bank.*',
                                 'admin.debts.customer*',
                                 'admin.debts.supplier*',
-                                'admin.debts.beginning*',
                                 'admin.accounts.*',
                                 'admin.journal-entries.*'
                             ) ? 'true' : 'false' }}"
@@ -384,7 +381,6 @@
                                 'admin.transactions.bank.*',
                                 'admin.debts.customer*',
                                 'admin.debts.supplier*',
-                                'admin.debts.beginning*',
                                 'admin.accounts.*',
                                 'admin.journal-entries.*'
                             ) ? 'show' : '' }}"
@@ -419,14 +415,6 @@
                                     <li class="{{ request()->routeIs('admin.debts.supplier*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.debts.supplier') }}">
                                             <span class="sub-item">Công nợ nhà cung cấp</span>
-                                        </a>
-                                    </li>
-                                @endcan
-
-                                @can('debt.beginning.view')
-                                    <li class="{{ request()->routeIs('admin.debts.beginning*') ? 'active' : '' }}">
-                                        <a href="{{ route('admin.debts.beginning') }}">
-                                            <span class="sub-item">Nhập công nợ đầu kỳ</span>
                                         </a>
                                     </li>
                                 @endcan

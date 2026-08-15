@@ -10,7 +10,6 @@ use App\Models\Company;
 use App\Models\Expense;
 use App\Models\Import;
 use App\Models\ImportCoupon;
-use App\Models\Receipts;
 use App\Models\Storage;
 use Illuminate\Http\Request;
 
@@ -35,7 +34,6 @@ class MultipleController extends Controller
             'Storage' => Storage::class,
             'ImportCoupon' => ImportCoupon::class,
             'Client' => Client::class,
-            'Receipts' => Receipts::class,
             'Expense' => Expense::class,
             'CheckInventory' => CheckInventory::class
         ];

@@ -132,13 +132,6 @@ class CustomerDebtPaymentController extends Controller
         ]);
     }
 
-    public function legacyReceiptRedirect(): RedirectResponse
-    {
-        return redirect()
-            ->route('admin.debts.customer')
-            ->with('warning', 'Vui lòng thu công nợ từ báo cáo công nợ khách hàng.');
-    }
-
     public function legacyWriteDisabled(Request $request): JsonResponse|RedirectResponse
     {
         if ($request->expectsJson()) {

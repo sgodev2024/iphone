@@ -128,11 +128,6 @@
                     <div class="collapse" id="sidebarthuchi">
                         <ul class="nav nav-collapse">
                             <li>
-                                <a href="{{ route('admin.quanlythuchi.receipts.index') }}">
-                                    <span class="sub-item">Phiếu thu</span>
-                                </a>
-                            </li>
-                            <li>
                                 <a href="{{ route('admin.quanlythuchi.expense.index') }}">
                                     <span class="sub-item">Phiếu chi</span>
                                 </a>

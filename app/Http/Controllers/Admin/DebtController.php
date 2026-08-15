@@ -3,17 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Account;
 use App\Models\Customer;
-use App\Models\Transaction;
 use App\Services\Accounting\CustomerDebtSnapshotService;
 use App\Services\SupplierDebtReportService;
 use App\Support\DecimalAmount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -207,11 +203,6 @@ class DebtController extends Controller
         return $totals;
     }
 
-    public function create()
-    {
-        return view('admin.debt.beginning');
-    }
-
     public function store(Request $request)
     {
         if ($request->input('object_type') === 'client') {
@@ -267,54 +258,6 @@ class DebtController extends Controller
             abort(410, 'Tạo công nợ đầu kỳ nhà cung cấp qua luồng legacy đã được vô hiệu hóa.');
         }
 
-        return DB::transaction(function () use ($credentials) {
-            $transaction = Transaction::create([
-                'transaction_date' => $credentials['transaction_date'],
-                'description' => $credentials['description'],
-                'type' => 'other', // phiếu công nợ đầu kỳ
-                'created_by' => Auth::id(),
-                'user_id' => Auth::id(),
-                'status' => Transaction::STATUS_COMPLETED,
-            ]);
-
-            // Xác định đối tượng (customer hoặc supplier)
-            $tableableType = $credentials['object_type'] === 'client'
-                ? 'App\\Models\\Client'
-                : 'App\\Models\\Supplier';
-            $tableableId = $credentials['object_id'];
-
-            // Xác định tài khoản kế toán theo loại phiếu
-            if ($credentials['type'] === 'income') {
-                // Phiếu thu → công nợ phải thu KH
-                $accountId = Account::where('code', 131)->value('id');
-                $debitAmount = $credentials['amount'];
-                $creditAmount = 0;
-            } else {
-                // Phiếu chi → công nợ phải trả NCC
-                $accountId = Account::where('code', 331)->value('id');
-                $debitAmount = 0;
-                $creditAmount = $credentials['amount'];
-            }
-
-            $transaction->entries()->create([
-                'account_id' => $accountId,
-                'debit_amount' => $debitAmount,
-                'credit_amount' => $creditAmount,
-                'tableable_type' => $tableableType,
-                'tableable_id' => $tableableId,
-                'note' => 'Công nợ đầu kỳ',
-            ]);
-
-            $message = 'Tạo công nợ đầu kỳ thành công.';
-
-            $redirect = $credentials['object_type'] === 'client'
-                ? '/admin/debts/customer'
-                : '/admin/debts/supplier';
-
-            return response()->json([
-                'message' => $message,
-                'data' => $redirect,
-            ]);
-        });
+        abort(410, 'Tạo công nợ đầu kỳ qua luồng legacy đã được vô hiệu hóa.');
     }
 }

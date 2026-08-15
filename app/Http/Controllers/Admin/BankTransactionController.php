@@ -227,9 +227,7 @@ class BankTransactionController extends Controller
 
             // Tự xác định tài khoản đối ứng theo type + obj_type
             $contraCode = match ([$credentials['type'], $credentials['obj_type']]) {
-                ['credit_notice', 'client']  => '131',
                 ['credit_notice', 'supplier']  => '331',
-                ['debit_notice', 'client'] => '131',
                 ['debit_notice', 'supplier'] => '331',
             };
 
@@ -458,9 +456,7 @@ class BankTransactionController extends Controller
 
             // Tự xác định tài khoản đối ứng theo type + obj_type
             $contraCode = match ([$credentials['type'], $credentials['obj_type']]) {
-                ['credit_notice', 'client']  => '131',
                 ['credit_notice', 'supplier']  => '331',
-                ['debit_notice', 'client'] => '131',
                 ['debit_notice', 'supplier'] => '331',
             };
 
