@@ -87,6 +87,11 @@ class Order extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function customerDebtAllocations()
+    {
+        return $this->hasMany(CustomerDebtCollectionAllocation::class);
+    }
+
     public function paymentStatusLabel(): string
     {
         return match ($this->payment_status) {

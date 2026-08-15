@@ -87,6 +87,10 @@ class CashTransactionController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->input('obj_type') === 'client') {
+            abort(410, 'Ghi TK131 khách hàng qua phiếu tiền mặt generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
+        }
+
         if ($request->input('obj_type') === 'supplier') {
             abort(410, 'Thanh toán nhà cung cấp qua luồng tiền mặt legacy đã được vô hiệu hóa cho tới Phase 6C.');
         }
@@ -273,6 +277,10 @@ class CashTransactionController extends Controller
 
     public function update(Request $request)
     {
+        if ($request->input('obj_type') === 'client') {
+            abort(410, 'Sửa TK131 khách hàng qua phiếu tiền mặt generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
+        }
+
         if ($request->input('obj_type') === 'supplier') {
             abort(410, 'Thanh toán nhà cung cấp qua luồng tiền mặt legacy đã được vô hiệu hóa cho tới Phase 6C.');
         }

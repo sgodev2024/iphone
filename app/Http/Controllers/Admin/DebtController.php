@@ -214,6 +214,10 @@ class DebtController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->input('object_type') === 'client') {
+            abort(410, 'Tạo công nợ đầu kỳ khách hàng đã tạm đóng cho tới khi có kiến trúc opening debt cân bằng.');
+        }
+
         $credentials = Validator::make($request->all(), [
             'transaction_date' => 'required|date_format:Y-m-d',
             'object_type' => 'required|in:client,supplier',

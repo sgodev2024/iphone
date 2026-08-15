@@ -2457,11 +2457,18 @@ class StaffPosSaleTest extends TestCase
                     'order' => ['debt_amount' => 4000000, 'payment_status' => Order::PAYMENT_STATUS_PARTIAL],
                 ]);
             $firstTransactionId = $first->json('transaction_id');
+            $firstCollectionId = DB::table('customer_debt_collections')
+                ->where('idempotency_key', $request['idempotency_key'])
+                ->value('id');
             $this->assertDatabaseHas('transactions', [
                 'id' => $firstTransactionId,
                 'status' => Transaction::STATUS_COMPLETED,
-                'idempotency_key' => $request['idempotency_key'],
+                'collection_id' => $firstCollectionId,
             ]);
+            $this->assertNotSame(
+                $request['idempotency_key'],
+                Transaction::query()->findOrFail($firstTransactionId)->idempotency_key
+            );
             $this->assertSame(
                 '2026-08-10',
                 Transaction::query()->findOrFail($firstTransactionId)->transaction_date->toDateString()
@@ -2493,13 +2500,15 @@ class StaffPosSaleTest extends TestCase
             $this->assertSame(Order::PAYMENT_STATUS_PAID, $order->payment_status);
             $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
             $this->assertSame(4, Transaction::query()->count());
-            $this->assertDatabaseHas('transactions', [
+            $finalCollectionId = DB::table('customer_debt_collections')->where([
                 'idempotency_key' => '66666666-6666-4666-8666-666666666666',
-            ]);
+            ])->value('id');
+            $this->assertNotNull($finalCollectionId);
+            $this->assertDatabaseHas('transactions', ['collection_id' => $finalCollectionId]);
             $this->assertSame(
                 '2026-08-20',
                 Transaction::query()
-                    ->where('idempotency_key', '66666666-6666-4666-8666-666666666666')
+                    ->where('collection_id', $finalCollectionId)
                     ->sole()
                     ->transaction_date
                     ->toDateString()
@@ -2750,6 +2759,26 @@ class StaffPosSaleTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('customer_debt_collections', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id');
+            $table->string('collection_number', 32);
+            $table->date('collection_date');
+            $table->string('payment_method', 20);
+            $table->unsignedBigInteger('money_account_id');
+            $table->decimal('total_amount', 20, 2);
+            $table->string('note')->nullable();
+            $table->string('attachment')->nullable();
+            $table->string('status', 20)->default('pending');
+            $table->char('idempotency_key', 36);
+            $table->char('idempotency_hash', 64);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+            $table->unique(['owner_id', 'idempotency_key']);
+            $table->unique(['owner_id', 'collection_number']);
+        });
+
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
@@ -2763,6 +2792,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('status')->default(Transaction::STATUS_PENDING);
             $table->char('idempotency_key', 36)->nullable();
             $table->char('idempotency_hash', 64)->nullable();
+            $table->unsignedBigInteger('collection_id')->nullable();
             $table->timestamps();
             $table->unique(['user_id', 'idempotency_key']);
             $table->index(['document_type', 'reference_number', 'status']);
@@ -2778,6 +2808,19 @@ class StaffPosSaleTest extends TestCase
             $table->unsignedBigInteger('tableable_id')->nullable();
             $table->string('note')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('customer_debt_collection_allocations', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('collection_id');
+            $table->unsignedBigInteger('order_id');
+            $table->decimal('allocated_amount', 20, 2);
+            $table->unsignedInteger('allocation_sequence');
+            $table->decimal('remaining_after', 20, 2);
+            $table->unsignedBigInteger('payment_transaction_id');
+            $table->timestamps();
+            $table->unique('payment_transaction_id');
+            $table->unique(['collection_id', 'allocation_sequence']);
         });
 
         Schema::create('customer_debt_yearly_snapshots', function (Blueprint $table) {

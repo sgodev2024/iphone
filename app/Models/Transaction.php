@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Transaction extends Model
@@ -27,11 +28,17 @@ class Transaction extends Model
         'status',
         'idempotency_key',
         'idempotency_hash',
+        'collection_id',
     ];
 
     public function entries(): HasMany
     {
         return $this->hasMany(TransactionEntry::class);
+    }
+
+    public function customerDebtCollection(): BelongsTo
+    {
+        return $this->belongsTo(CustomerDebtCollection::class, 'collection_id');
     }
 
     public function creator()

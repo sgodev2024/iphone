@@ -30,4 +30,9 @@ class Client extends Model
             $model->code = generateCode('clients', 'KH');
         });
     }
+
+    public function customerDebtCollections()
+    {
+        return $this->hasMany(CustomerDebtCollection::class);
+    }
 }
