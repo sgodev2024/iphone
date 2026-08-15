@@ -327,4 +327,266 @@
             text-align: left;
         }
     }
+
+    /* =========================================================
+   POS COMPACT
+   ========================================================= */
+
+.return-page {
+    font-size: .875rem;
+}
+
+.return-page .card-header {
+    padding: .55rem .75rem;
+}
+
+.return-page .card-body {
+    padding: .65rem .75rem;
+}
+
+.return-page .card-title {
+    font-size: .92rem;
+    font-weight: 700;
+}
+
+.return-page .form-label {
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+.return-page .form-control,
+.return-page .input-group-text,
+.return-page .btn {
+    font-size: .82rem;
+}
+
+.return-side-card .info-row {
+    padding: .22rem 0;
+    line-height: 1.35;
+}
+
+.return-side-card .info-label {
+    font-size: .8rem;
+}
+
+.return-side-card .info-value {
+    font-size: .82rem;
+}
+
+.return-settlement {
+    margin-top: .55rem;
+    padding-top: .55rem;
+    border-top: 1px dashed #d1d5db;
+}
+
+.return-settlement-title {
+    margin-bottom: .3rem;
+
+    color: #475569;
+
+    font-size: .72rem;
+    font-weight: 700;
+
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.return-settlement-final {
+    margin-top: .25rem;
+    padding-top: .4rem !important;
+
+    border-top: 1px solid #e5e7eb;
+}
+
+.return-settlement-final .info-value {
+    font-size: .95rem;
+}
+
+.return-cart-empty {
+    padding: 1rem .5rem;
+    font-size: .8rem;
+}
+
+.return-cart-row {
+    padding: .5rem 0;
+}
+
+.return-product-name {
+    font-size: .84rem;
+}
+
+.return-product-meta {
+    font-size: .74rem;
+}
+
+.return-products-table th,
+.return-products-table td {
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    font-size: .8rem;
+}
+
+.return-save-btn {
+    min-height: 36px;
+}
+
+@media (min-width: 992px) {
+
+    .return-page {
+        padding-top: .75rem !important;
+        padding-bottom: .75rem !important;
+    }
+
+    .return-side {
+        top: .5rem;
+    }
+}
+/* =========================================================
+   EXCHANGE SOURCE ORDER
+   ========================================================= */
+
+   .source-order-reference {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+
+    gap: .2rem;
+
+    margin-bottom: .45rem;
+    padding: .35rem .45rem;
+
+    background: #f8fafc;
+
+    border: 1px solid #e2e8f0;
+    border-radius: .35rem;
+
+    font-size: .74rem;
+    line-height: 1.25;
+}
+
+.source-order-reference > i {
+    color: #2563eb;
+}
+
+.source-order-link {
+    padding: 0;
+
+    border: 0;
+    background: transparent;
+
+    color: #2563eb;
+
+    font-size: inherit;
+    font-weight: 700;
+
+    text-decoration: none;
+}
+
+.source-order-link:hover {
+    text-decoration: underline;
+}
+
+
+/* Modal */
+
+.source-order-modal .modal-header,
+.source-order-modal .modal-footer {
+    padding: .55rem .75rem;
+}
+
+.source-order-modal .modal-body {
+    padding: .7rem .8rem;
+    font-size: .8rem;
+}
+
+.source-order-modal .modal-title {
+    font-size: .9rem;
+}
+
+.source-order-info-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+
+    gap: .5rem;
+
+    margin-bottom: .65rem;
+}
+
+.source-order-info-grid > div {
+    padding: .4rem .5rem;
+
+    background: #f8fafc;
+
+    border-radius: .35rem;
+}
+
+.source-info-label {
+    display: block;
+
+    margin-bottom: .1rem;
+
+    color: #64748b;
+
+    font-size: .7rem;
+}
+
+.source-order-section {
+    padding-top: .55rem;
+    margin-top: .55rem;
+
+    border-top: 1px solid #e5e7eb;
+}
+
+.source-order-section-title {
+    margin-bottom: .3rem;
+
+    color: #475569;
+
+    font-size: .72rem;
+    font-weight: 700;
+
+    text-transform: uppercase;
+}
+
+.source-order-money-row {
+    display: flex;
+    justify-content: space-between;
+
+    gap: 1rem;
+
+    padding: .18rem 0;
+}
+
+.source-order-table {
+    font-size: .76rem;
+}
+
+.source-order-table th {
+    padding: .35rem .4rem;
+
+    color: #64748b;
+
+    font-size: .7rem;
+    font-weight: 600;
+
+    background: #f8fafc;
+}
+
+.source-order-table td {
+    padding: .4rem;
+}
+
+
+@media (max-width: 767.98px) {
+
+    .source-order-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .source-order-modal .modal-dialog {
+        margin: .5rem;
+    }
+}
 </style>

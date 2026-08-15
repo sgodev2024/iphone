@@ -3,10 +3,10 @@
 @section('content')
     @include('Themes.pages.order.return.partials.styles')
 
-    <div class="container-fluid py-4 return-page">
+    <div class="container-fluid py-2 return-page">
         @include('Themes.pages.order.return.partials.header')
 
-        <div class="row g-4">
+        <div class="row g-2">
             <div class="col-lg-9">
                 @include('Themes.pages.order.return.partials.original-products')
                 @include('Themes.pages.order.return.partials.return-cart')
@@ -21,6 +21,9 @@
             </div>
         </div>
     </div>
+    @include(
+    'Themes.pages.order.return.partials.source-order-modal'
+)
 @endsection
 
 @push('script')

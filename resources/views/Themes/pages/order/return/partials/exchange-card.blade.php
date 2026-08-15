@@ -113,7 +113,7 @@
                 </div>
 
 
-                <div class="border-top pt-2 mt-2">
+                <!-- <div class="border-top pt-2 mt-2">
                     <div class="d-flex justify-content-between small">
 
                         <span class="fw-semibold">
@@ -127,7 +127,7 @@
                         </span>
 
                     </div>
-                </div>
+                </div> -->
 
             </div>
 

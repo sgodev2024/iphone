@@ -1,5 +1,5 @@
 {{-- Header --}}
-<div class="d-flex align-items-center justify-content-between mb-3 return-page-header">
+<div class="d-flex align-items-center justify-content-between mb-2 return-page-header">
     <div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <h6 class="mb-0">
@@ -21,8 +21,37 @@
             Đơn hàng:
             <span class="return-order-code text-dark">
                 {{ $order->code }}
+                @if ($sourceOrderInfo)
+
+<div class="source-order-reference">
+
+    <i class="fa-solid fa-arrow-turn-up me-1"></i>
+
+    <span class="text-muted">
+        Đơn đổi từ
+    </span>
+
+    <button
+        type="button"
+        class="source-order-link"
+        data-bs-toggle="modal"
+        data-bs-target="#sourceOrderModal">
+
+        {{ $sourceOrderInfo['order_code'] }}
+
+    </button>
+
+    <span class="text-muted">
+        ·
+        {{ $sourceOrderInfo['return_code'] }}
+    </span>
+
+</div>
+
+@endif
             </span>
         </div>
+           
     </div>
 
     <div class="return-header-actions">

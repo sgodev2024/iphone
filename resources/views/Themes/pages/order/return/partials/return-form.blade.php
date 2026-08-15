@@ -1,72 +1,60 @@
 {{-- Thông tin phiếu trả --}}
-<div class="card return-side-card">
+<div class="card return-side-card return-form-card">
 
-    <div class="card-header py-2 px-3">
-        <h6 class="card-title mb-0">
-            Phiếu trả hàng
-        </h6>
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            Phiếu đổi / trả
+        </h5>
     </div>
 
+    <div class="card-body">
 
-    <div class="card-body p-3">
-
-        {{-- Phí trả hàng --}}
-        <div class="mb-3">
+        <div class="mb-2">
 
             <label
                 for="returnFeeInput"
-                class="form-label small mb-1">
-
+                class="form-label mb-1">
                 Phí trả hàng
-
             </label>
 
-            <div class="input-group">
+            <div class="input-group input-group-sm">
 
                 <input
                     id="returnFeeInput"
                     type="text"
                     inputmode="numeric"
-                    class="form-control form-control-sm return-fee-input"
+                    class="form-control return-fee-input"
                     placeholder="0"
                     value="0"
                     @disabled($isFullyReturned)>
 
-                <span class="input-group-text small">
+                <span class="input-group-text">
                     VND
                 </span>
 
             </div>
 
-            <div class="form-text small">
-                Ví dụ: khách chịu phí trả hàng 20.000 VND.
-            </div>
-
         </div>
 
 
-        {{-- Ghi chú --}}
-        <div class="mb-3">
+        <div class="mb-2">
 
             <label
                 for="returnNote"
-                class="form-label small mb-1">
-
+                class="form-label mb-1">
                 Ghi chú
-
             </label>
 
             <textarea
                 id="returnNote"
                 class="form-control form-control-sm"
-                rows="3"
-                placeholder="Nhập ghi chú cho phiếu trả..."
+                rows="2"
+                placeholder="Ghi chú..."
                 @disabled($isFullyReturned)></textarea>
 
         </div>
 
 
-        {{-- Xác nhận --}}
         @if (!$isFullyReturned)
 
             <div class="d-grid">
@@ -76,7 +64,8 @@
                     id="saveReturnBtn"
                     class="btn btn-success btn-sm return-save-btn">
 
-                    <i class="fa-solid fa-floppy-disk me-1"></i>
+                    <i class="fa-solid fa-rotate-left me-1"></i>
+
                     Xác nhận trả hàng
 
                 </button>
@@ -85,12 +74,11 @@
 
         @else
 
-            <div class="alert alert-secondary mb-0 text-center small">
+            <div class="alert alert-secondary py-2 mb-0 text-center small">
                 Đơn đã trả toàn bộ.
             </div>
 
         @endif
 
     </div>
-
 </div>

@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 use App\Models\OrderReturnDetail;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use App\Models\OrderReturn;
 
 class OrderReturnController extends Controller
 {
@@ -60,6 +61,187 @@ class OrderReturnController extends Controller
         if (! (bool) $order->status) {
             abort(422, 'Chỉ có thể trả hàng từ đơn đã hoàn thành.');
         }
+        /*
+|--------------------------------------------------------------------------
+| XÁC ĐỊNH NGUỒN GỐC CỦA EXCHANGE ORDER
+|--------------------------------------------------------------------------
+|
+| Nếu order hiện tại từng được dùng làm exchange_order_id
+| của một order_return completed thì đây là đơn được sinh
+| ra từ nghiệp vụ đổi hàng.
+|
+*/
+
+$sourceReturn = OrderReturn::query()
+->with([
+    'originalOrder.client',
+    'originalOrder.creator',
+    'originalOrder.user',
+    'originalOrder.orderDetails.product',
+    'originalOrder.orderDetails.productImei',
+])
+->where(
+    'exchange_order_id',
+    $order->id
+)
+->where(
+    'status',
+    'completed'
+)
+->first();
+
+
+$sourceOrderInfo = null;
+
+
+if (
+$sourceReturn
+&& $sourceReturn->originalOrder
+) {
+
+$sourceOrder =
+    $sourceReturn->originalOrder;
+
+
+$sourceSubtotal =
+    (int) $sourceOrder->orderDetails
+        ->sum(function ($detail) {
+
+            return
+                (int) $detail->price
+                *
+                (int) $detail->quantity;
+        });
+
+
+$sourceOrderInfo = [
+
+    /*
+     * Phiếu đã sinh ra order hiện tại.
+     */
+    'return_id'
+        => (int) $sourceReturn->id,
+
+    'return_code'
+        => $sourceReturn->code,
+
+
+    /*
+     * Đơn nguồn trực tiếp.
+     */
+    'order_id'
+        => (int) $sourceOrder->id,
+
+    'order_code'
+        => $sourceOrder->code,
+
+    'created_at'
+        => optional(
+            $sourceOrder->created_at
+        )->format('d/m/Y H:i'),
+
+    'customer_name'
+        => $sourceOrder
+            ->customer_display_name,
+
+    'customer_phone'
+        => $sourceOrder
+            ->customer_display_phone
+            ?? '-',
+
+
+    /*
+     * Giá trị đơn nguồn.
+     */
+    'subtotal'
+        => $sourceSubtotal,
+
+    'discount_value'
+        => (int) (
+            $sourceOrder->discount_value
+            ?? 0
+        ),
+
+    'total_money'
+        => (int) (
+            $sourceOrder->total_money
+            ?? 0
+        ),
+
+
+    /*
+     * Giá trị giao dịch đổi / trả đã sinh ra
+     * order hiện tại.
+     */
+    'return_amount'
+        => (int) $sourceReturn
+            ->return_amount,
+
+    'exchange_amount'
+        => (int) $sourceReturn
+            ->exchange_amount,
+
+    'fee_amount'
+        => (int) $sourceReturn
+            ->fee_amount,
+
+    'refund_amount'
+        => (int) $sourceReturn
+            ->refund_amount,
+
+    'additional_payment'
+        => (int) $sourceReturn
+            ->additional_payment,
+
+
+    /*
+     * Hàng của đơn nguồn.
+     */
+    'items'
+        => $sourceOrder
+            ->orderDetails
+            ->map(
+                function ($detail) {
+
+                    return [
+
+                        'product_name'
+                            => $detail
+                                ->product
+                                ?->name
+                                ?? 'Sản phẩm',
+
+                        'product_code'
+                            => $detail
+                                ->product
+                                ?->code,
+
+                        'imei'
+                            => $detail
+                                ->productImei
+                                ?->imei,
+
+                        'quantity'
+                            => (int) $detail
+                                ->quantity,
+
+                        'unit_price'
+                            => (int) $detail
+                                ->price,
+
+                        'line_total'
+                            => (int) $detail
+                                ->price
+                                *
+                                (int) $detail
+                                ->quantity,
+                    ];
+                }
+            )
+            ->values()
+            ->all(),
+];
+}
 
 
         /*
@@ -254,7 +436,8 @@ class OrderReturnController extends Controller
                 'returnItems',
                 'summary',
                 'hasReturnableItems',
-                'isFullyReturned'
+                'isFullyReturned',
+                'sourceOrderInfo'
             )
         );
     }

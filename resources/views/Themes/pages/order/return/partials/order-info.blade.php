@@ -1,64 +1,24 @@
-{{-- Thông tin hóa đơn --}}
-<div class="card mb-3 return-side-card">
+{{-- Thông tin đơn hàng + quyết toán realtime --}}
+<div class="card mb-2 return-side-card return-order-summary-card">
 
-    <div class="card-header py-2 px-3">
-        <h6 class="card-title mb-0">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
             Thông tin đơn hàng
-        </h6>
+        </h5>
     </div>
 
-    <div class="card-body p-3">
+    <div class="card-body">
 
-        <div class="info-row">
-            <span class="info-label small">
-                Mã đơn
-            </span>
+        {{-- ================================================= --}}
+        {{-- GIÁ TRỊ ĐƠN GỐC --}}
+        {{-- ================================================= --}}
 
-            <span class="info-value small">
-                {{ $order->code }}
-            </span>
-        </div>
-
-        <div class="info-row">
-            <span class="info-label small">
-                Ngày bán
-            </span>
-
-            <span class="info-value small">
-                {{ optional($order->created_at)->format('d/m/Y H:i') }}
-            </span>
-        </div>
-
-        <hr class="my-2">
-
-        <div class="info-row">
-            <span class="info-label small">
-                Khách hàng
-            </span>
-
-            <span class="info-value small">
-                {{ $order->customer_display_name }}
-            </span>
-        </div>
-
-        <div class="info-row">
-            <span class="info-label small">
-                SĐT
-            </span>
-
-            <span class="info-value small">
-                {{ $order->customer_display_phone ?? '-' }}
-            </span>
-        </div>
-
-        <hr class="my-2">
-
-        <div class="info-row">
-            <span class="info-label small">
+        <!-- <div class="info-row">
+            <span class="info-label">
                 Tạm tính
             </span>
 
-            <span class="info-value small">
+            <span class="info-value">
                 {{ number_format(
                     $summary['subtotal'],
                     0,
@@ -69,12 +29,13 @@
             </span>
         </div>
 
+
         <div class="info-row">
-            <span class="info-label small">
+            <span class="info-label">
                 Giảm giá
             </span>
 
-            <span class="info-value small">
+            <span class="info-value">
                 {{ number_format(
                     $summary['discount_value'],
                     0,
@@ -85,12 +46,13 @@
             </span>
         </div>
 
+
         <div class="info-row">
-            <span class="info-label small fw-semibold">
+            <span class="info-label fw-semibold">
                 Thành tiền
             </span>
 
-            <span class="info-value small fw-bold">
+            <span class="info-value fw-bold">
                 {{ number_format(
                     $summary['total_money'],
                     0,
@@ -99,29 +61,99 @@
                 ) }}
                 VND
             </span>
-        </div>
+        </div> -->
 
-        @if ($summary['returned_amount'] > 0)
 
-            <hr class="my-2">
+        {{-- ================================================= --}}
+        {{-- QUYẾT TOÁN ĐỔI / TRẢ REALTIME --}}
+        {{-- ================================================= --}}
+
+        <div class="return-settlement">
+
+            <div
+                id="returnSettlementTitle"
+                class="return-settlement-title">
+                Quyết toán trả hàng
+            </div>
+
 
             <div class="info-row">
-                <span class="info-label small">
-                    Đã trả trước
+                <span class="info-label">
+                    Giá trị hàng trả
                 </span>
 
-                <span class="info-value small text-warning">
-                    {{ number_format(
-                        $summary['returned_amount'],
-                        0,
-                        ',',
-                        '.'
-                    ) }}
-                    VND
+                <span
+                    id="returnAmountPreview"
+                    class="info-value fw-semibold">
+                    0 VND
                 </span>
             </div>
 
-        @endif
+
+            {{-- Chỉ hiện khi có hàng khách lấy mới --}}
+            <div
+                id="exchangeAmountPreviewRow"
+                class="info-row d-none">
+
+                <span class="info-label">
+                    Giá trị hàng mới
+                </span>
+
+                <span
+                    id="exchangeAmountPreview"
+                    class="info-value fw-semibold">
+                    0 VND
+                </span>
+            </div>
+
+
+            <div class="info-row">
+                <span class="info-label">
+                    Phí trả hàng
+                </span>
+
+                <span
+                    id="returnFeePreview"
+                    class="info-value">
+                    0 VND
+                </span>
+            </div>
+
+
+            {{-- Hoàn khách --}}
+            <div
+                id="refundPreviewRow"
+                class="info-row return-settlement-final">
+
+                <span class="info-label fw-semibold">
+                    Hoàn khách
+                </span>
+
+                <span
+                    id="refundPreview"
+                    class="info-value text-success fw-bold">
+                    0 VND
+                </span>
+            </div>
+
+
+            {{-- Khách trả thêm --}}
+            <div
+                id="additionalPaymentPreviewRow"
+                class="info-row return-settlement-final d-none">
+
+                <span class="info-label fw-semibold">
+                    Khách trả thêm
+                </span>
+
+                <span
+                    id="additionalPaymentPreview"
+                    class="info-value text-danger fw-bold">
+                    0 VND
+                </span>
+            </div>
+
+        </div>
 
     </div>
 </div>
