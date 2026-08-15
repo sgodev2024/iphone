@@ -473,8 +473,198 @@ class CustomerDebtCollectionServiceTest extends TestCase
             ->assertSee('value="customer_debt_collection"', false)
             ->assertSee('id="customer-debt-panel"', false)
             ->assertSee('Tài khoản tiền mặt canonical')
-            ->assertSee("formData.set('payment_method', 'cash')", false)
+            ->assertSee("formData.set('payment_method', collectionPaymentMethod)", false)
             ->assertSee("replace(/\\./g, '')", false);
+    }
+
+    public function test_bank_add_form_reuses_collection_mode_and_lists_only_active_direct_children_of_112(): void
+    {
+        $defaultBank = Account::create([
+            'code' => '112DEF',
+            'name' => 'Default Bank Child',
+            'status' => true,
+            'is_default' => true,
+            'parent_id' => $this->bankParent->id,
+        ]);
+        Account::create([
+            'code' => '112OFF',
+            'name' => 'Inactive Bank Child',
+            'status' => false,
+            'parent_id' => $this->bankParent->id,
+        ]);
+        $unrelatedParent = Account::create(['code' => '211', 'name' => 'Unrelated', 'status' => true]);
+        Account::create([
+            'code' => '211CHILD',
+            'name' => 'Unrelated Child',
+            'status' => true,
+            'parent_id' => $unrelatedParent->id,
+        ]);
+
+        $response = $this->actingAs($this->owner)
+            ->get(route('admin.transactions.bank.save'));
+
+        $response->assertOk()
+            ->assertSee('Phiếu ngân hàng thông thường')
+            ->assertSee('value="customer_debt_collection"', false)
+            ->assertSee('id="collection-money-account"', false)
+            ->assertSee("value=\"{$this->bank->id}\"", false)
+            ->assertSee("value=\"{$defaultBank->id}\"", false)
+            ->assertDontSee("value=\"{$this->bankParent->id}\"", false)
+            ->assertDontSee('Inactive Bank Child')
+            ->assertDontSee('Unrelated Child')
+            ->assertSee('data-payment-method="bank_transfer"', false)
+            ->assertSee("formData.set('money_account_id', $('#collection-money-account').val())", false);
+    }
+
+    public function test_bank_collection_post_uses_selected_child112_and_allocates_700k_as_500k_plus_200k(): void
+    {
+        $first = $this->createCanonicalOrder(500000, '2026-08-01', 'BANK-A');
+        $second = $this->createCanonicalOrder(600000, '2026-08-05', 'BANK-B');
+        $payload = [
+            'client_id' => $this->client->id,
+            'amount' => '700000',
+            'collection_date' => '2026-08-15',
+            'payment_method' => 'bank_transfer',
+            'money_account_id' => $this->bank->id,
+            'note' => 'Thu từ Bank UI',
+            'idempotency_key' => $this->uuid(39),
+        ];
+
+        $response = $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), $payload)
+            ->assertOk()
+            ->assertJsonPath('replayed', false)
+            ->assertJsonPath('collection.payment_method', 'bank_transfer')
+            ->assertJsonPath('collection.money_account.id', $this->bank->id)
+            ->assertJsonPath('collection.money_account.code', $this->bank->code)
+            ->assertJsonPath('collection.allocations.0.order_id', $first->id)
+            ->assertJsonPath('collection.allocations.0.allocated_amount', '500000.00')
+            ->assertJsonPath('collection.allocations.1.order_id', $second->id)
+            ->assertJsonPath('collection.allocations.1.allocated_amount', '200000.00')
+            ->assertJsonPath('collectible_total', '400000.00');
+
+        $collection = CustomerDebtCollection::firstOrFail();
+        $payments = Transaction::query()->where('collection_id', $collection->id)->get();
+        $this->assertCount(2, $payments);
+        $this->assertSame(700000, (int) DB::table('transaction_entries')
+            ->whereIn('transaction_id', $payments->pluck('id'))
+            ->where('account_id', $this->bank->id)
+            ->sum('debit_amount'));
+        $this->assertSame(700000, (int) DB::table('transaction_entries')
+            ->whereIn('transaction_id', $payments->pluck('id'))
+            ->where('account_id', $this->receivable->id)
+            ->where('tableable_type', Client::class)
+            ->where('tableable_id', $this->client->id)
+            ->sum('credit_amount'));
+
+        foreach ($payments as $payment) {
+            $this->assertSame('credit_notice', $payment->type);
+            $this->assertSame('order', $payment->document_type);
+            $this->assertSame(Transaction::STATUS_COMPLETED, $payment->status);
+        }
+
+        $this->assertSame(0, (int) $first->fresh()->debt_amount);
+        $this->assertSame(400000, (int) $second->fresh()->debt_amount);
+
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), $payload)
+            ->assertOk()
+            ->assertJsonPath('replayed', true)
+            ->assertJsonPath('collection.id', $response->json('collection.id'));
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), array_merge($payload, [
+                'idempotency_key' => $this->uuid(48),
+            ]))
+            ->assertUnprocessable();
+
+        $this->assertDatabaseCount('customer_debt_collections', 1);
+        $this->assertSame(2, Transaction::where('collection_id', $collection->id)->count());
+    }
+
+    public function test_bank_collection_rejects_every_invalid_account_without_fallback(): void
+    {
+        $this->createCanonicalOrder(1000000, '2026-08-01', 'BANK-INVALID');
+        $inactive = Account::create([
+            'code' => '112OFF',
+            'name' => 'Inactive Bank',
+            'status' => false,
+            'parent_id' => $this->bankParent->id,
+        ]);
+        $unrelatedParent = Account::create(['code' => '211', 'name' => 'Unrelated', 'status' => true]);
+        $unrelatedChild = Account::create([
+            'code' => '211CHILD',
+            'name' => 'Wrong Child',
+            'status' => true,
+            'parent_id' => $unrelatedParent->id,
+        ]);
+        $base = [
+            'client_id' => $this->client->id,
+            'amount' => '100000',
+            'collection_date' => '2026-08-15',
+            'payment_method' => 'bank_transfer',
+        ];
+
+        foreach ([
+            $this->bankParent->id,
+            $this->cash->id,
+            $this->receivable->id,
+            $inactive->id,
+            $unrelatedChild->id,
+            999999,
+        ] as $index => $invalidAccountId) {
+            $this->actingAs($this->owner)
+                ->postJson(route('admin.debts.customer.collections.store'), array_merge($base, [
+                    'money_account_id' => $invalidAccountId,
+                    'idempotency_key' => $this->uuid(40 + $index),
+                ]))
+                ->assertUnprocessable();
+        }
+
+        $foreignClient = Client::create([
+            'user_id' => $this->otherOwner->id,
+            'name' => 'Foreign bank client',
+        ]);
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), array_merge($base, [
+                'client_id' => $foreignClient->id,
+                'money_account_id' => $this->bank->id,
+                'idempotency_key' => $this->uuid(47),
+            ]))
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('customer_debt_collections', 0);
+        $this->assertSame(0, Transaction::where('type', 'credit_notice')->count());
+    }
+
+    public function test_bank_idempotency_conflicts_when_selected_account_changes(): void
+    {
+        $this->createCanonicalOrder(500000, '2026-08-01', 'BANK-IDEMPOTENT');
+        $otherBank = Account::create([
+            'code' => '112VCB',
+            'name' => 'VCB',
+            'status' => true,
+            'parent_id' => $this->bankParent->id,
+        ]);
+        $payload = [
+            'client_id' => $this->client->id,
+            'amount' => '100000',
+            'collection_date' => '2026-08-15',
+            'payment_method' => 'bank_transfer',
+            'money_account_id' => $this->bank->id,
+            'idempotency_key' => $this->uuid(46),
+        ];
+
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), $payload)
+            ->assertOk();
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), array_merge($payload, [
+                'money_account_id' => $otherBank->id,
+            ]))
+            ->assertConflict();
+
+        $this->assertDatabaseCount('customer_debt_collections', 1);
+        $this->assertSame($this->bank->id, CustomerDebtCollection::firstOrFail()->money_account_id);
     }
 
     public function test_collection_client_search_is_owner_scoped(): void

@@ -116,6 +116,12 @@ class CustomerDebtPaymentController extends Controller
                 'id' => (int) $collection->id,
                 'collection_number' => $collection->collection_number,
                 'total_amount' => $collection->total_amount,
+                'payment_method' => $collection->payment_method,
+                'money_account' => [
+                    'id' => (int) $collection->moneyAccount->id,
+                    'code' => $collection->moneyAccount->code,
+                    'name' => $collection->moneyAccount->name,
+                ],
                 'status' => $collection->status,
                 'allocations' => $collection->allocations->map(fn ($allocation): array => [
                     'order_id' => (int) $allocation->order_id,

@@ -12,12 +12,14 @@ use App\Models\Supplier;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
+use App\Services\CustomerDebtCollectionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class BankTransactionController extends Controller
 {
@@ -115,7 +117,7 @@ class BankTransactionController extends Controller
         ]);
     }
 
-    public function save(Request $request)
+    public function save(Request $request, CustomerDebtCollectionService $collectionService)
     {
         $type = 'bank';
         $transaction = null;
@@ -135,6 +137,11 @@ class BankTransactionController extends Controller
             ->get();
 
         $moneyAccountIds = $moneyAccounts->pluck('id')->toArray();
+        try {
+            $collectionMoneyAccounts = $collectionService->bankAccounts();
+        } catch (ValidationException) {
+            $collectionMoneyAccounts = collect();
+        }
 
         if (!empty($transactionId)) {
             $transaction = Transaction::with('entries')->findOrFail($transactionId);
@@ -163,6 +170,7 @@ class BankTransactionController extends Controller
         return view('admin.cash-bank.form', compact(
             'type',
             'moneyAccounts',
+            'collectionMoneyAccounts',
             'transaction',
             'mainEntry',
             'contraEntry'

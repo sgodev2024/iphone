@@ -10,12 +10,12 @@
 
                 <input type="hidden" name="transaction_id" value="{{ optional($transaction)->id }}">
                 <input type="hidden" name="entry_id" value="{{ optional($mainEntry)->id }}">
-                @if ($type === 'cash' && empty($transaction))
+                @if (in_array($type, ['cash', 'bank'], true) && empty($transaction))
                     <input type="hidden" id="collection-idempotency-key" name="idempotency_key">
                     <div class="border-bottom p-3 bg-light">
                         <label class="form-label required" for="entry-mode">Loại phiếu</label>
                         <select class="form-select" id="entry-mode" name="entry_mode" required>
-                            <option value="generic">Phiếu tiền mặt thông thường</option>
+                            <option value="generic">Phiếu {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }} thông thường</option>
                             @if (auth()->user()?->hasPermission('receipt.create'))
                                 <option value="customer_debt_collection">Thu công nợ khách hàng</option>
                             @endif
@@ -49,7 +49,7 @@
                                 </div>
 
                                 <div class="col-md-6 generic-only-field" id="generic-account-field">
-                                    <label class="form-label required">Tài khoản tiền mặt</label>
+                                    <label class="form-label required">Tài khoản {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }}</label>
                                     <select class="form-select" name="account_id" id="account_id" required>
                                         <option value="">Chọn tài khoản</option>
                                         @foreach ($moneyAccounts as $moneyAccount)
@@ -60,12 +60,27 @@
                                     </select>
                                 </div>
 
-                                @if ($type === 'cash' && empty($transaction))
+                                @if (in_array($type, ['cash', 'bank'], true) && empty($transaction))
                                     <div class="col-md-6 collection-only-field d-none" id="collection-account-field">
-                                        <label class="form-label">Tài khoản tiền mặt canonical</label>
-                                        <input type="text" class="form-control" readonly
-                                            value="{{ $canonicalCashAccount ? "$canonicalCashAccount->code - $canonicalCashAccount->name" : 'Chưa cấu hình tài khoản 111 đang hoạt động' }}">
-                                        <div class="form-text">Tài khoản 111 do hệ thống tự xác định khi ghi sổ.</div>
+                                        @if ($type === 'cash')
+                                            <label class="form-label">Tài khoản tiền mặt canonical</label>
+                                            <input type="text" class="form-control" readonly
+                                                value="{{ $canonicalCashAccount ? "$canonicalCashAccount->code - $canonicalCashAccount->name" : 'Chưa cấu hình tài khoản 111 đang hoạt động' }}">
+                                            <div class="form-text">Tài khoản 111 do hệ thống tự xác định khi ghi sổ.</div>
+                                        @else
+                                            <label class="form-label required" for="collection-money-account">Tài khoản ngân hàng nhận tiền</label>
+                                            <select class="form-select" id="collection-money-account">
+                                                <option value="">Chọn tài khoản ngân hàng</option>
+                                                @foreach ($collectionMoneyAccounts as $collectionMoneyAccount)
+                                                    <option value="{{ $collectionMoneyAccount->id }}"
+                                                        data-code="{{ $collectionMoneyAccount->code }}"
+                                                        data-name="{{ $collectionMoneyAccount->name }}">
+                                                        {{ "$collectionMoneyAccount->code - $collectionMoneyAccount->name" }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="form-text">Chỉ gồm tài khoản đang hoạt động trực tiếp dưới TK112.</div>
+                                        @endif
                                     </div>
                                 @endif
 
@@ -115,12 +130,13 @@
                                         placeholder="Nhập ID chứng từ" class="form-control">
                                 </div>
 
-                                @if ($type === 'cash' && empty($transaction))
+                                @if (in_array($type, ['cash', 'bank'], true) && empty($transaction))
                                     <div class="col-12 collection-only-field d-none" id="customer-debt-panel"
                                         data-client-search-url="{{ route('admin.debts.customer.collections.clients') }}"
                                         data-preview-url="{{ route('admin.debts.customer.collections.preview', ['clientId' => '__CLIENT__']) }}"
                                         data-store-url="{{ route('admin.debts.customer.collections.store') }}"
-                                        data-cash-account-ready="{{ $canonicalCashAccount ? '1' : '0' }}">
+                                        data-payment-method="{{ $type === 'cash' ? 'cash' : 'bank_transfer' }}"
+                                        data-account-ready="{{ $type === 'cash' ? ($canonicalCashAccount ? '1' : '0') : ($collectionMoneyAccounts->isNotEmpty() ? '1' : '0') }}">
                                         <h6 class="mb-2">CÔNG NỢ KHÁCH HÀNG</h6>
                                         <div id="debt-status" class="alert alert-secondary mb-3">
                                             Chọn khách hàng để tải công nợ canonical từ ledger.
@@ -245,6 +261,8 @@
                 }
             });
             const debtPanel = $('#customer-debt-panel');
+            const collectionPaymentMethod = debtPanel.data('payment-method') || 'cash';
+            const isBankCollection = collectionPaymentMethod === 'bank_transfer';
             const collectionState = {
                 canSubmit: false,
                 submitting: false,
@@ -279,7 +297,10 @@
             }
 
             function setSubmitState() {
-                const disabled = collectionState.submitting || (isCollectionMode() && !collectionState.canSubmit);
+                const bankAccountMissing = isCollectionMode() && isBankCollection &&
+                    !$('#collection-money-account').val();
+                const disabled = collectionState.submitting ||
+                    (isCollectionMode() && (!collectionState.canSubmit || bankAccountMissing));
                 $('#submit-button').prop('disabled', disabled);
             }
 
@@ -315,14 +336,17 @@
                 $('#object_code').val('');
                 $('#object_id').val('');
                 $('#object-search-result').hide().empty();
+                $('#collection-money-account').val('').trigger('change.select2');
 
                 if (collection) {
                     $('#object-type').val('client').trigger('change.select2');
-                    $('#type').val('income').trigger('change.select2');
+                    $('#type').val(isBankCollection ? 'credit_notice' : 'income').trigger('change.select2');
                     $('#collection-idempotency-key').val(uuid());
 
-                    if (debtPanel.data('cash-account-ready').toString() !== '1') {
-                        setDebtStatus('Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.', 'danger');
+                    if (debtPanel.data('account-ready').toString() !== '1') {
+                        setDebtStatus(isBankCollection
+                            ? 'Không có tài khoản ngân hàng hợp lệ trực tiếp dưới TK112.'
+                            : 'Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.', 'danger');
                     } else {
                         setDebtStatus('Chọn khách hàng để tải công nợ canonical từ ledger.');
                     }
@@ -364,7 +388,7 @@
                 formatPrice($(this));
             });
 
-            $('#object-type, #type, #account_id').select2({
+            $('#object-type, #type, #account_id, #collection-money-account').select2({
                 placeholder: function() {
                     return $(this).attr('placeholder') || "Chọn một tùy chọn";
                 },
@@ -554,6 +578,10 @@
                 if (isCollectionMode()) loadDebtPreview();
             });
 
+            $('#collection-money-account').on('change', function() {
+                setSubmitState();
+            });
+
             $('#entry-mode').on('change', applyMode);
 
             $('#myForm').on('submit', function(e) {
@@ -561,7 +589,8 @@
                 if (collectionState.submitting) return;
 
                 if (isCollectionMode()) {
-                    if (!collectionState.canSubmit || !$('#object_id').val() || !rawAmount()) {
+                    if (!collectionState.canSubmit || !$('#object_id').val() || !rawAmount() ||
+                        (isBankCollection && !$('#collection-money-account').val())) {
                         Toast.fire({ icon: 'error', title: 'Dữ liệu thu công nợ chưa hợp lệ hoặc chưa đối chiếu xong.' });
                         return;
                     }
@@ -579,7 +608,10 @@
                     formData.set('client_id', $('#object_id').val());
                     formData.set('amount', rawAmount());
                     formData.set('collection_date', $('[name="transaction_date"]').val());
-                    formData.set('payment_method', 'cash');
+                    formData.set('payment_method', collectionPaymentMethod);
+                    if (isBankCollection) {
+                        formData.set('money_account_id', $('#collection-money-account').val());
+                    }
                     formData.set('note', $('[name="description"]').val());
                     formData.set('idempotency_key', $('#collection-idempotency-key').val());
                     if (fileInput?.files[0]) formData.set('attachment', fileInput.files[0]);
@@ -621,6 +653,8 @@
                                 html: `<div class="text-start">
                                     <p class="mb-1"><strong>Số phiếu:</strong> ${escapeHtml(res.collection.collection_number)}</p>
                                     <p class="mb-1"><strong>Khách hàng:</strong> ${escapeHtml($('#object_code').val())}</p>
+                                    <p class="mb-1"><strong>Phương thức:</strong> ${isBankCollection ? 'Chuyển khoản' : 'Tiền mặt'}</p>
+                                    <p class="mb-1"><strong>Tài khoản:</strong> ${escapeHtml(`${res.collection.money_account.code} - ${res.collection.money_account.name}`)}</p>
                                     <p><strong>Tổng thu:</strong> ${money(res.collection.total_amount)}</p>
                                     <table class="table table-sm"><thead><tr><th>Đơn hàng</th><th class="text-end">Phân bổ</th></tr></thead><tbody>${details}</tbody></table>
                                 </div>`
