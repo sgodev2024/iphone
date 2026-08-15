@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Models\CustomerDebtCollection;
 use App\Models\CustomerDebtCollectionAllocation;
 use App\Models\Order;
+use App\Models\Roles;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
@@ -17,8 +18,10 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -54,6 +57,9 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->service = app(CustomerDebtCollectionService::class);
         $this->owner = $this->createUser('owner@example.com');
         $this->otherOwner = $this->createUser('other@example.com');
+        $fullAccessRole = Roles::create(['name' => 'store']);
+        $this->owner->forceFill(['role_id' => $fullAccessRole->id])->save();
+        $this->otherOwner->forceFill(['role_id' => $fullAccessRole->id])->save();
         $this->client = Client::create(['user_id' => $this->owner->id, 'name' => 'Khách FIFO']);
         $this->createAccounts();
     }
@@ -457,6 +463,178 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->assertSame(66668, (int) $order->fresh()->debt_amount);
     }
 
+    public function test_cash_add_form_exposes_customer_debt_collection_mode_without_replacing_generic_mode(): void
+    {
+        $response = $this->actingAs($this->owner)
+            ->get(route('admin.transactions.cash.save'));
+
+        $response->assertOk()
+            ->assertSee('value="generic"', false)
+            ->assertSee('value="customer_debt_collection"', false)
+            ->assertSee('id="customer-debt-panel"', false)
+            ->assertSee('Tài khoản tiền mặt canonical')
+            ->assertSee("formData.set('payment_method', 'cash')", false)
+            ->assertSee("replace(/\\./g, '')", false);
+    }
+
+    public function test_collection_client_search_is_owner_scoped(): void
+    {
+        $owned = Client::create([
+            'user_id' => $this->owner->id,
+            'name' => 'Scoped Customer',
+            'phone' => '0901000001',
+        ]);
+        Client::create([
+            'user_id' => $this->otherOwner->id,
+            'name' => 'Scoped Customer Other',
+            'phone' => '0901000002',
+        ]);
+
+        $response = $this->actingAs($this->owner)
+            ->getJson(route('admin.debts.customer.collections.clients', ['keyword' => 'Scoped']));
+
+        $response->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $owned->id);
+    }
+
+    public function test_collection_preview_reports_ready_fifo_no_debt_and_reconciliation_blocked_states(): void
+    {
+        $first = $this->createCanonicalOrder(100000, '2026-08-01', 'FIFO-A');
+        $second = $this->createCanonicalOrder(200000, '2026-08-02', 'FIFO-B');
+
+        $this->actingAs($this->owner)
+            ->getJson(route('admin.debts.customer.collections.preview', [
+                'clientId' => $this->client->id,
+                'collection_date' => '2026-08-15',
+                'amount' => 150000,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('status', 'ready')
+            ->assertJsonPath('can_collect', true)
+            ->assertJsonPath('preview_allocations.0.order_id', $first->id)
+            ->assertJsonPath('preview_allocations.1.order_id', $second->id);
+
+        $noDebtClient = Client::create(['user_id' => $this->owner->id, 'name' => 'No debt']);
+        $this->actingAs($this->owner)
+            ->getJson(route('admin.debts.customer.collections.preview', [
+                'clientId' => $noDebtClient->id,
+                'collection_date' => '2026-08-15',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('status', 'blocked')
+            ->assertJsonPath('can_collect', false);
+
+        $this->actingAs($this->owner)
+            ->getJson(route('admin.debts.customer.collections.preview', [
+                'clientId' => $this->client->id,
+                'collection_date' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('status', 'blocked')
+            ->assertJsonCount(0, 'items');
+
+        $malformed = Transaction::create([
+            'user_id' => $this->owner->id,
+            'transaction_date' => '2026-08-10',
+            'type' => 'income',
+            'status' => Transaction::STATUS_COMPLETED,
+        ]);
+        $malformed->entries()->create([
+            'account_id' => $this->receivable->id,
+            'credit_amount' => 10000,
+            'tableable_type' => Client::class,
+            'tableable_id' => $this->client->id,
+        ]);
+
+        $this->actingAs($this->owner)
+            ->getJson(route('admin.debts.customer.collections.preview', [
+                'clientId' => $this->client->id,
+                'collection_date' => '2026-08-15',
+            ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('status', 'blocked')
+            ->assertJsonPath('can_collect', false)
+            ->assertJsonStructure(['errors' => ['reconciliation']]);
+    }
+
+    public function test_collection_post_saves_attachment_once_returns_result_and_replays_same_key(): void
+    {
+        config([
+            'filesystems.disks.public.root' => sys_get_temp_dir().DIRECTORY_SEPARATOR.'iphone-phase7c-'.uniqid(),
+        ]);
+        Storage::forgetDisk('public');
+        $order = $this->createCanonicalOrder(300000, '2026-08-01', 'ATTACH');
+        $payload = [
+            'client_id' => $this->client->id,
+            'amount' => '100000',
+            'collection_date' => '2026-08-15',
+            'payment_method' => 'cash',
+            'note' => 'Thu từ cash UI',
+            'idempotency_key' => $this->uuid(37),
+            'attachment' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'),
+        ];
+
+        $response = $this->actingAs($this->owner)
+            ->post(route('admin.debts.customer.collections.store'), $payload, ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('replayed', false)
+            ->assertJsonPath('collection.collection_number', 'PTCN-000001')
+            ->assertJsonPath('collection.total_amount', '100000.00')
+            ->assertJsonPath('collection.allocations.0.order_id', $order->id);
+
+        $collection = CustomerDebtCollection::firstOrFail();
+        $this->assertNotNull($collection->attachment);
+        Storage::disk('public')->assertExists($collection->attachment);
+
+        unset($payload['attachment']);
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), $payload)
+            ->assertOk()
+            ->assertJsonPath('replayed', true)
+            ->assertJsonPath('collection.id', $response->json('collection.id'));
+
+        $this->assertSame(1, CustomerDebtCollection::count());
+        $this->assertCount(1, Storage::disk('public')->allFiles('attachments/customer_debt_collections'));
+        Storage::disk('public')->delete($collection->attachment);
+    }
+
+    public function test_collection_http_validation_requires_raw_vnd_and_rejects_unsafe_input(): void
+    {
+        $this->createCanonicalOrder(100000, '2026-08-01', 'VALIDATE');
+        $base = [
+            'client_id' => $this->client->id,
+            'amount' => '50000',
+            'collection_date' => '2026-08-15',
+            'payment_method' => 'cash',
+            'idempotency_key' => $this->uuid(38),
+        ];
+
+        foreach ([
+            ['amount' => ''],
+            ['amount' => '0'],
+            ['amount' => '-1'],
+            ['amount' => '100.000'],
+            ['amount' => '100001'],
+            ['collection_date' => '2026-08-16'],
+            ['money_account_id' => $this->bank->id],
+        ] as $invalid) {
+            $this->actingAs($this->owner)
+                ->postJson(route('admin.debts.customer.collections.store'), array_merge($base, $invalid))
+                ->assertUnprocessable();
+        }
+
+        $foreignClient = Client::create([
+            'user_id' => $this->otherOwner->id,
+            'name' => 'Foreign client',
+        ]);
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.collections.store'), array_merge($base, [
+                'client_id' => $foreignClient->id,
+            ]))
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('customer_debt_collections', 0);
+    }
+
     private function createCanonicalOrder(
         int $amount,
         string $saleDate,
@@ -597,11 +775,37 @@ class CustomerDebtCollectionServiceTest extends TestCase
             $table->rememberToken();
             $table->timestamps();
         });
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('description')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('user_info', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
+            $table->timestamps();
+        });
+        Schema::create('config', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('bank_id')->nullable();
+            $table->string('logo')->nullable();
+            $table->string('name')->nullable();
+            $table->string('email')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('bank_account')->nullable();
+            $table->string('receiver')->nullable();
+            $table->string('qr')->nullable();
+            $table->timestamps();
+        });
         Schema::create('clients', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id');
             $table->string('code')->nullable();
             $table->string('name');
+            $table->string('phone')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });

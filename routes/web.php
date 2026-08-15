@@ -669,6 +669,10 @@ Route::middleware(['auth'])
                 ->middleware('permission:receipt.create')
                 ->name('debts.customer.payments.store');
 
+            Route::get('debts/customer/collection-clients/search', [CustomerDebtPaymentController::class, 'clients'])
+                ->middleware('permission:receipt.create')
+                ->name('debts.customer.collections.clients');
+
             Route::get('debts/customer/{clientId}/collection-preview', [CustomerDebtPaymentController::class, 'preview'])
                 ->middleware('permission:receipt.create')
                 ->name('debts.customer.collections.preview');

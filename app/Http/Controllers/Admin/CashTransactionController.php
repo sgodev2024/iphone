@@ -49,6 +49,10 @@ class CashTransactionController extends Controller
             ->get();
 
         $moneyAccountIds = $moneyAccounts->pluck('id')->toArray();
+        $canonicalCashAccount = Account::query()
+            ->where('code', '111')
+            ->where('status', true)
+            ->first(['id', 'code', 'name']);
 
         if (!empty($transactionId)) {
             // Lấy transaction + entries
@@ -79,6 +83,7 @@ class CashTransactionController extends Controller
         return view('admin.cash-bank.form', compact(
             'type',
             'moneyAccounts',
+            'canonicalCashAccount',
             'transaction',
             'mainEntry',
             'contraEntry'

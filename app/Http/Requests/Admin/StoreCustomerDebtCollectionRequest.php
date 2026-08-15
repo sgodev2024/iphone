@@ -35,6 +35,7 @@ class StoreCustomerDebtCollectionRequest extends FormRequest
                 'exists:accounts,id',
             ],
             'note' => ['nullable', 'string', 'max:255'],
+            'attachment' => ['nullable', 'file', 'max:2048', 'mimes:jpg,jpeg,png,pdf,webp'],
             'idempotency_key' => ['required', 'uuid'],
         ];
     }

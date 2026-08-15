@@ -109,7 +109,7 @@ class CustomerDebtCollectionService
                     'money_account_id' => (int) $moneyAccount->id,
                     'total_amount' => $payload['amount'],
                     'note' => $payload['note'],
-                    'attachment' => null,
+                    'attachment' => $payload['attachment'],
                     'status' => CustomerDebtCollection::STATUS_PENDING,
                     'idempotency_key' => $idempotencyKey,
                     'idempotency_hash' => $payloadHash,
@@ -197,15 +197,19 @@ class CustomerDebtCollectionService
         $this->assertReconciled($ledger);
         $collectionDate = $date ? $this->normalizeCollectionDate($date) : now()->toDateString();
         $previewAmount = $amount === null ? null : $this->normalizeAmount($amount);
+        $eligibleItems = $ledger['outstanding']->filter(
+            fn (array $item): bool => $item['sale_date'] <= $collectionDate
+        )->values();
+        $eligibleTotal = $this->sumItems($eligibleItems, 'remaining');
         $allocations = collect();
 
         if ($previewAmount !== null) {
-            $this->validateCollectibleAmount($previewAmount, $ledger['collectible_total']);
+            $this->validateCollectibleAmount($previewAmount, $eligibleTotal);
             $unallocated = $previewAmount;
 
-            foreach ($ledger['outstanding'] as $item) {
-                if ($item['sale_date'] > $collectionDate || DecimalAmount::isZero($unallocated)) {
-                    continue;
+            foreach ($eligibleItems as $item) {
+                if (DecimalAmount::isZero($unallocated)) {
+                    break;
                 }
 
                 $allocated = DecimalAmount::compare($unallocated, $item['remaining']) >= 0
@@ -228,9 +232,17 @@ class CustomerDebtCollectionService
 
         return [
             'client_id' => (int) $client->id,
-            'collectible_total' => $ledger['collectible_total'],
+            'status' => DecimalAmount::compare($eligibleTotal, '0.00') > 0 ? 'ready' : 'blocked',
+            'can_collect' => DecimalAmount::compare($eligibleTotal, '0.00') > 0,
+            'blocked_reason' => DecimalAmount::compare($eligibleTotal, '0.00') > 0
+                ? null
+                : ($ledger['outstanding']->isEmpty()
+                    ? 'Khách hàng hiện không còn công nợ phải thu.'
+                    : 'Không có công nợ đủ điều kiện tại ngày thu đã chọn.'),
+            'collection_date' => $collectionDate,
+            'collectible_total' => $eligibleTotal,
             'client_tk131_net' => $ledger['client_tk131_net'],
-            'items' => $ledger['outstanding']->map(fn (array $item): array => $this->itemResult($item))->values(),
+            'items' => $eligibleItems->map(fn (array $item): array => $this->itemResult($item))->values(),
             'preview_allocations' => $allocations,
         ];
     }
@@ -281,6 +293,9 @@ class CustomerDebtCollectionService
                 ? (int) ($data['money_account_id'] ?? $data['bank_account_id'] ?? 0)
                 : null,
             'note' => $note,
+            'attachment' => isset($data['attachment']) && is_string($data['attachment'])
+                ? $data['attachment']
+                : null,
             'expected_first_order_id' => isset($data['expected_first_order_id'])
                 ? (int) $data['expected_first_order_id']
                 : null,
