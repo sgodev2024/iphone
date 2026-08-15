@@ -51,6 +51,7 @@ class AdminOrderDisplayTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('name')->nullable();
+            $table->string('code')->nullable();
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
             $table->string('address')->nullable();
@@ -116,6 +117,7 @@ class AdminOrderDisplayTest extends TestCase
             $table->string('type')->nullable();
             $table->string('document_type')->nullable();
             $table->string('status')->default('pending');
+            $table->unsignedBigInteger('collection_id')->nullable();
             $table->timestamps();
         });
 
@@ -125,6 +127,35 @@ class AdminOrderDisplayTest extends TestCase
             $table->unsignedBigInteger('account_id');
             $table->decimal('debit_amount', 15, 2)->default(0);
             $table->decimal('credit_amount', 15, 2)->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('customer_debt_collections', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->unsignedBigInteger('client_id')->nullable();
+            $table->string('collection_number', 32);
+            $table->date('collection_date');
+            $table->string('payment_method', 20);
+            $table->unsignedBigInteger('money_account_id');
+            $table->decimal('total_amount', 20, 2);
+            $table->string('note')->nullable();
+            $table->string('attachment')->nullable();
+            $table->string('status', 20)->default('completed');
+            $table->char('idempotency_key', 36)->nullable();
+            $table->char('idempotency_hash', 64)->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('customer_debt_collection_allocations', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('collection_id');
+            $table->unsignedBigInteger('order_id');
+            $table->decimal('allocated_amount', 20, 2);
+            $table->unsignedInteger('allocation_sequence');
+            $table->decimal('remaining_after', 20, 2);
+            $table->unsignedBigInteger('payment_transaction_id');
             $table->timestamps();
         });
 
@@ -636,9 +667,9 @@ class AdminOrderDisplayTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(1, substr_count($html, 'payment-history-row'));
-        $this->assertStringContainsString('LỊCH SỬ THANH TOÁN', $html);
+        $this->assertStringContainsString('DANH SÁCH NHỮNG LẦN THU NỢ', $html);
         $this->assertStringContainsString('13/08/2026', $html);
-        $this->assertStringContainsString('1.000.000 VND', $html);
+        $this->assertStringContainsString('1.000.000', $html);
         $this->assertStringContainsString('Tiền mặt', $html);
         $this->assertStringContainsString('Admin order test', $html);
         $this->assertStringContainsString('Thu tiền đơn hàng #19', $html);
@@ -658,8 +689,8 @@ class AdminOrderDisplayTest extends TestCase
         $html = $response->getContent();
 
         $response->assertOk();
-        $this->assertStringContainsString('LỊCH SỬ THANH TOÁN', $html);
-        $this->assertStringContainsString('Chưa có lịch sử thanh toán', $html);
+        $this->assertStringContainsString('DANH SÁCH NHỮNG LẦN THU NỢ', $html);
+        $this->assertStringContainsString('Chưa có lần thu nợ canonical nào', $html);
         $this->assertSame(0, substr_count($html, 'payment-history-row'));
     }
 
@@ -951,8 +982,45 @@ class AdminOrderDisplayTest extends TestCase
         ?int $createdBy = null,
         ?string $transactionDate = null
     ): int {
+        $ownerId = $userId ?? $order->user_id;
+        $debitTotal = (float) collect($entries)->sum(fn (array $entry) => $entry['debit_amount'] ?? 0);
+        $creditTotal = (float) collect($entries)->sum(fn (array $entry) => $entry['credit_amount'] ?? 0);
+        $allocatedAmount = (float) collect($entries)
+            ->where('account_id', $this->receivableAccountId)
+            ->sum(fn (array $entry) => $entry['credit_amount'] ?? 0);
+        $moneyEntry = collect($entries)->first(fn (array $entry) =>
+            ($entry['debit_amount'] ?? 0) > 0
+            && in_array($entry['account_id'], [$this->cashAccountId, $this->bankAccountId], true)
+        );
+        $isCanonical = $status === 'completed'
+            && $documentType === 'order'
+            && $ownerId === (int) $order->user_id
+            && in_array($type, ['income', 'credit_notice'], true)
+            && $allocatedAmount > 0
+            && $moneyEntry !== null
+            && $debitTotal === $creditTotal;
+        $collectionId = null;
+
+        if ($isCanonical) {
+            $sequence = DB::table('customer_debt_collections')->count() + 1;
+            $collectionId = (int) DB::table('customer_debt_collections')->insertGetId([
+                'owner_id' => $order->user_id,
+                'client_id' => $order->client_id,
+                'collection_number' => sprintf('PTCN-%06d', $sequence),
+                'collection_date' => $transactionDate ?? now()->toDateString(),
+                'payment_method' => $moneyEntry['account_id'] === $this->cashAccountId ? 'cash' : 'bank_transfer',
+                'money_account_id' => $moneyEntry['account_id'],
+                'total_amount' => $allocatedAmount,
+                'note' => $description,
+                'status' => 'completed',
+                'created_by' => $createdBy,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
         $transactionId = (int) DB::table('transactions')->insertGetId([
-            'user_id' => $userId ?? $order->user_id,
+            'user_id' => $ownerId,
             'created_by' => $createdBy,
             'transaction_date' => $transactionDate ?? now()->toDateString(),
             'description' => $description,
@@ -960,6 +1028,7 @@ class AdminOrderDisplayTest extends TestCase
             'type' => $type,
             'document_type' => $documentType,
             'status' => $status,
+            'collection_id' => $collectionId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -970,6 +1039,22 @@ class AdminOrderDisplayTest extends TestCase
                 'account_id' => $entry['account_id'],
                 'debit_amount' => $entry['debit_amount'] ?? 0,
                 'credit_amount' => $entry['credit_amount'] ?? 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        if ($collectionId !== null) {
+            $priorAllocated = (float) DB::table('customer_debt_collection_allocations')
+                ->where('order_id', $order->id)
+                ->sum('allocated_amount');
+            DB::table('customer_debt_collection_allocations')->insert([
+                'collection_id' => $collectionId,
+                'order_id' => $order->id,
+                'allocated_amount' => $allocatedAmount,
+                'allocation_sequence' => 1,
+                'remaining_after' => max(0, (float) $order->total_money - $priorAllocated - $allocatedAmount),
+                'payment_transaction_id' => $transactionId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

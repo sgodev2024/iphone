@@ -80,11 +80,11 @@
 
         <div class="card">
             <div class="card-header">
-                <h5 class="text-center text-primary mb-0"><b>LỊCH SỬ THANH TOÁN</b></h5>
+                <h5 class="text-center text-primary mb-0"><b>DANH SÁCH NHỮNG LẦN THU NỢ</b></h5>
             </div>
             <div class="card-body">
                 @if ($paymentHistory->isEmpty())
-                    <p class="mb-0 text-muted">Chưa có lịch sử thanh toán</p>
+                    <p class="mb-0 text-muted">Chưa có lần thu nợ canonical nào được phân bổ cho đơn này.</p>
                 @else
                     <div class="table-responsive">
                         <table class="table table-bordered mb-0">
@@ -92,8 +92,11 @@
                                 <tr>
                                     <th>#</th>
                                     <th>NGÀY THU</th>
-                                    <th>SỐ TIỀN</th>
+                                    <th>SỐ PHIẾU</th>
                                     <th>PHƯƠNG THỨC</th>
+                                    <th>TÀI KHOẢN NHẬN</th>
+                                    <th>SỐ TIỀN PHÂN BỔ</th>
+                                    <th>CÒN NỢ SAU THU</th>
                                     <th>NHÂN VIÊN</th>
                                     <th>GHI CHÚ</th>
                                 </tr>
@@ -103,8 +106,15 @@
                                     <tr class="payment-history-row">
                                         <td>{{ $loop->iteration }}</td>
                                         <td>{{ $payment['transaction_date'] }}</td>
-                                        <td>{{ formatPrice($payment['amount']) }} VND</td>
+                                        <td>
+                                            <a href="{{ route('admin.debts.customer.collections.show', $payment['collection_id']) }}">
+                                                {{ $payment['collection_number'] }}
+                                            </a>
+                                        </td>
                                         <td>{{ $payment['payment_method'] }}</td>
+                                        <td>{{ $payment['account'] }}</td>
+                                        <td class="text-end">{{ formatExactMoney($payment['amount']) }}</td>
+                                        <td class="text-end">{{ formatExactMoney($payment['remaining_after']) }}</td>
                                         <td>{{ $payment['creator_name'] }}</td>
                                         <td>{{ $payment['description'] }}</td>
                                     </tr>

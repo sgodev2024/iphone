@@ -185,6 +185,8 @@ class OrderController extends Controller
     public function show(string $id)
     {
         $order = Order::query()
+            ->when(request()->user(), fn ($query, $user) => $query
+                ->where('user_id', (int) $user->ownerId()))
             ->with([
                 'user',
                 'client',

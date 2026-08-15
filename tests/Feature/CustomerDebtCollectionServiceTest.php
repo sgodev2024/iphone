@@ -14,6 +14,8 @@ use App\Models\Roles;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
+use App\Services\OrderPaymentHistoryService;
+use App\Services\TransactionBusinessListService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
@@ -825,6 +827,166 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->assertDatabaseCount('customer_debt_collections', 0);
     }
 
+    public function test_old_per_order_public_route_is_gone_and_collection_history_is_one_row_per_collection(): void
+    {
+        $first = $this->createCanonicalOrder(500000, '2026-08-01', 'HISTORY-A');
+        $second = $this->createCanonicalOrder(600000, '2026-08-02', 'HISTORY-B');
+
+        $this->actingAs($this->owner)
+            ->postJson(route('admin.debts.customer.payments.store'), [
+                'order_id' => $first->id,
+                'amount' => 100000,
+            ])
+            ->assertGone();
+
+        $result = $this->service->collect($this->owner, $this->payload(700000, 'cash', $this->uuid(40)));
+
+        $response = $this->actingAs($this->owner)
+            ->get(route('admin.debts.customer.collections.index'))
+            ->assertOk();
+        $collections = $response->viewData('collections');
+
+        $this->assertCount(1, $collections);
+        $this->assertSame($result['collection']->id, $collections->first()->id);
+        $this->assertSame(2, $collections->first()->allocations_count);
+        $response->assertSee('PTCN-000001');
+
+        $this->actingAs($this->owner)
+            ->get(route('admin.debts.customer.collections.show', $result['collection']->id))
+            ->assertOk()
+            ->assertSee('HISTORY-A')
+            ->assertSee('HISTORY-B')
+            ->assertSee('500.000', false)
+            ->assertSee('200.000', false);
+    }
+
+    public function test_order_history_uses_exact_allocations_across_multiple_collections(): void
+    {
+        $first = $this->createCanonicalOrder(500000, '2026-08-01', 'ORDER-A');
+        $second = $this->createCanonicalOrder(600000, '2026-08-02', 'ORDER-B');
+        $this->service->collect($this->owner, $this->payload(300000, 'cash', $this->uuid(41)));
+        $this->service->collect($this->owner, $this->payload(400000, 'cash', $this->uuid(42)));
+
+        $history = app(OrderPaymentHistoryService::class);
+        $firstRows = $history->forOrder($first);
+        $secondRows = $history->forOrder($second);
+
+        $this->assertSame([300000, 200000], $firstRows->pluck('amount')->map(fn ($amount) => (int) $amount)->all());
+        $this->assertSame([200000], $secondRows->pluck('amount')->map(fn ($amount) => (int) $amount)->all());
+        $this->assertSame(['200000.00', '0.00'], $firstRows->pluck('remaining_after')->all());
+        $this->assertSame('400000.00', $secondRows->first()['remaining_after']);
+        $this->assertSame(['PTCN-000001', 'PTCN-000002'], $firstRows->pluck('collection_number')->all());
+    }
+
+    public function test_collection_owner_isolation_attachment_permission_and_integrity_warning(): void
+    {
+        $this->createCanonicalOrder(100000, '2026-08-01', 'SECURE');
+        $collection = $this->service->collect(
+            $this->owner,
+            $this->payload(100000, 'cash', $this->uuid(43))
+        )['collection'];
+        DB::table('customer_debt_collections')->where('id', $collection->id)->update([
+            'attachment' => 'proof.pdf',
+            'total_amount' => '100001.00',
+        ]);
+        $disk = \Mockery::mock();
+        $disk->shouldReceive('exists')->once()->with('proof.pdf')->andReturnTrue();
+        $disk->shouldReceive('response')->once()->with('proof.pdf')->andReturn(response('proof'));
+        Storage::shouldReceive('disk')->with('public')->andReturn($disk);
+
+        $this->actingAs($this->owner)
+            ->get(route('admin.debts.customer.collections.show', $collection->id))
+            ->assertOk()
+            ->assertSee('Cảnh báo toàn vẹn');
+        $this->actingAs($this->owner)
+            ->get(route('admin.debts.customer.collections.attachment', $collection->id))
+            ->assertOk();
+
+        $this->actingAs($this->otherOwner)
+            ->get(route('admin.debts.customer.collections.show', $collection->id))
+            ->assertNotFound();
+        $this->actingAs($this->otherOwner)
+            ->get(route('admin.debts.customer.collections.attachment', $collection->id))
+            ->assertNotFound();
+        $foreignList = $this->actingAs($this->otherOwner)
+            ->get(route('admin.debts.customer.collections.index', ['collection_number' => 'PTCN-000001']))
+            ->assertOk()
+            ->viewData('collections');
+        $this->assertCount(0, $foreignList);
+    }
+
+    public function test_cash_and_bank_lists_group_collection_transactions_without_double_counting_generic_rows(): void
+    {
+        $this->createCanonicalOrder(500000, '2026-08-01', 'GROUP-A');
+        $this->createCanonicalOrder(600000, '2026-08-02', 'GROUP-B');
+        $cashCollection = $this->service->collect(
+            $this->owner,
+            $this->payload(700000, 'cash', $this->uuid(44))
+        )['collection'];
+
+        $generic = Transaction::create([
+            'user_id' => $this->owner->id,
+            'transaction_date' => '2026-08-15',
+            'description' => 'Generic cash row',
+            'type' => 'income',
+            'created_by' => $this->owner->id,
+            'status' => Transaction::STATUS_COMPLETED,
+        ]);
+        $generic->entries()->create(['account_id' => $this->cash->id, 'debit_amount' => 50000, 'credit_amount' => 0]);
+        $generic->entries()->create(['account_id' => $this->revenue->id, 'debit_amount' => 0, 'credit_amount' => 50000]);
+
+        $otherClient = Client::create(['user_id' => $this->owner->id, 'name' => 'Khách Bank']);
+        $this->createCanonicalOrder(500000, '2026-08-03', 'BANK-A', $otherClient);
+        $this->createCanonicalOrder(600000, '2026-08-04', 'BANK-B', $otherClient);
+        $bankPayload = $this->payload(700000, 'bank_transfer', $this->uuid(45));
+        $bankPayload['client_id'] = $otherClient->id;
+        $bankCollection = $this->service->collect($this->owner, $bankPayload)['collection'];
+
+        $businessList = app(TransactionBusinessListService::class);
+        $cashRows = $businessList->entries([$this->owner->id], collect([$this->cash->id]), '2026-08-01', '2026-08-31');
+        $bankRows = $businessList->entries([$this->owner->id], collect([$this->bank->id]), '2026-08-01', '2026-08-31');
+
+        $this->assertCount(2, $cashRows);
+        $this->assertSame(1, $cashRows->where('collection_id', $cashCollection->id)->count());
+        $this->assertSame(700000, (int) $cashRows->firstWhere('collection_id', $cashCollection->id)->debit_amount);
+        $this->assertSame(50000, (int) $cashRows->firstWhere('collection_id', null)->debit_amount);
+        $this->assertSame(750000, (int) $cashRows->sum('debit_amount'));
+        $this->assertCount(1, $bankRows);
+        $this->assertSame($bankCollection->id, (int) $bankRows->first()->collection_id);
+        $this->assertSame(700000, (int) $bankRows->first()->debit_amount);
+        $this->assertSame(2, Transaction::where('collection_id', $cashCollection->id)->count());
+        $this->assertSame(2, Transaction::where('collection_id', $bankCollection->id)->count());
+    }
+
+    public function test_collection_child_transactions_cannot_be_opened_or_updated_individually_and_list_queries_are_bounded(): void
+    {
+        $this->createCanonicalOrder(100000, '2026-08-01', 'IMMUTABLE-TX');
+        $collection = $this->service->collect(
+            $this->owner,
+            $this->payload(100000, 'cash', $this->uuid(46))
+        )['collection'];
+        $transaction = Transaction::where('collection_id', $collection->id)->firstOrFail();
+
+        $this->actingAs($this->owner)
+            ->get(route('admin.transactions.cash.save', ['transactionId' => $transaction->id]))
+            ->assertConflict();
+        $this->actingAs($this->owner)
+            ->putJson(route('admin.transactions.cash.update'), [
+                'transaction_id' => $transaction->id,
+            ])
+            ->assertConflict();
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $request = Request::create('/admin/debts/customer/collections', 'GET');
+        $request->setUserResolver(fn () => $this->owner);
+        app(\App\Http\Controllers\Admin\CustomerDebtCollectionController::class)->index($request);
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(6, $queryCount);
+    }
+
     private function createCanonicalOrder(
         int $amount,
         string $saleDate,
@@ -997,6 +1159,13 @@ class CustomerDebtCollectionServiceTest extends TestCase
             $table->string('name');
             $table->string('phone')->nullable();
             $table->softDeletes();
+            $table->timestamps();
+        });
+        Schema::create('suppliers', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code')->nullable();
+            $table->string('name');
+            $table->string('phone')->nullable();
             $table->timestamps();
         });
         Schema::create('accounts', function (Blueprint $table): void {

@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\ConfigController;
 use App\Http\Controllers\Admin\CustomerDebtPaymentController;
+use App\Http\Controllers\Admin\CustomerDebtCollectionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\DailyReportController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -661,13 +662,21 @@ Route::middleware(['auth'])
                         });
                 });
 
-            Route::get('debts/customer/{clientId}/payment-options', [CustomerDebtPaymentController::class, 'options'])
-                ->middleware('permission:receipt.create')
-                ->name('debts.customer.payment-options');
-
-            Route::post('debts/customer/payments', [CustomerDebtPaymentController::class, 'store'])
+            Route::post('debts/customer/payments', [CustomerDebtPaymentController::class, 'legacyWriteDisabled'])
                 ->middleware('permission:receipt.create')
                 ->name('debts.customer.payments.store');
+
+            Route::get('debts/customer/collections', [CustomerDebtCollectionController::class, 'index'])
+                ->middleware('permission:debt.customer.view')
+                ->name('debts.customer.collections.index');
+
+            Route::get('debts/customer/collections/{collection}', [CustomerDebtCollectionController::class, 'show'])
+                ->middleware('permission:debt.customer.view')
+                ->name('debts.customer.collections.show');
+
+            Route::get('debts/customer/collections/{collection}/attachment', [CustomerDebtCollectionController::class, 'attachment'])
+                ->middleware('permission:debt.customer.view')
+                ->name('debts.customer.collections.attachment');
 
             Route::get('debts/customer/collection-clients/search', [CustomerDebtPaymentController::class, 'clients'])
                 ->middleware('permission:receipt.create')

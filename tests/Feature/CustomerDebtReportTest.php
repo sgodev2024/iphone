@@ -307,8 +307,11 @@ class CustomerDebtReportTest extends TestCase
         $this->assertStringContainsString('10.000.000', $footer);
         $this->assertStringContainsString('4.000.000', $footer);
         $this->assertStringNotContainsString('90.000.000', $footer);
-        $this->assertSame(8, substr_count($footer, '<td'));
+        $this->assertSame(7, substr_count($footer, '<td'));
         $this->assertSame(1, substr_count($footer, '<th'));
+        $response->assertDontSee('>Thu nợ<', false);
+        $response->assertDontSee('>Thao tác<', false);
+        $response->assertDontSee('customerDebtPaymentModal', false);
     }
 
     public function test_customer_footer_renders_six_zero_totals_without_action_column_for_empty_result(): void

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use LogicException;
 
 class Transaction extends Model
 {
@@ -30,6 +31,21 @@ class Transaction extends Model
         'idempotency_hash',
         'collection_id',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $transaction): void {
+            if ($transaction->getOriginal('collection_id') !== null) {
+                throw new LogicException('Customer debt collection transactions are immutable.');
+            }
+        });
+
+        static::deleting(function (self $transaction): void {
+            if ($transaction->collection_id !== null) {
+                throw new LogicException('Customer debt collection transactions cannot be deleted.');
+            }
+        });
+    }
 
     public function entries(): HasMany
     {

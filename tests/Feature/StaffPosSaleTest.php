@@ -18,7 +18,7 @@ use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\DailyReportService;
-use App\Services\CustomerDebtPaymentService;
+use App\Services\CustomerDebtCollectionService;
 use App\Services\ProfitService;
 use App\Services\SaleService;
 use Illuminate\Database\Schema\Blueprint;
@@ -2189,20 +2189,21 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
         $this->assertSame(1, Transaction::query()->where('type', 'income')->count());
 
-        $service = app(CustomerDebtPaymentService::class);
+        $service = app(CustomerDebtCollectionService::class);
         $bankRequest = [
-            'order_id' => $order->id,
+            'client_id' => $client->id,
             'amount' => 2000000,
             'payment_method' => Order::PAYMENT_METHOD_BANK_TRANSFER,
-            'bank_account_id' => $accounts['bank']->id,
-            'transaction_date' => now()->toDateString(),
+            'money_account_id' => $accounts['bank']->id,
+            'collection_date' => now()->toDateString(),
             'idempotency_key' => '11111111-1111-4111-8111-111111111111',
         ];
         $bankResult = $service->collect($staff, $bankRequest);
+        $bankTransaction = $bankResult['collection']->allocations->first()->paymentTransaction;
 
         $this->assertFalse($bankResult['replayed']);
-        $this->assertSame('credit_notice', $bankResult['transaction']->type);
-        $this->assertTrue($bankResult['transaction']->entries->contains(
+        $this->assertSame('credit_notice', $bankTransaction->type);
+        $this->assertTrue($bankTransaction->entries->contains(
             fn ($entry) => (int) $entry->account_id === (int) $accounts['bank']->id
                 && (int) $entry->debit_amount === 2000000
         ));
@@ -2215,7 +2216,7 @@ class StaffPosSaleTest extends TestCase
         $entryCount = DB::table('transaction_entries')->count();
         $replay = $service->collect($staff, $bankRequest);
         $this->assertTrue($replay['replayed']);
-        $this->assertSame($bankResult['transaction']->id, $replay['transaction']->id);
+        $this->assertSame($bankResult['collection']->id, $replay['collection']->id);
         $this->assertSame($transactionCount, Transaction::query()->count());
         $this->assertSame($entryCount, DB::table('transaction_entries')->count());
 
@@ -2228,11 +2229,11 @@ class StaffPosSaleTest extends TestCase
 
         try {
             $service->collect($staff, [
-                'order_id' => $order->id,
+                'client_id' => $client->id,
                 'amount' => 5000000,
                 'payment_method' => Order::PAYMENT_METHOD_CASH,
-                'bank_account_id' => null,
-                'transaction_date' => now()->toDateString(),
+                'money_account_id' => null,
+                'collection_date' => now()->toDateString(),
                 'idempotency_key' => '22222222-2222-4222-8222-222222222222',
             ]);
             $this->fail('An overpayment must be rejected.');
@@ -2243,14 +2244,17 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame($entryCount, DB::table('transaction_entries')->count());
 
         $finalResult = $service->collect($staff, [
-            'order_id' => $order->id,
+            'client_id' => $client->id,
             'amount' => 4000000,
             'payment_method' => Order::PAYMENT_METHOD_CASH,
-            'bank_account_id' => null,
-            'transaction_date' => now()->toDateString(),
+            'money_account_id' => null,
+            'collection_date' => now()->toDateString(),
             'idempotency_key' => '33333333-3333-4333-8333-333333333333',
         ]);
-        $this->assertSame('income', $finalResult['transaction']->type);
+        $this->assertSame(
+            'income',
+            $finalResult['collection']->allocations->first()->paymentTransaction->type
+        );
 
         $order->refresh();
         $this->assertSame(10000000, (int) $order->paid_amount);
@@ -2364,12 +2368,12 @@ class StaffPosSaleTest extends TestCase
         $beforeEntries = DB::table('transaction_entries')->count();
 
         try {
-            app(CustomerDebtPaymentService::class)->collect($otherOwner, [
-                'order_id' => $order->id,
+            app(CustomerDebtCollectionService::class)->collect($otherOwner, [
+                'client_id' => $client->id,
                 'amount' => 1000000,
                 'payment_method' => Order::PAYMENT_METHOD_CASH,
-                'bank_account_id' => null,
-                'transaction_date' => now()->toDateString(),
+                'money_account_id' => null,
+                'collection_date' => now()->toDateString(),
                 'idempotency_key' => '44444444-4444-4444-8444-444444444444',
             ]);
             $this->fail('A different owner must not see the order.');
@@ -2418,48 +2422,46 @@ class StaffPosSaleTest extends TestCase
 
         try {
             $request = [
-                'order_id' => $order->id,
+                'client_id' => $client->id,
                 'amount' => 2000000,
                 'payment_method' => Order::PAYMENT_METHOD_BANK_TRANSFER,
-                'bank_account_id' => $accounts['bank']->id,
-                'transaction_date' => '2026-08-10',
+                'money_account_id' => $accounts['bank']->id,
+                'collection_date' => '2026-08-10',
                 'idempotency_key' => '55555555-5555-4555-8555-555555555555',
             ];
 
             $this->actingAs($manager)
                 ->getJson("/admin/debts/customer/{$client->id}/payment-options")
-                ->assertOk()
-                ->assertJsonPath('orders.0.id', $order->id)
-                ->assertJsonPath('orders.0.remaining', 6000000)
-                ->assertJsonFragment(['id' => $accounts['bank']->id]);
+                ->assertNotFound();
+            $this->actingAs($manager)
+                ->postJson('/admin/debts/customer/payments', $request)
+                ->assertGone();
 
             $this->actingAs($manager)
-                ->postJson('/admin/debts/customer/payments', array_merge($request, [
+                ->postJson('/admin/debts/customer/collections', array_merge($request, [
                     'idempotency_key' => 'not-a-uuid',
                 ]))
                 ->assertUnprocessable()
                 ->assertJsonValidationErrors('idempotency_key');
             $this->actingAs($manager)
-                ->postJson('/admin/debts/customer/payments', array_merge($request, [
-                    'transaction_date' => '2026-08-21',
+                ->postJson('/admin/debts/customer/collections', array_merge($request, [
+                    'collection_date' => '2026-08-21',
                 ]))
                 ->assertUnprocessable()
-                ->assertJsonValidationErrors('transaction_date')
-                ->assertJsonPath('errors.transaction_date.0', 'Ngày thu không được lớn hơn ngày hiện tại.');
+                ->assertJsonValidationErrors('collection_date')
+                ->assertJsonPath('errors.collection_date.0', 'Ngày thu không được lớn hơn ngày hiện tại.');
             $this->assertSame(2, Transaction::query()->count());
             $this->assertSame(4, DB::table('transaction_entries')->count());
 
             $first = $this->actingAs($manager)
-                ->postJson('/admin/debts/customer/payments', $request)
+                ->postJson('/admin/debts/customer/collections', $request)
                 ->assertOk()
                 ->assertJson([
                     'replayed' => false,
-                    'order' => ['debt_amount' => 4000000, 'payment_status' => Order::PAYMENT_STATUS_PARTIAL],
+                    'collection' => ['total_amount' => '2000000.00'],
                 ]);
-            $firstTransactionId = $first->json('transaction_id');
-            $firstCollectionId = DB::table('customer_debt_collections')
-                ->where('idempotency_key', $request['idempotency_key'])
-                ->value('id');
+            $firstTransactionId = $first->json('collection.allocations.0.payment_transaction_id');
+            $firstCollectionId = $first->json('collection.id');
             $this->assertDatabaseHas('transactions', [
                 'id' => $firstTransactionId,
                 'status' => Transaction::STATUS_COMPLETED,
@@ -2475,22 +2477,22 @@ class StaffPosSaleTest extends TestCase
             );
 
             $this->actingAs($manager)
-                ->postJson('/admin/debts/customer/payments', $request)
+                ->postJson('/admin/debts/customer/collections', $request)
                 ->assertOk()
                 ->assertJson([
                     'replayed' => true,
-                    'order' => ['debt_amount' => 4000000, 'payment_status' => Order::PAYMENT_STATUS_PARTIAL],
+                    'collection' => ['id' => $firstCollectionId],
                 ]);
             $this->actingAs($manager)
-                ->postJson('/admin/debts/customer/payments', array_merge($request, ['amount' => 1000000]))
+                ->postJson('/admin/debts/customer/collections', array_merge($request, ['amount' => 1000000]))
                 ->assertStatus(409);
 
-            app(CustomerDebtPaymentService::class)->collect($staff, [
-                'order_id' => $order->id,
+            app(CustomerDebtCollectionService::class)->collect($staff, [
+                'client_id' => $client->id,
                 'amount' => 4000000,
                 'payment_method' => Order::PAYMENT_METHOD_CASH,
-                'bank_account_id' => null,
-                'transaction_date' => '2026-08-20',
+                'money_account_id' => null,
+                'collection_date' => '2026-08-20',
                 'idempotency_key' => '66666666-6666-4666-8666-666666666666',
             ]);
 

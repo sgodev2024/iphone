@@ -13,6 +13,7 @@ use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
+use App\Services\TransactionBusinessListService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -28,7 +29,7 @@ class BankTransactionController extends Controller
         return view('admin.cash-bank.bank');
     }
 
-    public function list(Request $request)
+    public function list(Request $request, TransactionBusinessListService $businessList)
     {
         $dateRange = $request->query('date_range');
 
@@ -51,63 +52,7 @@ class BankTransactionController extends Controller
             })
             ->pluck('id');
 
-        $entries = DB::table('transactions as t')
-            ->whereIn('t.user_id', $this->transactionOwnerIds())
-            ->join('transaction_entries as te', 'te.transaction_id', '=', 't.id')
-            ->join('accounts as ma', 'ma.id', '=', 'te.account_id')
-
-            // Join lấy dòng đối ứng
-            ->join('transaction_entries as te_contra', function ($q) {
-                $q->on('te_contra.transaction_id', '=', 't.id')
-                    ->whereColumn('te_contra.id', '!=', 'te.id');
-            })
-            ->join('accounts as contra_acc', 'contra_acc.id', '=', 'te_contra.account_id')
-
-            // Lấy thông tin KH/NCC từ dòng đối ứng
-            ->leftJoin('clients as c', function ($q) {
-                $q->on('c.id', '=', 'te_contra.tableable_id')
-                    ->where('te_contra.tableable_type', 'App\\Models\\Client');
-            })
-            ->leftJoin('suppliers as s', function ($q) {
-                $q->on('s.id', '=', 'te_contra.tableable_id')
-                    ->where('te_contra.tableable_type', 'App\\Models\\Supplier');
-            })
-            ->join('users as u', 'u.id', '=', 't.created_by')
-
-            ->where('t.type', '!=', 'other')
-            ->whereIn('te.account_id', $bankAccountIds)
-            ->whereDate('t.transaction_date', '>=', $from)
-            ->whereDate('t.transaction_date', '<=', $to)
-            ->groupBy(
-                't.id',
-                't.transaction_date',
-                't.reference_number',
-                't.description',
-                't.document_type',
-                't.attachment',
-                'u.name',
-            )
-            ->select(
-                't.id',
-                't.transaction_date',
-                't.reference_number',
-                't.description',
-                't.document_type',
-                't.attachment',
-                'u.name as creator_name',
-                DB::raw("MAX(te.id) as entry_id"),
-                DB::raw("COALESCE(MAX(c.name), MAX(s.name)) as related_party"),
-                DB::raw("COALESCE(MAX(c.phone), MAX(s.phone)) as related_party_phone"),
-                DB::raw("MAX(ma.code) as account_code"),
-                DB::raw("MAX(ma.name) as account_name"),
-                DB::raw("MAX(contra_acc.code) as contra_code"),
-                DB::raw("MAX(contra_acc.name) as contra_name"),
-                DB::raw("SUM(te.debit_amount) as debit_amount"),
-                DB::raw("SUM(te.credit_amount) as credit_amount")
-            )
-            ->orderByDesc('t.transaction_date')
-            ->orderByDesc('t.id')
-            ->get();
+        $entries = $businessList->entries($this->transactionOwnerIds(), $bankAccountIds, $from, $to);
 
         $type = 'bank';
 
@@ -144,7 +89,16 @@ class BankTransactionController extends Controller
         }
 
         if (!empty($transactionId)) {
-            $transaction = Transaction::with('entries')->findOrFail($transactionId);
+            $transaction = Transaction::query()
+                ->whereIn('user_id', $this->transactionOwnerIds())
+                ->with('entries')
+                ->findOrFail($transactionId);
+
+            abort_if(
+                $transaction->collection_id !== null,
+                409,
+                'Transaction thuộc phiếu thu công nợ đã hoàn tất và không thể sửa riêng lẻ.'
+            );
 
             // Kiểm tra xem transaction này có entry nào thuộc tài khoản ngân hàng không
             $hasBankAccount = $transaction->entries->contains(function ($entry) use ($moneyAccountIds) {
@@ -411,6 +365,19 @@ class BankTransactionController extends Controller
 
     public function update(Request $request)
     {
+        $transactionId = $request->input('transaction_id');
+
+        if ($transactionId) {
+            $protectedTransaction = Transaction::query()
+                ->whereIn('user_id', $this->transactionOwnerIds())
+                ->findOrFail($transactionId);
+            abort_if(
+                $protectedTransaction->collection_id !== null,
+                409,
+                'Transaction thuộc phiếu thu công nợ đã hoàn tất và không thể sửa riêng lẻ.'
+            );
+        }
+
         if ($request->input('obj_type') === 'client') {
             abort(410, 'Sửa TK131 khách hàng qua phiếu ngân hàng generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
         }
@@ -418,8 +385,6 @@ class BankTransactionController extends Controller
         if ($request->input('obj_type') === 'supplier') {
             abort(410, 'Thanh toán nhà cung cấp qua luồng ngân hàng legacy đã được vô hiệu hóa cho tới Phase 6C.');
         }
-
-        $transactionId = $request->input('transaction_id');
 
         $credentials = $request->validate([
             'transaction_id'     => 'required|integer|exists:transactions,id',
@@ -441,7 +406,9 @@ class BankTransactionController extends Controller
         ]);
 
         return DB::transaction(function () use ($credentials, $request, $transactionId) {
-            $transaction = Transaction::findOrFail($transactionId);
+            $transaction = Transaction::query()
+                ->whereIn('user_id', $this->transactionOwnerIds())
+                ->findOrFail($transactionId);
 
             // Nếu là phiếu chi, kiểm tra số dư tài khoản tiền
             if ($credentials['type'] === 'debit_notice') {
@@ -570,8 +537,15 @@ class BankTransactionController extends Controller
             $transactionIds = $request->input('ids');
 
             foreach ($transactionIds as $transactionId) {
-                $transaction = Transaction::find($transactionId);
+                $transaction = Transaction::query()
+                    ->whereIn('user_id', $this->transactionOwnerIds())
+                    ->find($transactionId);
                 if ($transaction) {
+                    abort_if(
+                        $transaction->collection_id !== null,
+                        409,
+                        'Transaction thuộc phiếu thu công nợ đã hoàn tất và không thể xóa riêng lẻ.'
+                    );
                     // Xóa file nếu có
                     if ($transaction->attachment) {
                         deleteImage($transaction->attachment);

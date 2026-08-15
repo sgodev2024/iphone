@@ -14,10 +14,20 @@
     @endphp
     <tr>
         <td class="cash-col-check text-center">
-            <input type="checkbox" class="item-checkbox" data-id="{{ $entry->id }}">
+            @if (! $entry->collection_id)
+                <input type="checkbox" class="item-checkbox" data-id="{{ $entry->id }}">
+            @endif
         </td>
         <td class="cash-col-date cash-date-cell">
-            {{ $entry->id }} | {{ \Carbon\Carbon::parse($entry->transaction_date)->format('d/m/Y') }}
+            @if ($entry->collection_id)
+                <a class="fw-semibold" href="{{ route('admin.debts.customer.collections.show', $entry->collection_id) }}">
+                    {{ $entry->reference_number }}
+                </a>
+                <span class="badge bg-info text-dark d-block mt-1">Thu công nợ</span>
+            @else
+                {{ $entry->id }}
+            @endif
+            <span class="d-block">{{ \Carbon\Carbon::parse($entry->transaction_date)->format('d/m/Y') }}</span>
         </td>
         <td class="cash-col-account">
             <span class="cash-cell-line d-block">{{ $entry->account_code ?? '-' }}</span>
@@ -42,7 +52,9 @@
         </td>
         <td class="cash-col-file">
             @if ($entry->attachment)
-                <a href="{{ asset('storage/' . $entry->attachment) }}" target="_blank"
+                <a href="{{ $entry->collection_id
+                    ? route('admin.debts.customer.collections.attachment', $entry->collection_id)
+                    : asset('storage/' . $entry->attachment) }}" target="_blank"
                     class="cash-file-link text-primary fw-bold text-decoration-none">
                     <i class="bi bi-file-earmark-text me-1"></i> Xem file đính kèm
                 </a>
@@ -53,17 +65,22 @@
             @endif
         </td>
         <td class="cash-col-action text-center position-relative">
-            <button type="button" class="btn btn-sm btn-light action-toggle-btn">
-                <i class="fas fa-ellipsis-v"></i>
-            </button>
-            <ul class="action-menu list-group position-absolute shadow-sm rounded"
-                style="display: none; min-width: 150px; z-index: 1000;">
-                <li class="list-group-item action-print cursor-pointer">In phiếu</li>
-                <li class="list-group-item action-edit cursor-pointer"
-                    data-url="{{ route("admin.transactions.$type.save", ['transactionId' => $entry->id]) }}">
-                    Sửa
-                </li>
-            </ul>
+            @if ($entry->collection_id)
+                <a class="btn btn-sm btn-outline-primary"
+                    href="{{ route('admin.debts.customer.collections.show', $entry->collection_id) }}">Chi tiết</a>
+            @else
+                <button type="button" class="btn btn-sm btn-light action-toggle-btn">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="action-menu list-group position-absolute shadow-sm rounded"
+                    style="display: none; min-width: 150px; z-index: 1000;">
+                    <li class="list-group-item action-print cursor-pointer">In phiếu</li>
+                    <li class="list-group-item action-edit cursor-pointer"
+                        data-url="{{ route("admin.transactions.$type.save", ['transactionId' => $entry->id]) }}">
+                        Sửa
+                    </li>
+                </ul>
+            @endif
         </td>
     </tr>
 @empty

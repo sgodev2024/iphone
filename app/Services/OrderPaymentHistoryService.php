@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\Transaction;
+use App\Support\DecimalAmount;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -12,71 +12,54 @@ class OrderPaymentHistoryService
 {
     public function forOrder(Order $order): Collection
     {
-        return DB::table('transactions as t')
-            ->join('transaction_entries as te', 'te.transaction_id', '=', 't.id')
-            ->join('accounts as a', 'a.id', '=', 'te.account_id')
-            ->leftJoin('accounts as parent_account', 'parent_account.id', '=', 'a.parent_id')
-            ->leftJoin('users as creator', 'creator.id', '=', 't.created_by')
-            ->where('t.user_id', $order->user_id)
-            ->where('t.document_type', 'order')
-            ->where('t.reference_number', (string) $order->id)
-            ->whereIn('t.type', ['income', 'credit_notice'])
-            ->where('t.status', Transaction::STATUS_COMPLETED)
+        return DB::table('customer_debt_collection_allocations as allocation')
+            ->join('customer_debt_collections as collection', 'collection.id', '=', 'allocation.collection_id')
+            ->join('transactions as payment', 'payment.id', '=', 'allocation.payment_transaction_id')
+            ->join('accounts as money_account', 'money_account.id', '=', 'collection.money_account_id')
+            ->leftJoin('users as creator', 'creator.id', '=', 'collection.created_by')
+            ->where('allocation.order_id', $order->id)
+            ->where('collection.owner_id', $order->user_id)
+            ->where('collection.status', 'completed')
+            ->whereColumn('payment.collection_id', 'collection.id')
+            ->whereColumn('payment.user_id', 'collection.owner_id')
+            ->where('payment.document_type', 'order')
+            ->where('payment.reference_number', (string) $order->id)
+            ->whereIn('payment.type', ['income', 'credit_notice'])
+            ->where('payment.status', 'completed')
             ->select([
-                't.id',
-                't.transaction_date',
-                't.description',
+                'allocation.id',
+                'allocation.collection_id',
+                'allocation.payment_transaction_id',
+                'allocation.allocated_amount',
+                'allocation.remaining_after',
+                'collection.collection_number',
+                'collection.collection_date',
+                'collection.payment_method',
+                'collection.note',
+                'money_account.code as account_code',
+                'money_account.name as account_name',
+                'payment.description as payment_description',
                 'creator.name as creator_name',
             ])
-            ->selectRaw(
-                'SUM(CASE WHEN a.code = ? THEN COALESCE(te.credit_amount, 0) ELSE 0 END) AS amount',
-                ['131']
-            )
-            ->selectRaw(
-                "CASE
-                    WHEN SUM(CASE WHEN te.debit_amount > 0 AND a.code = ? THEN te.debit_amount ELSE 0 END) > 0
-                        THEN ?
-                    WHEN SUM(CASE WHEN te.debit_amount > 0 AND parent_account.code = ? THEN te.debit_amount ELSE 0 END) > 0
-                        THEN ?
-                    ELSE ''
-                END AS payment_method",
-                ['111', 'Tiền mặt', '112', 'Chuyển khoản']
-            )
-            ->groupBy([
-                't.id',
-                't.transaction_date',
-                't.description',
-                't.created_by',
-                'creator.name',
-            ])
-            ->havingRaw(
-                'SUM(COALESCE(te.debit_amount, 0)) = SUM(COALESCE(te.credit_amount, 0))'
-            )
-            ->havingRaw(
-                'SUM(CASE WHEN a.code = ? THEN COALESCE(te.credit_amount, 0) ELSE 0 END) > 0',
-                ['131']
-            )
-            ->havingRaw(
-                "SUM(CASE
-                    WHEN te.debit_amount > 0 AND (a.code = ? OR parent_account.code = ?)
-                        THEN te.debit_amount
-                    ELSE 0
-                END) > 0",
-                ['111', '112']
-            )
-            ->orderBy('t.transaction_date')
-            ->orderBy('t.id')
+            ->orderBy('collection.collection_date')
+            ->orderBy('collection.id')
+            ->orderBy('allocation.allocation_sequence')
             ->get()
             ->map(static function (object $payment): array {
                 return [
                     'id' => (int) $payment->id,
-                    'transaction_date' => $payment->transaction_date
-                        ? Carbon::parse($payment->transaction_date)->format('d/m/Y')
+                    'collection_id' => (int) $payment->collection_id,
+                    'payment_transaction_id' => (int) $payment->payment_transaction_id,
+                    'collection_number' => (string) $payment->collection_number,
+                    'transaction_date' => $payment->collection_date
+                        ? Carbon::parse($payment->collection_date)->format('d/m/Y')
                         : '',
-                    'amount' => (int) round((float) $payment->amount),
-                    'payment_method' => (string) $payment->payment_method,
+                    'amount' => DecimalAmount::normalize((string) $payment->allocated_amount),
+                    'remaining_after' => DecimalAmount::normalize((string) $payment->remaining_after),
+                    'payment_method' => $payment->payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản',
+                    'account' => trim((string) $payment->account_code.' - '.(string) $payment->account_name, ' -'),
                     'creator_name' => $payment->creator_name ?: 'Không xác định',
-                    'description' => (string) ($payment->description ?? ''),
+                    'description' => (string) ($payment->note ?: $payment->payment_description ?: ''),
                 ];
             });
     }

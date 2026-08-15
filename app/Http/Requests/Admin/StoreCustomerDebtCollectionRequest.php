@@ -39,4 +39,11 @@ class StoreCustomerDebtCollectionRequest extends FormRequest
             'idempotency_key' => ['required', 'uuid'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'collection_date.before_or_equal' => 'Ngày thu không được lớn hơn ngày hiện tại.',
+        ];
+    }
 }
