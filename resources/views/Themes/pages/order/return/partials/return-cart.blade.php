@@ -1,97 +1,150 @@
-            {{-- Giỏ hàng trả --}}
-            <div class="card">
-                <div class="card-header">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <h5 class="card-title mb-0">
-                            Hàng khách trả
-                        </h5>
+{{-- Giỏ hàng trả --}}
+<div class="card mb-3">
 
-                        <button
-                            id="clearReturnCartBtn"
-                            type="button"
-                            class="btn btn-outline-danger btn-sm"
-                            @disabled($isFullyReturned)>
-                            Xóa danh sách
-                        </button>
-                    </div>
-                </div>
+    <div class="card-header py-2 px-3">
 
-                <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
 
-                    <div id="returnCartBody"></div>
+            <h6 class="card-title mb-0">
+                Hàng khách trả
+            </h6>
 
-                    <div id="returnCartEmpty" class="return-cart-empty">
-                        Chưa chọn sản phẩm nào để trả.
-                    </div>
+            <button
+                id="clearReturnCartBtn"
+                type="button"
+                class="btn btn-outline-danger btn-sm"
+                @disabled($isFullyReturned)>
+                Xóa danh sách
+            </button>
+
+        </div>
+
+    </div>
 
 
-                    {{-- Summary --}}
-                    <div class="return-summary mt-3 pt-3">
+    <div class="card-body p-3">
 
-                        <div class="return-summary-line">
-                            <span>Giá trị hàng theo giá bán</span>
-
-                            <span id="returnGrossPreview">
-                                0 VND
-                            </span>
-                        </div>
-
-                        <div class="return-summary-line text-muted">
-                            <span>Giảm giá của đơn gốc phân bổ</span>
-
-                            <span id="returnDiscountPreview">
-                                -0 VND
-                            </span>
-                        </div>
-
-                        <div class="return-summary-line fw-semibold">
-                            <span>Giá trị hàng trả</span>
-
-                            <span id="returnAmountPreview">
-                                0 VND
-                            </span>
-                        </div>
-
-                        <div class="return-summary-line">
-                            <span>Phí trả hàng</span>
-
-                            <span id="returnFeePreview">
-                                -0 VND
-                            </span>
-                        </div>
+        <div id="returnCartBody"></div>
 
 
-                        <div
-                            id="refundPreviewRow"
-                            class="return-summary-line return-summary-final">
-                            <span>Hoàn khách</span>
+        <div
+            id="returnCartEmpty"
+            class="return-cart-empty small">
 
-                            <span
-                                id="refundPreview"
-                                class="text-success">
-                                0 VND
-                            </span>
-                        </div>
+            Chưa chọn sản phẩm nào để trả.
+
+        </div>
 
 
-                        <div
-                            id="additionalPaymentPreviewRow"
-                            class="return-summary-line return-summary-final d-none">
-                            <span>Khách trả thêm</span>
+        {{-- Summary --}}
+        <div class="return-summary mt-3 pt-3">
 
-                            <span
-                                id="additionalPaymentPreview"
-                                class="text-danger">
-                                0 VND
-                            </span>
-                        </div>
+            {{-- Giá trị hàng theo giá bán --}}
+            <div class="return-summary-line small">
 
+                <span>
+                    Giá trị hàng theo giá bán
+                </span>
 
-                        <div class="return-preview-note mt-2">
-                            Số tiền trên màn hình là giá trị dự kiến.
-                            Khi lưu, hệ thống sẽ tính lại từ dữ liệu đơn hàng gốc.
-                        </div>
-                    </div>
+                <span id="returnGrossPreview">
+                    0 VND
+                </span>
 
-                </div>
             </div>
+
+
+            {{-- Giảm giá --}}
+            <div class="return-summary-line text-muted small">
+
+                <span>
+                    Giảm giá của đơn gốc phân bổ
+                </span>
+
+                <span id="returnDiscountPreview">
+                    -0 VND
+                </span>
+
+            </div>
+
+
+            {{-- Giá trị hàng trả --}}
+            <div class="return-summary-line fw-semibold small">
+
+                <span>
+                    Giá trị hàng trả
+                </span>
+
+                <span id="returnAmountPreview">
+                    0 VND
+                </span>
+
+            </div>
+
+
+            {{-- Phí trả hàng --}}
+            <div class="return-summary-line small">
+
+                <span>
+                    Phí trả hàng
+                </span>
+
+                <span id="returnFeePreview">
+                    -0 VND
+                </span>
+
+            </div>
+
+
+            {{-- Hoàn khách --}}
+            <div
+                id="refundPreviewRow"
+                class="return-summary-line return-summary-final small">
+
+                <span>
+                    Hoàn khách
+                </span>
+
+                <span
+                    id="refundPreview"
+                    class="text-success fw-semibold">
+
+                    0 VND
+
+                </span>
+
+            </div>
+
+
+            {{-- Khách trả thêm --}}
+            <div
+                id="additionalPaymentPreviewRow"
+                class="return-summary-line return-summary-final d-none small">
+
+                <span>
+                    Khách trả thêm
+                </span>
+
+                <span
+                    id="additionalPaymentPreview"
+                    class="text-danger fw-semibold">
+
+                    0 VND
+
+                </span>
+
+            </div>
+
+
+            {{-- Ghi chú --}}
+            <div class="return-preview-note mt-2 small">
+
+                Số tiền trên màn hình là giá trị dự kiến.
+                Khi lưu, hệ thống sẽ tính lại từ dữ liệu đơn hàng gốc.
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
