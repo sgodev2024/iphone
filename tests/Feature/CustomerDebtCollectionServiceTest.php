@@ -465,17 +465,24 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->assertSame(66668, (int) $order->fresh()->debt_amount);
     }
 
-    public function test_cash_add_form_exposes_customer_debt_collection_mode_without_replacing_generic_mode(): void
+    public function test_cash_add_form_is_a_unified_receipt_payment_form(): void
     {
         $response = $this->actingAs($this->owner)
             ->get(route('admin.transactions.cash.save'));
 
         $response->assertOk()
-            ->assertSee('value="generic"', false)
-            ->assertSee('value="customer_debt_collection"', false)
+            ->assertSee('id="cash-transaction-type"', false)
+            ->assertSee('Loại giao dịch')
+            ->assertSee('id="cash-operation"', false)
+            ->assertSee('Nghiệp vụ')
+            ->assertSee('Thu công nợ khách hàng')
+            ->assertSee('Trả công nợ nhà cung cấp')
+            ->assertDontSee('Phiếu tiền mặt thông thường')
+            ->assertDontSee('id="entry-mode"', false)
             ->assertSee('id="customer-debt-panel"', false)
+            ->assertSee('id="supplier-debt-panel"', false)
             ->assertSee('Tài khoản tiền mặt canonical')
-            ->assertSee("formData.set('payment_method', collectionPaymentMethod)", false)
+            ->assertSee("formData.set('import_coupon_id', $('#supplier-import-id').val())", false)
             ->assertSee("replace(/\\./g, '')", false);
     }
 
@@ -854,6 +861,8 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->actingAs($this->owner)
             ->get(route('admin.debts.customer.collections.show', $result['collection']->id))
             ->assertOk()
+            ->assertSee('<strong>ID:</strong> '.$result['collection']->id, false)
+            ->assertSee('<strong>Mã phiếu:</strong> PTCN-000001', false)
             ->assertSee('HISTORY-A')
             ->assertSee('HISTORY-B')
             ->assertSee('500.000', false)

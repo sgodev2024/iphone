@@ -8,13 +8,15 @@ use App\Imports\CashTransactionImport;
 use App\Models\Account;
 use App\Models\CashTransaction;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Supplier;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
-use App\Services\TransactionBusinessListService;
+use App\Services\CashActivityReadService;
+use App\Support\DecimalAmount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -102,6 +104,8 @@ class CashTransactionController extends Controller
 
     public function store(Request $request)
     {
+        abort(410, 'Luồng hạch toán tiền mặt generic legacy đã bị đóng vĩnh viễn.');
+
         if ($request->input('obj_type') === 'client') {
             abort(410, 'Ghi TK131 khách hàng qua phiếu tiền mặt generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
         }
@@ -303,6 +307,8 @@ class CashTransactionController extends Controller
             );
         }
 
+        abort(410, 'Phase hiện tại không hỗ trợ sửa phiếu tiền mặt generic hoặc giao dịch canonical đã hạch toán.');
+
         if ($request->input('obj_type') === 'client') {
             abort(410, 'Sửa TK131 khách hàng qua phiếu tiền mặt generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
         }
@@ -491,15 +497,33 @@ class CashTransactionController extends Controller
     public function search(Request $request)
     {
         $type = $request->input('type');
-        $keyword = $request->input('keyword');
+        $keyword = trim((string) $request->input('keyword'));
+        $ownerId = Auth::user()?->ownerId();
 
-        if (!$type || strlen($keyword) < 3) {
+        if (!$type || !$ownerId || strlen($keyword) < ($type === 'company' ? 2 : 3)) {
             return response()->json([]);
         }
 
         $query = match ($type) {
-            'client' => Client::query()->where('name', 'like', "%$keyword%"),
-            'supplier' => Supplier::query()->where('name', 'like', "%$keyword%"),
+            'client' => Client::query()
+                ->where('user_id', $ownerId)
+                ->where(function ($query) use ($keyword): void {
+                    $query->where('name', 'like', "%$keyword%")
+                        ->orWhere('phone', 'like', "%$keyword%")
+                        ->orWhere('code', 'like', "%$keyword%");
+                }),
+            'supplier' => Supplier::query()
+                ->whereHas('company', fn ($query) => $query->where('user_id', $ownerId))
+                ->where(function ($query) use ($keyword): void {
+                    $query->where('name', 'like', "%$keyword%")
+                        ->orWhere('phone', 'like', "%$keyword%");
+                }),
+            'company' => Company::query()
+                ->where('user_id', $ownerId)
+                ->where(function ($query) use ($keyword): void {
+                    $query->where('name', 'like', "%$keyword%")
+                        ->orWhere('phone', 'like', "%$keyword%");
+                }),
             default => null,
         };
 
@@ -512,7 +536,7 @@ class CashTransactionController extends Controller
                 'id' => $item->id,
                 'code' => $item->code,
                 'name' => match ($type) {
-                    'client', 'supplier' => $item->name ?? '',
+                    'client', 'supplier', 'company' => $item->name ?? '',
                     default => '',
                 },
                 'phone' => $item->phone ?? '',
@@ -534,7 +558,7 @@ class CashTransactionController extends Controller
     //     return view('admin.cash-transaction.print', compact('transactions'));
     // }
 
-    public function list(Request $request, TransactionBusinessListService $businessList)
+    public function list(Request $request, CashActivityReadService $activityRead)
     {
         $dateRange = $request->query('date_range');
 
@@ -557,13 +581,67 @@ class CashTransactionController extends Controller
             })
             ->pluck('id');
 
-        $entries = $businessList->entries($this->transactionOwnerIds(), $cashAccountIds, $from, $to);
+        $result = $activityRead->read(
+            $request->user(),
+            $this->transactionOwnerIds(),
+            $cashAccountIds,
+            $from,
+            $to,
+            max(1, (int) $request->query('page', 1))
+        );
+
+        $activities = $result['paginator'];
+        $totals = $result['totals'];
 
         $type = 'cash';
 
         return response()->json([
             'success' => true,
-            'html' => view('admin.cash-bank._table', compact('entries', 'type'))->render()
+            'html' => view('admin.cash-bank._table', compact('activities', 'totals', 'type'))->render(),
+            'pagination' => view('admin.cash-bank._pagination', compact('activities'))->render(),
+        ]);
+    }
+
+    public function showPosted(Request $request, int $transactionId)
+    {
+        $cashAccountIds = DB::table('accounts')
+            ->where(function ($query): void {
+                $query->where('code', '111')
+                    ->orWhere('parent_id', function ($subQuery): void {
+                        $subQuery->select('id')
+                            ->from('accounts')
+                            ->where('code', '111')
+                            ->limit(1);
+                    });
+            })
+            ->pluck('id');
+
+        $transaction = Transaction::query()
+            ->whereIn('user_id', $this->transactionOwnerIds())
+            ->where('type', '!=', 'other')
+            ->whereNull('collection_id')
+            ->whereHas('entries', fn ($query) => $query->whereIn('account_id', $cashAccountIds))
+            ->with([
+                'creator:id,name',
+                'entries.account:id,code,name',
+                'entries.tableable',
+            ])
+            ->findOrFail($transactionId);
+
+        $totalAmount = $transaction->entries->reduce(
+            fn (string $total, TransactionEntry $entry): string => DecimalAmount::add(
+                $total,
+                (string) $entry->debit_amount
+            ),
+            '0.00'
+        );
+
+        return view('admin.cash-bank.posted-detail', [
+            'transaction' => $transaction,
+            'operationLabel' => $transaction->document_type === 'import_payment'
+                ? 'Trả công nợ nhà cung cấp'
+                : 'Giao dịch tiền mặt đã hạch toán',
+            'totalAmount' => $totalAmount,
         ]);
     }
 

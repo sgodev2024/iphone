@@ -77,12 +77,10 @@
                     <table class="table table-hover table-bordered mb-0 cash-transactions-table">
                         <thead>
                             <tr>
-                                <th class="cash-col-check" style="width: 40px;">
-                                    <input type="checkbox" id="checked-all">
-                                </th>
-                                <th class="cash-col-id">ID</th>
+                                <th class="cash-col-id text-center">ID</th>
                                 <th class="cash-col-date">Ngày</th>
                                 <th class="cash-col-account">Tài khoản</th>
+                                <th class="cash-col-operation">Nghiệp vụ</th>
                                 <th class="cash-col-contra">
                                     <span class="cash-header-stack">
                                         <span>Tài khoản</span>
@@ -90,8 +88,11 @@
                                     </span>
                                 </th>
                                 <th class="cash-col-party">Đối tượng</th>
+                                <th class="cash-col-document">Chứng từ</th>
+                                <th class="cash-col-description">Nội dung</th>
                                 <th class="cash-col-money text-end">Thu</th>
                                 <th class="cash-col-money text-end">Chi</th>
+                                <th class="cash-col-status">Trạng thái</th>
                                 <th class="cash-col-creator">Người tạo</th>
                                 <th class="cash-col-file">File chứng từ</th>
                                 <th class="cash-col-action text-center" style="width: 5%">
@@ -104,6 +105,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="cash-pagination-area" class="cash-pagination-area"></div>
             </div>
         </div>
     </div>
@@ -396,10 +398,11 @@
             }
         });
 
-        function loadCashTransactions() {
+        function loadCashTransactions(page = 1) {
 
             let filters = {
                 date_range: $('#dateFilter').val(),
+                page: page,
             };
 
             $.ajax({
@@ -410,6 +413,7 @@
                 success: function(res) {
                     if (res.success) {
                         $('table tbody').html(res.html);
+                        $('#cash-pagination-area').html(res.pagination || '');
                     }
                 },
                 error: function(xhr) {
@@ -420,6 +424,12 @@
                 }
             });
         }
+
+        $(document).on('click', '.cash-pagination-area a', function(event) {
+            event.preventDefault();
+            const page = new URL(this.href).searchParams.get('page') || 1;
+            loadCashTransactions(page);
+        });
 
         function debounce(func, delay) {
             let timeoutId;
@@ -718,6 +728,161 @@
             .cash-transaction-page .cash-create-action {
                 margin-left: 0;
             }
+        }
+
+        .cash-transaction-page {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .cash-transaction-page .cash-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .cash-transaction-page .cash-transactions-table {
+            min-width: 1890px;
+            width: max-content;
+            table-layout: auto;
+        }
+
+        .cash-transaction-page .cash-transactions-table th,
+        .cash-transaction-page .cash-transactions-table td {
+            box-sizing: border-box;
+        }
+
+        .cash-transaction-page .cash-col-id {
+            min-width: 70px !important;
+            width: 70px !important;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-col-date {
+            min-width: 105px !important;
+            width: 105px !important;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-col-account {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: normal;
+        }
+
+        .cash-transaction-page .cash-col-operation {
+            min-width: 180px !important;
+            width: 180px !important;
+            white-space: normal;
+        }
+
+        .cash-transaction-page .cash-col-contra {
+            min-width: 165px !important;
+            width: 165px !important;
+            white-space: normal;
+        }
+
+        .cash-transaction-page .cash-col-party {
+            min-width: 170px !important;
+            width: 170px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .cash-transaction-page .cash-col-document {
+            min-width: 165px !important;
+            width: 165px !important;
+            white-space: normal;
+        }
+
+        .cash-transaction-page .cash-col-description {
+            min-width: 250px !important;
+            width: 250px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .cash-transaction-page .cash-col-money {
+            min-width: 120px !important;
+            width: 120px !important;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-col-status {
+            min-width: 120px !important;
+            width: 120px !important;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-col-creator {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .cash-transaction-page .cash-col-file {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-col-action {
+            min-width: 80px !important;
+            width: 80px !important;
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-date-cell {
+            white-space: nowrap;
+        }
+
+        .cash-transaction-page .cash-cell-clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            max-height: 2.7em;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .cash-transaction-page .cash-pagination-area {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 12px 4px 0;
+        }
+
+        .cash-transaction-page .cash-pagination-area nav {
+            margin: 0;
+        }
+
+        .cash-transaction-page .cash-pagination-area .pagination {
+            margin: 0;
+            gap: 4px;
+        }
+
+        .cash-transaction-page .cash-pagination-area .page-link {
+            min-width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: .375rem .65rem;
+            line-height: 1;
+        }
+
+        .cash-transaction-page .cash-pagination-area .pagination .page-item:first-child .page-link,
+        .cash-transaction-page .cash-pagination-area .pagination .page-item:last-child .page-link {
+            min-width: auto;
         }
     </style>
 @endpush

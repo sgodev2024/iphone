@@ -152,6 +152,45 @@ class SupplierPaymentService
         return $this->summaryResult($this->validatedLedger($importCoupon, $ownerId));
     }
 
+    public function outstandingImports(User $actor, int $companyId): array
+    {
+        $ownerId = (int) $actor->ownerId();
+
+        Company::query()
+            ->whereKey($companyId)
+            ->where('user_id', $ownerId)
+            ->firstOrFail();
+
+        return ImportCoupon::query()
+            ->where('user_id', $ownerId)
+            ->where('companies_id', $companyId)
+            ->orderBy('id')
+            ->get(['id', 'user_id', 'coupon_code', 'companies_id', 'total'])
+            ->map(function (ImportCoupon $importCoupon) use ($ownerId): ?array {
+                try {
+                    $ledger = $this->validatedLedger($importCoupon, $ownerId);
+                } catch (ValidationException) {
+                    return null;
+                }
+
+                if (DecimalAmount::compare($ledger['remaining'], '0.00') <= 0) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $importCoupon->id,
+                    'code' => $importCoupon->coupon_code ?: 'MP'.str_pad((string) $importCoupon->id, 6, '0', STR_PAD_LEFT),
+                    'purchase_date' => $ledger['purchase']->transaction_date?->toDateString(),
+                    'total' => $this->wholeAmount($ledger['purchase_credit']),
+                    'paid' => $this->wholeAmount($ledger['paid']),
+                    'remaining' => $this->wholeAmount($ledger['remaining']),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     public function bankAccounts(): Collection
     {
         $parent = $this->resolveRequiredActiveAccount('112', 'tài khoản ngân hàng');

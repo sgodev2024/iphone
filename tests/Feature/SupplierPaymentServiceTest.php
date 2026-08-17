@@ -211,6 +211,27 @@ class SupplierPaymentServiceTest extends TestCase
         $this->assertSame($before, Transaction::count());
     }
 
+    public function test_outstanding_imports_are_company_scoped_and_use_the_canonical_ledger(): void
+    {
+        $import = $this->createCanonicalImport(100000, 40000, 'cash');
+
+        $rows = $this->service->outstandingImports($this->owner, $this->company->id);
+
+        $this->assertSame([
+            [
+                'id' => $import->id,
+                'code' => $import->coupon_code,
+                'purchase_date' => '2026-08-01',
+                'total' => 100000,
+                'paid' => 40000,
+                'remaining' => 60000,
+            ],
+        ], $rows);
+
+        $this->expectException(ModelNotFoundException::class);
+        $this->service->outstandingImports($this->otherOwner, $this->company->id);
+    }
+
     public function test_company_and_owner_fields_from_payload_are_not_authoritative(): void
     {
         $import = $this->createCanonicalImport(100000);

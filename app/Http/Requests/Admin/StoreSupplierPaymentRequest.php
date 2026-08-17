@@ -9,7 +9,7 @@ class StoreSupplierPaymentRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'import_coupon_id' => (int) $this->route('id'),
+            'import_coupon_id' => (int) ($this->route('id') ?? $this->input('import_coupon_id')),
             'payment_method' => strtolower(trim((string) $this->input('payment_method'))),
             'idempotency_key' => strtolower(trim((string) $this->input('idempotency_key'))),
         ]);

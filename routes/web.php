@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BankTransactionController;
 use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CashTransactionController;
+use App\Http\Controllers\Admin\GenericCashVoucherController;
 use App\Http\Controllers\Admin\CategorieController;
 use App\Http\Controllers\Admin\CheckInventoryController;
 use App\Http\Controllers\Admin\ClientController;
@@ -1058,9 +1059,34 @@ Route::middleware(['auth'])
                         ->middleware('permission:cash_transaction.create')
                         ->name('save');
 
-                    Route::post('store', 'store')
+                    Route::post('store', [GenericCashVoucherController::class, 'store'])
                         ->middleware('permission:cash_transaction.create')
                         ->name('store');
+
+                    Route::get('vouchers/{voucher}', [GenericCashVoucherController::class, 'show'])
+                        ->middleware('permission:cash_transaction.view')
+                        ->name('vouchers.show');
+
+                    Route::get('vouchers/{voucher}/attachment', [GenericCashVoucherController::class, 'attachment'])
+                        ->middleware('permission:cash_transaction.view')
+                        ->name('vouchers.attachment');
+
+                    Route::get('posted/{transactionId}', 'showPosted')
+                        ->whereNumber('transactionId')
+                        ->middleware('permission:cash_transaction.view')
+                        ->name('posted.show');
+
+                    Route::get('supplier-companies', [SupplierPaymentController::class, 'companies'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-companies');
+
+                    Route::get('supplier-companies/{companyId}/imports', [SupplierPaymentController::class, 'imports'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-imports');
+
+                    Route::post('supplier-payment', [SupplierPaymentController::class, 'storeFromCash'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-payment');
 
                     Route::put('update', 'update')
                         ->middleware('permission:cash_transaction.update')

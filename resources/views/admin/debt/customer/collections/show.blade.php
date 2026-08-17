@@ -25,6 +25,8 @@
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-4"><strong>Ngày thu:</strong> {{ $collection->collection_date?->format('d/m/Y') }}</div>
+                    <div class="col-md-4"><strong>ID:</strong> {{ $collection->id }}</div>
+                    <div class="col-md-4"><strong>Mã phiếu:</strong> {{ $collection->collection_number }}</div>
                     <div class="col-md-4"><strong>Khách hàng:</strong> {{ $collection->client?->name ?? 'Khách hàng đã xóa' }}</div>
                     <div class="col-md-4"><strong>Người thu:</strong> {{ $collection->creator?->name ?? 'Không xác định' }}</div>
                     <div class="col-md-4"><strong>Phương thức:</strong> {{ $collection->payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản' }}</div>
