@@ -96,10 +96,13 @@
                                         @if ($item['can_return'] && !$isFullyReturned)
                                         <button
                                             type="button"
-                                            class="btn btn-outline-primary btn-sm return-add-btn"
+                                            class="btn  btn-sm return-add-btn"
                                             data-detail-id="{{ $item['order_detail_id'] }}">
-                                            <i class="fa-solid fa-rotate-left me-1"></i>
-                                            Trả hàng
+                                            <i class=" fa-solid
+                                    fa-solid fa-trash me-1
+                                    me-1
+                                    text-danger"></i>
+                                           
                                         </button>
                                         @else
                                         <span class="badge bg-secondary">

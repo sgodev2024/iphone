@@ -294,11 +294,12 @@
                             <i
                                 class="
                                     fa-solid
-                                    fa-rotate-left
+                                    fa-solid fa-trash me-1
                                     me-1
+                                    text-danger
                                 "
                             ></i>
-                            Trả hàng
+                            
                         `;
                 });
         }
