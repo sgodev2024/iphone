@@ -47,6 +47,7 @@ class OrderController extends Controller
                     $query->whereBetween('created_at', [$start, $end]);
                 })
                 ->with(['user', 'client'])
+                ->orderBy('created_at', 'desc')
                 ->paginate(10);
 
             return response()->json([
