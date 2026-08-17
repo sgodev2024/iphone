@@ -14,19 +14,14 @@
     @endphp
     <tr>
         <td class="cash-col-check text-center">
-            @if (! $entry->collection_id)
+            @if (!$entry->collection_id)
                 <input type="checkbox" class="item-checkbox" data-id="{{ $entry->id }}">
             @endif
         </td>
+        <td class="cash-col-id">
+            {{ $entry->id }}
+        </td>
         <td class="cash-col-date cash-date-cell">
-            @if ($entry->collection_id)
-                <a class="fw-semibold" href="{{ route('admin.debts.customer.collections.show', $entry->collection_id) }}">
-                    {{ $entry->reference_number }}
-                </a>
-                <span class="badge bg-info text-dark d-block mt-1">Thu công nợ</span>
-            @else
-                {{ $entry->id }}
-            @endif
             <span class="d-block">{{ \Carbon\Carbon::parse($entry->transaction_date)->format('d/m/Y') }}</span>
         </td>
         <td class="cash-col-account">
@@ -54,8 +49,8 @@
             @if ($entry->attachment)
                 <a href="{{ $entry->collection_id
                     ? route('admin.debts.customer.collections.attachment', $entry->collection_id)
-                    : asset('storage/' . $entry->attachment) }}" target="_blank"
-                    class="cash-file-link text-primary fw-bold text-decoration-none">
+                    : asset('storage/' . $entry->attachment) }}"
+                    target="_blank" class="cash-file-link text-primary fw-bold text-decoration-none">
                     <i class="bi bi-file-earmark-text me-1"></i> Xem file đính kèm
                 </a>
             @else
@@ -85,12 +80,12 @@
     </tr>
 @empty
     <tr>
-        <td colspan="10" class="text-center cash-empty-cell">Không có dữ liệu</td>
+        <td colspan="11" class="text-center cash-empty-cell">Không có dữ liệu</td>
     </tr>
 @endforelse
 
 <tr class="fw-bold cash-total-row">
-    <td colspan="5" class="text-end fw-bold cash-total-label">Tổng</td>
+    <td colspan="6" class="text-end fw-bold cash-total-label">Tổng</td>
     <td class="text-end fw-bold cash-total-money">{{ formatPrice($totalThu) }}</td>
     <td class="text-end fw-bold cash-total-money">{{ formatPrice($totalChi) }}</td>
     <td colspan="3"></td>

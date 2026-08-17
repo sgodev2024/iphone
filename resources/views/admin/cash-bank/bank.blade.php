@@ -79,7 +79,8 @@
                                 <th class="cash-col-check" style="width: 40px;">
                                     <input type="checkbox" id="checked-all" class="form-check-input">
                                 </th>
-                                <th>ID | Ngày</th>
+                                <th class="cash-col-id">ID</th>
+                                <th class="cash-col-date">Ngày</th>
                                 <th>Tài khoản</th>
                                 <th>Tài khoản đối ứng</th>
                                 <th>Đối tượng</th>
@@ -602,51 +603,59 @@
                 text-align: center;
             }
 
+            /* Cột ID */
             .bank-transaction-page .bank-transactions-table th:nth-child(2),
-            .bank-transaction-page .cash-col-date {
-                min-width: 140px;
-                width: 140px;
+            .bank-transaction-page .cash-col-id {
+                min-width: 120px;
+                width: 120px;
             }
 
+            /* Cột Ngày */
             .bank-transaction-page .bank-transactions-table th:nth-child(3),
+            .bank-transaction-page .cash-col-date {
+                min-width: 120px;
+                width: 120px;
+            }
+
+            .bank-transaction-page .bank-transactions-table th:nth-child(4),
             .bank-transaction-page .cash-col-account {
                 min-width: 145px;
                 width: 145px;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(4),
+            .bank-transaction-page .bank-transactions-table th:nth-child(5),
             .bank-transaction-page .cash-col-contra {
                 min-width: 185px;
                 width: 185px;
                 white-space: normal;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(5),
+            .bank-transaction-page .bank-transactions-table th:nth-child(6),
             .bank-transaction-page .cash-col-party {
                 min-width: 220px;
                 width: 220px;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(6),
             .bank-transaction-page .bank-transactions-table th:nth-child(7),
+            .bank-transaction-page .bank-transactions-table th:nth-child(8),
             .bank-transaction-page .cash-col-money {
                 min-width: 135px;
                 width: 135px;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(8),
+            .bank-transaction-page .bank-transactions-table th:nth-child(9),
             .bank-transaction-page .cash-col-creator {
                 min-width: 145px;
                 width: 145px;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(9),
+            .bank-transaction-page .bank-transactions-table th:nth-child(10),
             .bank-transaction-page .cash-col-file {
                 min-width: 155px;
                 width: 155px;
             }
 
-            .bank-transaction-page .bank-transactions-table th:nth-child(10),
+            .bank-transaction-page .bank-transactions-table th:nth-child(11),
             .bank-transaction-page .cash-col-action {
                 min-width: 76px;
                 width: 76px;

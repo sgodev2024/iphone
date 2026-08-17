@@ -80,7 +80,8 @@
                                 <th class="cash-col-check" style="width: 40px;">
                                     <input type="checkbox" id="checked-all">
                                 </th>
-                                <th class="cash-col-date">ID | Ngày</th>
+                                <th class="cash-col-id">ID</th>
+                                <th class="cash-col-date">Ngày</th>
                                 <th class="cash-col-account">Tài khoản</th>
                                 <th class="cash-col-contra">
                                     <span class="cash-header-stack">
@@ -603,48 +604,66 @@
                 white-space: nowrap;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(1),
             .cash-transaction-page .cash-col-check {
                 min-width: 44px;
                 width: 44px;
                 text-align: center;
             }
 
-            .cash-transaction-page .cash-col-date {
-                min-width: 140px;
-                width: 140px;
+            /* Cột ID */
+            .cash-transaction-page .cash-transactions-table th:nth-child(2),
+            .cash-transaction-page .cash-col-id {
+                min-width: 120px;
+                width: 120px;
             }
 
+            /* Cột Ngày */
+            .cash-transaction-page .cash-transactions-table th:nth-child(3),
+            .cash-transaction-page .cash-col-date {
+                min-width: 120px;
+                width: 120px;
+            }
+
+            .cash-transaction-page .cash-transactions-table th:nth-child(4),
             .cash-transaction-page .cash-col-account {
                 min-width: 145px;
                 width: 145px;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(5),
             .cash-transaction-page .cash-col-contra {
                 min-width: 185px;
                 width: 185px;
                 white-space: normal;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(6),
             .cash-transaction-page .cash-col-party {
                 min-width: 220px;
                 width: 220px;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(7),
+            .cash-transaction-page .cash-transactions-table th:nth-child(8),
             .cash-transaction-page .cash-col-money {
                 min-width: 135px;
                 width: 135px;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(9),
             .cash-transaction-page .cash-col-creator {
                 min-width: 145px;
                 width: 145px;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(10),
             .cash-transaction-page .cash-col-file {
                 min-width: 155px;
                 width: 155px;
             }
 
+            .cash-transaction-page .cash-transactions-table th:nth-child(11),
             .cash-transaction-page .cash-col-action {
                 min-width: 76px;
                 width: 76px;
