@@ -175,40 +175,89 @@
 @endif
 
 <body style="overflow-x: hidden; ">
-    <header class="header bg-primary py-2" id="header">
-        <div class="container-fluid">
-            <div class="d-flex align-items-center justify-content-between">
-                <!-- Left side: Search bar -->
-                <div class="text-center">
-                    <a href="{{ route('staff.index') }}">
-                        <img src="{{ showImage(optional($config)->logo, 'images/aicrm1.png') }}" alt="logo"
-                            style="max-width: 120px; height: auto; object-fit: contain;" />
-                    </a>
-                </div>
-                <!-- Right side: Icons -->
-                <div class="">
-                    <a href="#" class="home-icon" id="homeIcon" style="font-size: 20px;">
-                        <i style="color: white;" class="fas fa-user-tag"></i>
-                    </a>
-                    <div id="submenu" class="submenu">
-                        <ul>
-                            <li><a href="{{ route('staff.Inventory.get') }}">Kiểm kho</a></li>
-                            <li><a style="padding: 0px" class="dropdown-item" href="{{ route('staff.order') }}">Lịch sử
-                                    mua hàng</a></li>
-                            <li>
-                                <form id="logoutForm" action="{{ route('admin.logout') }}" method="POST"
-                                    style="display: none;">
-                                    @csrf
-                                </form>
-                                <a style="padding: 0px" class="dropdown-item" href="#"
-                                    onclick="event.preventDefault(); document.getElementById('logoutForm').submit();">
-                                    Đăng xuất
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
+<header class="header bg-primary py-2" id="header">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center justify-content-between">
+
+            {{-- Bên trái: Logo + chức năng --}}
+            <div class="d-flex align-items-center gap-3">
+
+                {{-- Logo --}}
+                <a href="{{ route('staff.index') }}">
+                    <img
+                        src="{{ showImage(optional($config)->logo, 'images/aicrm1.png') }}"
+                        alt="logo"
+                        style="max-width: 120px; height: auto; object-fit: contain;"
+                    />
+                </a>
+
+                <a href="{{ route('staff.index') }}"
+                   class="text-white text-decoration-none"
+                >
+                   Bán hàng
+                </a>
+
+                {{-- Lịch sử mua hàng --}}
+                <a
+                    href="{{ route('staff.order') }}"
+                    class="text-white text-decoration-none"
+                >
+                    Đơn hàng
+                </a>
+
+                {{-- Kiểm kho --}}
+                <a
+                    href="{{ route('staff.Inventory.get') }}"
+                    class="text-white text-decoration-none"
+                >
+                    Kiểm kho
+                </a>
+
+                
+
+            </div>
+
+            {{-- Bên phải: Tài khoản --}}
+            <div class="position-relative">
+
+                <a
+                    href="#"
+                    class="home-icon"
+                    id="homeIcon"
+                    style="font-size: 20px;"
+                >
+                    <i
+                        style="color: white;"
+                        class="fas fa-user-tag"
+                    ></i>
+                </a>
+
+                <div id="submenu" class="submenu">
+                    <ul>
+                        <li>
+                            <form
+                                id="logoutForm"
+                                action="{{ route('admin.logout') }}"
+                                method="POST"
+                                style="display: none;"
+                            >
+                                @csrf
+                            </form>
+
+                            <a
+                                style="padding: 0px"
+                                class="dropdown-item"
+                                href="#"
+                                onclick="event.preventDefault(); document.getElementById('logoutForm').submit();"
+                            >
+                                Đăng xuất
+                            </a>
+                        </li>
+                    </ul>
                 </div>
 
             </div>
+
         </div>
-    </header>
+    </div>
+</header>
