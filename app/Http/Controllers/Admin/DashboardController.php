@@ -49,29 +49,163 @@ class DashboardController extends Controller
         ));
     }
 
-
     private function getRevenueStats(): array
     {
-        $doanhThu = DB::table('orders')
+        /*
+        |--------------------------------------------------------------------------
+        | DOANH THU BÁN HÀNG THỰC
+        |--------------------------------------------------------------------------
+        |
+        | Loại các order được tạo ra từ nghiệp vụ đổi hàng.
+        |
+        */
+    
+        $sales = DB::table('orders as o')
+            ->where('o.status', 1)
+    
+            ->whereNotExists(function ($query) {
+                $query
+                    ->select(DB::raw(1))
+                    ->from('order_returns as r')
+                    ->whereColumn(
+                        'r.exchange_order_id',
+                        'o.id'
+                    )
+                    ->where(
+                        'r.status',
+                        'completed'
+                    );
+            })
+    
             ->selectRaw("
-                SUM(CASE WHEN DATE(created_at) = CURDATE() THEN total_money ELSE 0 END) AS today_revenue,
-                SUM(CASE WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY THEN total_money ELSE 0 END) AS yesterday_revenue
+                SUM(
+                    CASE
+                        WHEN DATE(o.created_at) = CURDATE()
+                        THEN o.total_money
+                        ELSE 0
+                    END
+                ) AS today_sales,
+    
+                SUM(
+                    CASE
+                        WHEN DATE(o.created_at) = CURDATE() - INTERVAL 1 DAY
+                        THEN o.total_money
+                        ELSE 0
+                    END
+                ) AS yesterday_sales
             ")
-            ->where('status', 1) // status 1 = đã hoàn thành
+    
             ->first();
-
+    
+    
+        /*
+        |--------------------------------------------------------------------------
+        | ĐỔI / TRẢ HÀNG
+        |--------------------------------------------------------------------------
+        |
+        | refund_amount:
+        |   tiền thực tế trả lại khách.
+        |
+        | additional_payment:
+        |   tiền khách trả thêm.
+        |
+        | additional_payment hiện đã bao gồm fee_amount,
+        | nên KHÔNG cộng fee_amount lần nữa.
+        |
+        */
+    
+        $returns = DB::table('order_returns')
+            ->where('status', 'completed')
+    
+            ->selectRaw("
+                SUM(
+                    CASE
+                        WHEN DATE(created_at) = CURDATE()
+                        THEN refund_amount
+                        ELSE 0
+                    END
+                ) AS today_refund,
+    
+                SUM(
+                    CASE
+                        WHEN DATE(created_at) = CURDATE()
+                        THEN additional_payment
+                        ELSE 0
+                    END
+                ) AS today_additional_payment,
+    
+                SUM(
+                    CASE
+                        WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY
+                        THEN refund_amount
+                        ELSE 0
+                    END
+                ) AS yesterday_refund,
+    
+                SUM(
+                    CASE
+                        WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY
+                        THEN additional_payment
+                        ELSE 0
+                    END
+                ) AS yesterday_additional_payment
+            ")
+    
+            ->first();
+    
+    
+        /*
+        |--------------------------------------------------------------------------
+        | DOANH THU THUẦN
+        |--------------------------------------------------------------------------
+        */
+    
+        $todayRevenue =
+            (float) ($sales->today_sales ?? 0)
+            - (float) ($returns->today_refund ?? 0)
+            + (float) ($returns->today_additional_payment ?? 0);
+    
+    
+        $yesterdayRevenue =
+            (float) ($sales->yesterday_sales ?? 0)
+            - (float) ($returns->yesterday_refund ?? 0)
+            + (float) ($returns->yesterday_additional_payment ?? 0);
+    
+    
+        /*
+        |--------------------------------------------------------------------------
+        | SO SÁNH HÔM QUA
+        |--------------------------------------------------------------------------
+        */
+    
         $percentChange = null;
-        if ($doanhThu->yesterday_revenue > 0) {
+    
+        if ($yesterdayRevenue > 0) {
+    
             $percentChange = round(
-                ($doanhThu->today_revenue - $doanhThu->yesterday_revenue) / $doanhThu->yesterday_revenue * 100,
+                (
+                    $todayRevenue
+                    -
+                    $yesterdayRevenue
+                )
+                /
+                $yesterdayRevenue
+                *
+                100,
                 2
             );
         }
-
+    
+    
         return [
-            'today_revenue'     => (float) $doanhThu->today_revenue,
-            'yesterday_revenue' => (float) $doanhThu->yesterday_revenue,
-            'percent_change'    => $percentChange,
+            'today_revenue'
+                => $todayRevenue,
+    
+            'yesterday_revenue'
+                => $yesterdayRevenue,
+    
+            'percent_change'
+                => $percentChange,
         ];
     }
 
