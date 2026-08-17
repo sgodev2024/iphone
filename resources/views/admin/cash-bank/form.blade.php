@@ -15,7 +15,8 @@
                     <div class="border-bottom p-3 bg-light">
                         <label class="form-label required" for="entry-mode">Loại phiếu</label>
                         <select class="form-select" id="entry-mode" name="entry_mode" required>
-                            <option value="generic">Phiếu {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }} thông thường</option>
+                            <option value="generic">Phiếu {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }} thông thường
+                            </option>
                             @if (auth()->user()?->hasPermission('receipt.create'))
                                 <option value="customer_debt_collection">Thu công nợ khách hàng</option>
                             @endif
@@ -35,8 +36,7 @@
                                     <label class="form-label" id="transaction-date-label">Ngày thu chi</label>
                                     <input type="date" class="form-control" name="transaction_date"
                                         value="{{ optional($transaction)->transaction_date ? optional($transaction)->transaction_date->format('Y-m-d') : now()->format('Y-m-d') }}"
-                                        data-today="{{ now()->format('Y-m-d') }}"
-                                        required>
+                                        data-today="{{ now()->format('Y-m-d') }}" required>
                                 </div>
 
                                 <div class="col-lg-6 generic-only-field" id="generic-object-type-field">
@@ -49,7 +49,8 @@
                                 </div>
 
                                 <div class="col-md-6 generic-only-field" id="generic-account-field">
-                                    <label class="form-label required">Tài khoản {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }}</label>
+                                    <label class="form-label required">Tài khoản
+                                        {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }}</label>
                                     <select class="form-select" name="account_id" id="account_id" required>
                                         <option value="">Chọn tài khoản</option>
                                         @foreach ($moneyAccounts as $moneyAccount)
@@ -68,7 +69,8 @@
                                                 value="{{ $canonicalCashAccount ? "$canonicalCashAccount->code - $canonicalCashAccount->name" : 'Chưa cấu hình tài khoản 111 đang hoạt động' }}">
                                             <div class="form-text">Tài khoản 111 do hệ thống tự xác định khi ghi sổ.</div>
                                         @else
-                                            <label class="form-label required" for="collection-money-account">Tài khoản ngân hàng nhận tiền</label>
+                                            <label class="form-label required" for="collection-money-account">Tài khoản ngân
+                                                hàng nhận tiền</label>
                                             <select class="form-select" id="collection-money-account">
                                                 <option value="">Chọn tài khoản ngân hàng</option>
                                                 @foreach ($collectionMoneyAccounts as $collectionMoneyAccount)
@@ -79,7 +81,8 @@
                                                     </option>
                                                 @endforeach
                                             </select>
-                                            <div class="form-text">Chỉ gồm tài khoản đang hoạt động trực tiếp dưới TK112.</div>
+                                            <div class="form-text">Chỉ gồm tài khoản đang hoạt động trực tiếp dưới TK112.
+                                            </div>
                                         @endif
                                     </div>
                                 @endif
@@ -138,7 +141,7 @@
                                         data-payment-method="{{ $type === 'cash' ? 'cash' : 'bank_transfer' }}"
                                         data-account-ready="{{ $type === 'cash' ? ($canonicalCashAccount ? '1' : '0') : ($collectionMoneyAccounts->isNotEmpty() ? '1' : '0') }}">
                                         <h6 class="mb-2">CÔNG NỢ KHÁCH HÀNG</h6>
-                                        <div id="debt-status" class="alert alert-secondary mb-3">
+                                        <div id="debt-status" class="mb-3">
                                             Chọn khách hàng để tải công nợ canonical từ ledger.
                                         </div>
                                         <div id="debt-content" class="d-none">
@@ -208,7 +211,8 @@
                         <div class="section-content">
                             <div class="mb-3">
                                 <label class="form-label required" id="amount-label">Số tiền (VND)</label>
-                                <input type="text" name="amount" id="amount" class="form-control usd-price-format"
+                                <input type="text" name="amount" id="amount"
+                                    class="form-control usd-price-format"
                                     value="{{ $mainEntry ? ($mainEntry->debit_amount > 0 ? formatPrice($mainEntry->debit_amount) : formatPrice($mainEntry->credit_amount)) : '' }}"
                                     placeholder="0" required>
                             </div>
@@ -309,7 +313,7 @@
                 if (isCollectionMode()) $('#amount').prop('disabled', disableAmount);
                 $('#debt-status')
                     .removeClass('alert-secondary alert-info alert-success alert-warning alert-danger')
-                    .addClass(`alert-${style}`)
+                    // .addClass(`alert-${style}`)
                     .text(message);
                 $('#debt-content').addClass('d-none');
                 setSubmitState();
@@ -322,9 +326,9 @@
                 $('#transaction-date-label').text(collection ? 'Ngày thu công nợ' : 'Ngày thu chi');
                 $('#object-label').text(collection ? 'Khách hàng' : 'Đối tượng');
                 $('#amount-label').text(collection ? 'Số tiền thu (VND)' : 'Số tiền (VND)');
-                $('#object_code').attr('placeholder', collection
-                    ? 'Nhập ít nhất 2 ký tự để tìm khách hàng'
-                    : 'Nhập 3 ký tự để tìm đối tượng');
+                $('#object_code').attr('placeholder', collection ?
+                    'Nhập ít nhất 2 ký tự để tìm khách hàng' :
+                    'Nhập 3 ký tự để tìm đối tượng');
                 $('[name="transaction_date"]')
                     .attr('max', collection ? $('[name="transaction_date"]').data('today') : null);
 
@@ -344,9 +348,9 @@
                     $('#collection-idempotency-key').val(uuid());
 
                     if (debtPanel.data('account-ready').toString() !== '1') {
-                        setDebtStatus(isBankCollection
-                            ? 'Không có tài khoản ngân hàng hợp lệ trực tiếp dưới TK112.'
-                            : 'Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.', 'danger');
+                        setDebtStatus(isBankCollection ?
+                            'Không có tài khoản ngân hàng hợp lệ trực tiếp dưới TK112.' :
+                            'Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.', 'danger');
                     } else {
                         setDebtStatus('Chọn khách hàng để tải công nợ canonical từ ledger.');
                     }
@@ -392,7 +396,7 @@
                 placeholder: function() {
                     return $(this).attr('placeholder') || "Chọn một tùy chọn";
                 },
-                allowClear: true,
+                allowClear: false,
                 width: '100%'
             });
 
@@ -421,9 +425,9 @@
                 if (keyword.length >= minimumLength && type) {
                     typingTimer = setTimeout(() => {
                         $.ajax({
-                            url: collection
-                                ? debtPanel.data('client-search-url')
-                                : '/admin/transactions/cash/search',
+                            url: collection ?
+                                debtPanel.data('client-search-url') :
+                                '/admin/transactions/cash/search',
                             data: {
                                 type,
                                 keyword
@@ -433,8 +437,10 @@
                                 if (res.length > 0) {
                                     res.forEach(item => {
                                         const name = escapeHtml(item.name);
-                                        const phone = escapeHtml(item.phone || 'Không có SĐT');
-                                        const code = escapeHtml(item.code || '');
+                                        const phone = escapeHtml(item.phone ||
+                                            'Không có SĐT');
+                                        const code = escapeHtml(item.code ||
+                                            '');
                                         html += `<div class="p-2 border-bottom object-item" style="cursor: pointer;" data-id="${Number(item.id)}" data-phone="${phone}" data-name="${name}">
                                             <strong>${name}</strong> - ${phone}${code ? ` <span class="text-muted">(${code})</span>` : ''}
                                         </div>`;
@@ -505,7 +511,9 @@
 
                 setDebtStatus('Đang đối chiếu công nợ canonical...', 'info', false);
                 const previewUrl = debtPanel.data('preview-url').replace('__CLIENT__', clientId);
-                const data = { collection_date: collectionDate };
+                const data = {
+                    collection_date: collectionDate
+                };
                 const amount = rawAmount();
                 if (amount) data.amount = amount;
 
@@ -522,9 +530,9 @@
                         if (previewSequence !== collectionState.previewSequence ||
                             clientId !== $('#object_id').val()) return;
                         const reconciliationBlocked = Boolean(xhr.responseJSON?.errors?.reconciliation);
-                        const message = reconciliationBlocked
-                            ? 'Dữ liệu công nợ cần được đối chiếu trước khi thu.'
-                            : xhr.responseJSON?.blocked_reason || xhr.responseJSON?.message ||
+                        const message = reconciliationBlocked ?
+                            'Dữ liệu công nợ cần được đối chiếu trước khi thu.' :
+                            xhr.responseJSON?.blocked_reason || xhr.responseJSON?.message ||
                             Object.values(xhr.responseJSON?.errors || {}).flat()[0] ||
                             'Không thể đối chiếu công nợ khách hàng.';
                         setDebtStatus(message, 'danger', reconciliationBlocked);
@@ -566,11 +574,10 @@
                 const amount = rawAmount();
                 collectionState.canSubmit = Boolean(amount) && Number(amount) > 0;
                 $('#debt-status')
-                    .removeClass('alert-secondary alert-info alert-warning alert-danger')
-                    .addClass('alert-success')
-                    .text(amount
-                        ? 'Đã đối chiếu ledger. Phân bổ FIFO dự kiến được hiển thị bên dưới.'
-                        : 'Đã đối chiếu ledger. Nhập số tiền để xem phân bổ FIFO dự kiến.');
+                    .removeClass('alert alert-secondary alert-info alert-warning alert-danger alert-success')
+                    .text(amount ?
+                        'Đã đối chiếu ledger. Phân bổ FIFO dự kiến được hiển thị bên dưới.' :
+                        'Đã đối chiếu ledger. Nhập số tiền để xem phân bổ FIFO dự kiến.');
                 setSubmitState();
             }
 
@@ -591,11 +598,17 @@
                 if (isCollectionMode()) {
                     if (!collectionState.canSubmit || !$('#object_id').val() || !rawAmount() ||
                         (isBankCollection && !$('#collection-money-account').val())) {
-                        Toast.fire({ icon: 'error', title: 'Dữ liệu thu công nợ chưa hợp lệ hoặc chưa đối chiếu xong.' });
+                        Toast.fire({
+                            icon: 'error',
+                            title: 'Dữ liệu thu công nợ chưa hợp lệ hoặc chưa đối chiếu xong.'
+                        });
                         return;
                     }
                 } else if (!validateForm()) {
-                    Toast.fire({ icon: 'error', title: 'Vui lòng điền đầy đủ các trường bắt buộc!' });
+                    Toast.fire({
+                        icon: 'error',
+                        title: 'Vui lòng điền đầy đủ các trường bắt buộc!'
+                    });
                     return;
                 }
 
@@ -620,7 +633,10 @@
                     formData = new FormData(this);
                     let objId = $('#object_id').val();
                     if (!objId) {
-                        Toast.fire({ icon: 'error', title: 'Vui lòng chọn một đối tượng hợp lệ!' });
+                        Toast.fire({
+                            icon: 'error',
+                            title: 'Vui lòng chọn một đối tượng hợp lệ!'
+                        });
                         return;
                     }
                     formData.set('obj_id', objId);
@@ -796,6 +812,27 @@
             border-radius: 4px;
             padding: 8px 12px;
             font-size: 14px;
+        }
+
+        #object-type+.select2-container .select2-selection--single,
+        #account_id+.select2-container .select2-selection--single,
+        #type+.select2-container .select2-selection--single,
+        #collection-money-account+.select2-container .select2-selection--single {
+            height: 38px;
+        }
+
+        #object-type+.select2-container .select2-selection__rendered,
+        #account_id+.select2-container .select2-selection__rendered,
+        #type+.select2-container .select2-selection__rendered,
+        #collection-money-account+.select2-container .select2-selection__rendered {
+            line-height: 36px;
+        }
+
+        #object-type+.select2-container .select2-selection__arrow,
+        #account_id+.select2-container .select2-selection__arrow,
+        #type+.select2-container .select2-selection__arrow,
+        #collection-money-account+.select2-container .select2-selection__arrow {
+            height: 36px;
         }
 
         .form-control:focus,
