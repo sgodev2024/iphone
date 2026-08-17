@@ -26,6 +26,16 @@ class GenericCashVoucherController extends Controller
             'voucher' => [
                 'id' => $voucher->id,
                 'voucher_number' => $voucher->voucher_number,
+                'amount' => $voucher->amount,
+                'direction' => $voucher->direction,
+                'operation' => $voucher->operation,
+                'document_type' => $voucher->document_type,
+                'reference_number' => $voucher->reference_number,
+                'cash_account' => [
+                    'id' => $voucher->cashAccount?->id,
+                    'code' => $voucher->cashAccount?->code,
+                    'name' => $voucher->cashAccount?->name,
+                ],
                 'accounting_status' => $voucher->accounting_status,
                 'accounting_status_label' => 'Chờ hạch toán',
             ],

@@ -599,8 +599,10 @@ class CustomerDebtCollectionService
         }
 
         if (DecimalAmount::compare($amount, $collectibleTotal) > 0) {
+            $formattedCollectibleTotal = number_format($this->wholeAmount($collectibleTotal), 0, ',', '.');
+
             throw ValidationException::withMessages([
-                'amount' => 'Số tiền thu không được lớn hơn tổng công nợ order còn lại.',
+                'amount' => "Số tiền thu không được vượt quá tổng công nợ {$formattedCollectibleTotal} đ.",
             ]);
         }
     }

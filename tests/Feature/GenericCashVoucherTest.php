@@ -81,6 +81,9 @@ class GenericCashVoucherTest extends TestCase
         $this->assertStringContainsString('id="cash-generic-account-field"', $html);
         $this->assertStringContainsString("$('#cash-object-field').toggleClass('d-none', generic)", $html);
         $this->assertStringNotContainsString('name="counter_account_id"', $html);
+        $this->assertStringContainsString("title: 'Thu tiền thành công'", $html);
+        $this->assertStringContainsString('allowOutsideClick: true', $html);
+        $this->assertStringContainsString('res.success && isGenericReceiptMode()', $html);
     }
 
     public function test_generic_receipt_document_combinations_create_only_pending_vouchers(): void
@@ -108,6 +111,9 @@ class GenericCashVoucherTest extends TestCase
                 ])
                 ->assertCreated()
                 ->assertJsonPath('voucher.voucher_number', sprintf('PTTM-%06d', $index + 1))
+                ->assertJsonPath('voucher.amount', '500000.00')
+                ->assertJsonPath('voucher.cash_account.code', '111')
+                ->assertJsonPath('voucher.cash_account.name', 'Tiền mặt')
                 ->assertJsonPath('voucher.accounting_status', 'pending_accounting');
 
             $this->assertSame($beforeTransactions, Schema::getConnection()->table('transactions')->count());

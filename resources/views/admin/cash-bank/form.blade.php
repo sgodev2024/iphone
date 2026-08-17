@@ -92,7 +92,8 @@
                                         <label class="form-label">Tài khoản tiền mặt</label>
                                         <input type="text" class="form-control" readonly
                                             value="{{ $canonicalCashAccount ? "$canonicalCashAccount->code - $canonicalCashAccount->name" : 'Chưa cấu hình tài khoản 111 đang hoạt động' }}">
-                                        <div class="form-text">Tài khoản 111 do hệ thống xác định; phiếu thông thường chưa hạch toán đối ứng.</div>
+                                        {{-- <div class="form-text">Tài khoản 111 do hệ thống xác định; phiếu thông thường chưa
+                                            hạch toán đối ứng.</div> --}}
                                     </div>
                                 @endif
 
@@ -175,10 +176,10 @@
                                         data-store-url="{{ route('admin.debts.customer.collections.store') }}"
                                         data-payment-method="{{ $type === 'cash' ? 'cash' : 'bank_transfer' }}"
                                         data-account-ready="{{ $type === 'cash' ? ($canonicalCashAccount ? '1' : '0') : ($collectionMoneyAccounts->isNotEmpty() ? '1' : '0') }}">
-                                        <h6 class="mb-2">CÔNG NỢ KHÁCH HÀNG</h6>
+                                        {{-- <h6 class="mb-2">CÔNG NỢ KHÁCH HÀNG</h6>
                                         <div id="debt-status" class="mb-3">
                                             Chọn khách hàng để tải công nợ canonical từ ledger.
-                                        </div>
+                                        </div> --}}
                                         <div id="debt-content" class="d-none">
                                             <div class="d-flex justify-content-between align-items-center mb-2">
                                                 <strong>Tổng có thể thu tại ngày đã chọn</strong>
@@ -210,9 +211,9 @@
                                         data-company-search-url="{{ route('admin.transactions.cash.supplier-companies') }}"
                                         data-imports-url="{{ route('admin.transactions.cash.supplier-imports', ['companyId' => '__COMPANY__']) }}"
                                         data-store-url="{{ route('admin.transactions.cash.supplier-payment') }}">
-                                        <h6 class="mb-2">CÔNG NỢ NHÀ CUNG CẤP</h6>
+                                        {{-- <h6 class="mb-2">CÔNG NỢ NHÀ CUNG CẤP</h6>
                                         <div id="supplier-debt-status" class="mb-3">Chọn nhà cung cấp để tải công nợ
-                                            canonical.</div>
+                                            canonical.</div> --}}
                                         <div id="supplier-debt-content" class="d-none">
                                             <div class="d-flex justify-content-between align-items-center mb-2">
                                                 <strong>Tổng còn phải trả</strong>
@@ -290,6 +291,7 @@
                                     class="form-control usd-price-format"
                                     value="{{ $mainEntry ? ($mainEntry->debit_amount > 0 ? formatPrice($mainEntry->debit_amount) : formatPrice($mainEntry->credit_amount)) : '' }}"
                                     placeholder="0" required>
+                                <div id="collection-amount-error" class="invalid-feedback"></div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Ghi chú</label>
@@ -324,7 +326,7 @@
 
 @push('script')
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('assets/js/sweetalert2.js') }}"></script>
 
     <script>
         $(function() {
@@ -348,12 +350,16 @@
                 canSubmit: false,
                 submitting: false,
                 previewTimer: null,
-                previewSequence: 0
+                previewSequence: 0,
+                collectibleTotal: null
             };
             const supplierState = {
                 canSubmit: false,
                 submitting: false,
                 loadSequence: 0
+            };
+            const genericState = {
+                submitting: false
             };
 
             function isCollectionMode() {
@@ -370,6 +376,12 @@
                 return isUnifiedCash ?
                     !isCollectionMode() && !isSupplierPaymentMode() :
                     !isCollectionMode();
+            }
+
+            function isGenericReceiptMode() {
+                return isUnifiedCash &&
+                    $('#cash-transaction-type').val() === 'receipt' &&
+                    $('#cash-operation').val() === 'generic_receipt';
             }
 
             function uuid() {
@@ -390,6 +402,66 @@
                 return `${new Intl.NumberFormat('vi-VN').format(Number.parseInt(value || 0, 10) || 0)} ₫`;
             }
 
+            function setCollectionAmountError(message = '') {
+                const invalid = Boolean(message);
+                $('#amount').toggleClass('is-invalid', invalid);
+                $('#collection-amount-error').text(message);
+            }
+
+            function resetGenericReceiptForm() {
+                resetUnifiedContext();
+                collectionState.canSubmit = true;
+                setSubmitState();
+            }
+
+            function showGenericReceiptSuccess(voucher) {
+                const cashAccount = voucher.cash_account || {};
+                const html = `<div class="text-start">
+                    <p class="mb-1"><strong>Số phiếu:</strong> ${escapeHtml(voucher.voucher_number)}</p>
+                    <p class="mb-1"><strong>Phương thức:</strong> Tiền mặt</p>
+                    <p class="mb-1"><strong>Tài khoản:</strong> ${escapeHtml(`${cashAccount.code || ''} - ${cashAccount.name || ''}`)}</p>
+                    <p class="mb-1"><strong>Tổng thu:</strong> ${money(voucher.amount)}</p>
+                    <p class="mb-0"><strong>Trạng thái:</strong> ${escapeHtml(voucher.accounting_status_label || 'Chờ hạch toán')}</p>
+                </div>`;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thu tiền thành công',
+                    html,
+                    confirmButtonText: 'OK',
+                    allowOutsideClick: true
+                });
+            }
+
+            function validateCollectionAmount() {
+                if (!isCollectionMode()) {
+                    setCollectionAmountError();
+                    return true;
+                }
+
+                const amount = rawAmount();
+                if (!amount) {
+                    setCollectionAmountError();
+                    return false;
+                }
+
+                if (Number(amount) <= 0) {
+                    setCollectionAmountError('Số tiền thu phải lớn hơn 0.');
+                    return false;
+                }
+
+                if (collectionState.collectibleTotal !== null &&
+                    Number(amount) > Number.parseInt(collectionState.collectibleTotal, 10)) {
+                    setCollectionAmountError(
+                        `Số tiền thu không được vượt quá tổng công nợ ${money(collectionState.collectibleTotal)}.`
+                    );
+                    return false;
+                }
+
+                setCollectionAmountError();
+                return true;
+            }
+
             function escapeHtml(value) {
                 return $('<div>').text(value ?? '').html();
             }
@@ -398,21 +470,24 @@
                 const bankAccountMissing = isCollectionMode() && isBankCollection &&
                     !$('#collection-money-account').val();
                 const supplierImportMissing = isSupplierPaymentMode() && !$('#supplier-import-id').val();
-                const disabled = collectionState.submitting ||
+                const collectionAmountValid = !isCollectionMode() || validateCollectionAmount();
+                const disabled = genericState.submitting ||
+                    collectionState.submitting ||
                     supplierState.submitting ||
-                    (isCollectionMode() && (!collectionState.canSubmit || bankAccountMissing)) ||
+                    (isCollectionMode() && (!collectionState.canSubmit || !collectionAmountValid || bankAccountMissing)) ||
                     (isSupplierPaymentMode() && (!supplierState.canSubmit || supplierImportMissing));
                 $('#submit-button').prop('disabled', disabled);
             }
 
-            function setDebtStatus(message, style = 'secondary', disableAmount = true) {
+            function setDebtStatus(message, style = 'secondary', disableAmount = true, preserveContent = false) {
                 collectionState.canSubmit = false;
                 if (isCollectionMode()) $('#amount').prop('disabled', disableAmount);
+                setCollectionAmountError();
                 $('#debt-status')
                     .removeClass('alert-secondary alert-info alert-success alert-warning alert-danger')
                     // .addClass(`alert-${style}`)
                     .text(message);
-                $('#debt-content').addClass('d-none');
+                if (!preserveContent) $('#debt-content').addClass('d-none');
                 setSubmitState();
             }
 
@@ -426,12 +501,14 @@
             function resetUnifiedContext() {
                 collectionState.previewSequence++;
                 collectionState.canSubmit = false;
+                collectionState.collectibleTotal = null;
                 supplierState.loadSequence++;
                 supplierState.canSubmit = false;
                 $('#object_code').val('');
                 $('#object_id').val('');
                 $('#object-search-result').hide().empty();
                 $('#amount').val('').prop('disabled', false);
+                setCollectionAmountError();
                 $('[name="document_type"], [name="reference_number"], [name="description"]').val('');
                 $('#object-type').val('').trigger('change.select2');
                 $('#debt-items, #supplier-debt-items').empty();
@@ -596,7 +673,20 @@
                 if (e.originalEvent.inputType === "insertText" && e.originalEvent.data === ".") return;
                 formatPrice($(this));
 
-                if (isCollectionMode()) scheduleDebtPreview();
+                if (isCollectionMode()) {
+                    collectionState.previewSequence++;
+                    const amountValid = validateCollectionAmount();
+
+                    if (collectionState.collectibleTotal !== null && !amountValid) {
+                        collectionState.canSubmit = false;
+                        setSubmitState();
+                        return;
+                    }
+
+                    collectionState.canSubmit = false;
+                    setSubmitState();
+                    scheduleDebtPreview();
+                }
                 if (isSupplierPaymentMode()) updateSupplierSubmitState();
             });
 
@@ -688,7 +778,7 @@
                 $('#object_id').val(id).trigger('change'); // Đảm bảo giá trị được cập nhật
                 $('#object-search-result').hide();
 
-                if (isCollectionMode()) loadDebtPreview();
+                if (isCollectionMode()) loadDebtPreview({ resetCollectible: true });
                 if (isSupplierPaymentMode()) loadSupplierImports();
             });
 
@@ -710,8 +800,13 @@
                 collectionState.previewTimer = setTimeout(loadDebtPreview, 350);
             }
 
-            function loadDebtPreview() {
+            function loadDebtPreview({ resetCollectible = false } = {}) {
                 if (!isCollectionMode()) return;
+
+                if (resetCollectible) {
+                    collectionState.collectibleTotal = null;
+                    setCollectionAmountError();
+                }
 
                 const clientId = $('#object_id').val();
                 const collectionDate = $('[name="transaction_date"]').val();
@@ -727,13 +822,15 @@
                     return;
                 }
 
-                setDebtStatus('Đang đối chiếu công nợ canonical...', 'info', false);
+                setDebtStatus('Đang đối chiếu công nợ canonical...', 'info', false, true);
                 const previewUrl = debtPanel.data('preview-url').replace('__CLIENT__', clientId);
                 const data = {
                     collection_date: collectionDate
                 };
                 const amount = rawAmount();
-                if (amount) data.amount = amount;
+                if (amount && collectionState.collectibleTotal !== null && validateCollectionAmount()) {
+                    data.amount = amount;
+                }
 
                 $.ajax({
                     url: previewUrl,
@@ -748,6 +845,13 @@
                         if (previewSequence !== collectionState.previewSequence ||
                             clientId !== $('#object_id').val()) return;
                         const reconciliationBlocked = Boolean(xhr.responseJSON?.errors?.reconciliation);
+                        const amountError = xhr.responseJSON?.errors?.amount?.[0];
+                        if (amountError) {
+                            collectionState.canSubmit = false;
+                            setCollectionAmountError(amountError);
+                            setSubmitState();
+                            return;
+                        }
                         const message = reconciliationBlocked ?
                             'Dữ liệu công nợ cần được đối chiếu trước khi thu.' :
                             xhr.responseJSON?.blocked_reason || xhr.responseJSON?.message ||
@@ -759,6 +863,8 @@
             }
 
             function renderDebtPreview(data) {
+                collectionState.collectibleTotal = data.collectible_total ?? '0.00';
+
                 if (!data.can_collect) {
                     setDebtStatus(data.blocked_reason || 'Khách hàng không có công nợ có thể thu.', 'warning');
                     return;
@@ -790,7 +896,8 @@
                 $('#amount').prop('disabled', false);
 
                 const amount = rawAmount();
-                collectionState.canSubmit = Boolean(amount) && Number(amount) > 0;
+                const amountValid = validateCollectionAmount();
+                collectionState.canSubmit = Boolean(amount) && amountValid;
                 $('#debt-status')
                     .removeClass('alert alert-secondary alert-info alert-warning alert-danger alert-success')
                     .text(amount ?
@@ -850,7 +957,7 @@
                 $('#supplier-debt-total').text(money(total));
                 $('#supplier-debt-items').html(rows ||
                     '<tr><td colspan="5" class="text-center text-muted">Nhà cung cấp không còn phiếu nhập có công nợ.</td></tr>'
-                    );
+                );
                 $('#supplier-import-id').html('<option value="">Chọn phiếu nhập</option>' + options).trigger(
                     'change.select2');
                 $('#supplier-debt-content').removeClass('d-none');
@@ -860,7 +967,7 @@
             }
 
             $('[name="transaction_date"]').on('change', function() {
-                if (isCollectionMode()) loadDebtPreview();
+                if (isCollectionMode()) loadDebtPreview({ resetCollectible: true });
                 if (isSupplierPaymentMode()) loadSupplierImports();
             });
 
@@ -880,9 +987,15 @@
 
             $('#myForm').on('submit', function(e) {
                 e.preventDefault();
-                if (collectionState.submitting || supplierState.submitting) return;
+                if (genericState.submitting || collectionState.submitting || supplierState.submitting) return;
 
                 if (isCollectionMode()) {
+                    if (!validateCollectionAmount()) {
+                        collectionState.canSubmit = false;
+                        setSubmitState();
+                        return;
+                    }
+
                     if (!collectionState.canSubmit || !$('#object_id').val() || !rawAmount() ||
                         (isBankCollection && !$('#collection-money-account').val())) {
                         Toast.fire({
@@ -964,6 +1077,7 @@
 
                 collectionState.submitting = collection;
                 supplierState.submitting = supplierPayment;
+                genericState.submitting = isGenericMode();
                 setSubmitState();
 
                 $.ajax({
@@ -996,7 +1110,7 @@
                             $('#collection-idempotency-key').val(uuid());
                             if (fileInput) fileInput.value = '';
                             if (filePreviewArea) filePreviewArea.innerHTML = '';
-                            loadDebtPreview();
+                            loadDebtPreview({ resetCollectible: true });
                         } else if (supplierPayment) {
                             Swal.fire({
                                 icon: 'success',
@@ -1010,6 +1124,9 @@
                             $('#amount').val('');
                             $('#collection-idempotency-key').val(uuid());
                             loadSupplierImports();
+                        } else if (res.success && isGenericReceiptMode()) {
+                            resetGenericReceiptForm();
+                            showGenericReceiptSuccess(res.voucher || {});
                         } else if (res.success) {
                             window.location.href = res.redirect;
                         } else {
@@ -1033,6 +1150,7 @@
                         });
                     },
                     complete: () => {
+                        genericState.submitting = false;
                         collectionState.submitting = false;
                         supplierState.submitting = false;
                         setSubmitState();
