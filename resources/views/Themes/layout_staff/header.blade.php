@@ -115,6 +115,108 @@
             margin-bottom: 10px;
         }
     }
+
+    #header {
+    min-height: 58px;
+    position: relative;
+}
+
+.staff-header-logo {
+    width: 180px;
+    display: flex;
+    align-items: center;
+}
+
+.staff-header-logo img {
+    max-width: 120px;
+    max-height: 42px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+
+/* MENU NẰM CHÍNH GIỮA HEADER */
+.staff-header-menu {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+
+    transform: translate(-50%, -50%);
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+
+/* Chức năng */
+.staff-header-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 9px 15px;
+    border-radius: 7px;
+
+    color: #fff !important;
+    text-decoration: none;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    transition: background-color .2s ease;
+}
+
+.staff-header-link i {
+    color: #fff;
+    font-size: 14px;
+}
+
+.staff-header-link:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .12);
+}
+
+.staff-header-link.active {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .18);
+}
+
+
+/* Tài khoản bên phải */
+.staff-header-account {
+    width: 180px;
+
+    display: flex;
+    justify-content: flex-end;
+}
+
+.staff-account-btn {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    color: #fff !important;
+    text-decoration: none;
+
+    background: rgba(255, 255, 255, .12);
+}
+
+.staff-account-btn:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .22);
+}
+
+.staff-account-btn i {
+    color: #fff;
+}
+
 </style>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -179,57 +281,57 @@
     <div class="container-fluid">
         <div class="d-flex align-items-center justify-content-between">
 
-            {{-- Bên trái: Logo + chức năng --}}
-            <div class="d-flex align-items-center gap-3">
-
-                {{-- Logo --}}
+            {{-- ================= LOGO ================= --}}
+            <div class="staff-header-logo">
                 <a href="{{ route('staff.index') }}">
                     <img
                         src="{{ showImage(optional($config)->logo, 'images/aicrm1.png') }}"
                         alt="logo"
-                        style="max-width: 120px; height: auto; object-fit: contain;"
-                    />
+                    >
                 </a>
-
-                <a href="{{ route('staff.index') }}"
-                   class="text-white text-decoration-none"
-                >
-                   Bán hàng
-                </a>
-
-                {{-- Lịch sử mua hàng --}}
-                <a
-                    href="{{ route('staff.order') }}"
-                    class="text-white text-decoration-none"
-                >
-                    Đơn hàng
-                </a>
-
-                {{-- Kiểm kho --}}
-                <a
-                    href="{{ route('staff.Inventory.get') }}"
-                    class="text-white text-decoration-none"
-                >
-                    Kiểm kho
-                </a>
-
-                
-
             </div>
 
-            {{-- Bên phải: Tài khoản --}}
-            <div class="position-relative">
+
+            {{-- ================= CHỨC NĂNG ================= --}}
+            <nav class="staff-header-menu">
+
+                <a
+                    href="{{ route('staff.index') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span>Bán hàng</span>
+                </a>
+
+                <a
+                    href="{{ route('staff.order') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-receipt"></i>
+                    <span>Đơn hàng</span>
+                </a>
+
+                <a
+                    href="{{ route('staff.Inventory.get') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    <span>Kiểm kho</span>
+                </a>
+
+            </nav>
+
+
+            {{-- ================= TÀI KHOẢN ================= --}}
+            <div class="staff-header-account position-relative">
 
                 <a
                     href="#"
-                    class="home-icon"
+                    class="staff-account-btn"
                     id="homeIcon"
-                    style="font-size: 20px;"
+                    title="Tài khoản"
                 >
-                    <i
-                        style="color: white;"
-                        class="fas fa-user-tag"
-                    ></i>
+                    <i class="fa-solid fa-user"></i>
                 </a>
 
                 <div id="submenu" class="submenu">
@@ -245,11 +347,14 @@
                             </form>
 
                             <a
-                                style="padding: 0px"
-                                class="dropdown-item"
                                 href="#"
-                                onclick="event.preventDefault(); document.getElementById('logoutForm').submit();"
+                                class="dropdown-item"
+                                onclick="
+                                    event.preventDefault();
+                                    document.getElementById('logoutForm').submit();
+                                "
                             >
+                                <i class="fa-solid fa-right-from-bracket me-2"></i>
                                 Đăng xuất
                             </a>
                         </li>

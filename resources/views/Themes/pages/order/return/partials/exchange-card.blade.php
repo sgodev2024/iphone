@@ -99,7 +99,7 @@
                         type="button"
                         id="clearExchangeCartBtn"
                         class="btn btn-outline-danger btn-sm">
-                        Xóa danh sách
+                        Xóa 
                     </button>
                 </div>
 
