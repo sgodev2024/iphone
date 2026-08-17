@@ -26,6 +26,10 @@ class TransactionBusinessListService
                 $join->on('s.id', '=', 'te_contra.tableable_id')
                     ->where('te_contra.tableable_type', 'App\\Models\\Supplier');
             })
+            ->leftJoin('companies as company', function ($join): void {
+                $join->on('company.id', '=', 'te_contra.tableable_id')
+                    ->where('te_contra.tableable_type', 'App\\Models\\Company');
+            })
             ->join('users as u', 'u.id', '=', 't.created_by')
             ->leftJoin('customer_debt_collections as collection', 'collection.id', '=', 't.collection_id')
             ->leftJoin('clients as collection_client', 'collection_client.id', '=', 'collection.client_id')
@@ -43,11 +47,12 @@ class TransactionBusinessListService
             ->selectRaw('MAX(t.reference_number) as reference_number')
             ->selectRaw('MAX(t.description) as description')
             ->selectRaw('MAX(t.document_type) as document_type')
+            ->selectRaw('MAX(t.status) as status')
             ->selectRaw('COALESCE(MAX(collection.attachment), MAX(t.attachment)) as attachment')
             ->selectRaw('MAX(u.name) as creator_name')
             ->selectRaw('MAX(te.id) as entry_id')
-            ->selectRaw('COALESCE(MAX(collection_client.name), MAX(c.name), MAX(s.name)) as related_party')
-            ->selectRaw('COALESCE(MAX(collection_client.phone), MAX(c.phone), MAX(s.phone)) as related_party_phone')
+            ->selectRaw('COALESCE(MAX(collection_client.name), MAX(c.name), MAX(s.name), MAX(company.name)) as related_party')
+            ->selectRaw('COALESCE(MAX(collection_client.phone), MAX(c.phone), MAX(s.phone), MAX(company.phone)) as related_party_phone')
             ->selectRaw('MAX(te_contra.tableable_type) as related_party_type')
             ->selectRaw('MAX(te_contra.tableable_id) as related_party_id')
             ->selectRaw('MAX(ma.code) as account_code')
@@ -57,6 +62,7 @@ class TransactionBusinessListService
             ->selectRaw('SUM(te.debit_amount) as debit_amount')
             ->selectRaw('SUM(te.credit_amount) as credit_amount')
             ->orderByDesc('transaction_date')
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
     }

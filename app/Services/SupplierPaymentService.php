@@ -462,7 +462,7 @@ class SupplierPaymentService
         bool $replayed
     ): array {
         return [
-            'transaction' => $transaction->fresh('entries'),
+            'transaction' => $transaction->fresh(['entries.account']),
             'import_coupon' => $importCoupon,
             'summary' => $this->summaryResult($ledger),
             'replayed' => $replayed,

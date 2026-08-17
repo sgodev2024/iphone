@@ -13,8 +13,10 @@ use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
+use App\Services\SupplierPaymentService;
 use App\Services\TransactionBusinessListService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -52,17 +54,45 @@ class BankTransactionController extends Controller
             })
             ->pluck('id');
 
-        $entries = $businessList->entries($this->transactionOwnerIds(), $bankAccountIds, $from, $to);
+        $entries = $businessList
+            ->entries($this->transactionOwnerIds(), $bankAccountIds, $from, $to)
+            ->map(function (object $entry): object {
+                if (
+                    $entry->document_type === 'import_payment'
+                    && preg_match('/^IMP-(\d+)-PAY-/', (string) $entry->reference_number, $matches)
+                ) {
+                    $entry->supplier_import_id = (int) $matches[1];
+                }
+
+                return $entry;
+            });
+
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = 25;
+        $entries = new LengthAwarePaginator(
+            $entries->forPage($page, $perPage)->values(),
+            $entries->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $type = 'bank';
 
         return response()->json([
             'success' => true,
-            'html' => view('admin.cash-bank._table', compact('entries', 'type'))->render()
+            'html' => view('admin.cash-bank._table', compact('entries', 'type'))->render(),
+            'pagination' => view('admin.cash-bank._pagination', [
+                'activities' => $entries,
+            ])->render(),
         ]);
     }
 
-    public function save(Request $request, CustomerDebtCollectionService $collectionService)
+    public function save(
+        Request $request,
+        CustomerDebtCollectionService $collectionService,
+        SupplierPaymentService $supplierPaymentService
+    )
     {
         $type = 'bank';
         $transaction = null;
@@ -86,6 +116,12 @@ class BankTransactionController extends Controller
             $collectionMoneyAccounts = $collectionService->bankAccounts();
         } catch (ValidationException) {
             $collectionMoneyAccounts = collect();
+        }
+
+        try {
+            $supplierMoneyAccounts = $supplierPaymentService->bankAccounts();
+        } catch (ValidationException) {
+            $supplierMoneyAccounts = collect();
         }
 
         if (!empty($transactionId)) {
@@ -125,6 +161,7 @@ class BankTransactionController extends Controller
             'type',
             'moneyAccounts',
             'collectionMoneyAccounts',
+            'supplierMoneyAccounts',
             'transaction',
             'mainEntry',
             'contraEntry'
@@ -147,6 +184,8 @@ class BankTransactionController extends Controller
 
     public function store(Request $request)
     {
+        abort(410, 'Phiếu ngân hàng generic đã bị đóng. Vui lòng dùng nghiệp vụ canonical thu công nợ khách hàng hoặc trả công nợ nhà cung cấp.');
+
         if ($request->input('obj_type') === 'client') {
             abort(410, 'Ghi TK131 khách hàng qua phiếu ngân hàng generic đã bị đóng. Vui lòng dùng luồng thu công nợ khách hàng canonical.');
         }
@@ -363,6 +402,8 @@ class BankTransactionController extends Controller
 
     public function update(Request $request)
     {
+        abort(410, 'Sửa phiếu ngân hàng generic đã bị đóng.');
+
         $transactionId = $request->input('transaction_id');
 
         if ($transactionId) {

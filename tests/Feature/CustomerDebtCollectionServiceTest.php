@@ -513,8 +513,14 @@ class CustomerDebtCollectionServiceTest extends TestCase
             ->get(route('admin.transactions.bank.save'));
 
         $response->assertOk()
-            ->assertSee('Phiếu ngân hàng thông thường')
+            ->assertSee('Loại giao dịch')
+            ->assertSee('Nghiệp vụ')
             ->assertSee('value="customer_debt_collection"', false)
+            ->assertSee('Trả công nợ nhà cung cấp')
+            ->assertSee('id="supplier-bank-account"', false)
+            ->assertDontSee('id="entry-mode"', false)
+            ->assertDontSee('<option value="generic_receipt"', false)
+            ->assertDontSee('<option value="generic_payment"', false)
             ->assertSee('id="collection-money-account"', false)
             ->assertSee("value=\"{$this->bank->id}\"", false)
             ->assertSee("value=\"{$defaultBank->id}\"", false)
@@ -1168,6 +1174,13 @@ class CustomerDebtCollectionServiceTest extends TestCase
             $table->string('name');
             $table->string('phone')->nullable();
             $table->softDeletes();
+            $table->timestamps();
+        });
+        Schema::create('companies', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('name');
+            $table->string('phone')->nullable();
             $table->timestamps();
         });
         Schema::create('suppliers', function (Blueprint $table): void {

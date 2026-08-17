@@ -72,23 +72,25 @@
                 </div>
 
                 <!-- Data Table -->
+                <div class="bank-scroll-hint d-md-none">Vuốt ngang để xem đầy đủ giao dịch</div>
                 <div class="table-responsive bank-table-scroll">
                     <table class="table table-hover table-bordered mb-0 bank-transactions-table">
                         <thead>
                             <tr>
-                                <th class="cash-col-check" style="width: 40px;">
-                                    <input type="checkbox" id="checked-all" class="form-check-input">
-                                </th>
-                                <th class="cash-col-id">ID</th>
+                                <th class="cash-col-id text-center">ID</th>
                                 <th class="cash-col-date">Ngày</th>
-                                <th>Tài khoản</th>
-                                <th>Tài khoản đối ứng</th>
-                                <th>Đối tượng</th>
-                                <th>Thu</th>
-                                <th>Chi</th>
-                                <th>Người tạo</th>
-                                <th>File chứng từ</th>
-                                <th class="text-center" style="width: 5%">
+                                <th class="cash-col-account">Tài khoản</th>
+                                <th class="cash-col-operation">Nghiệp vụ</th>
+                                <th class="cash-col-contra">Tài khoản đối ứng</th>
+                                <th class="cash-col-party">Đối tượng</th>
+                                <th class="cash-col-document">Chứng từ</th>
+                                <th class="cash-col-description">Nội dung</th>
+                                <th class="cash-col-money text-end">Thu</th>
+                                <th class="cash-col-money text-end">Chi</th>
+                                <th class="cash-col-status">Trạng thái</th>
+                                <th class="cash-col-creator">Người tạo</th>
+                                <th class="cash-col-file">File chứng từ</th>
+                                <th class="cash-col-action text-center" style="width: 5%">
                                     <i class="fas fa-cog"></i>
                                 </th>
                             </tr>
@@ -98,6 +100,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="bank-pagination-area" class="bank-pagination-area"></div>
             </div>
         </div>
     </div>
@@ -375,14 +378,18 @@
             }
         });
 
-        function loadBankTransactions(filters = {}) {
+        function loadBankTransactions(filters = {}, page = 1) {
             $.ajax({
                 url: "/admin/transactions/bank/ajax/list",
                 type: "GET",
-                data: filters,
+                data: {
+                    ...filters,
+                    page,
+                },
                 success: function(res) {
                     if (res.success) {
                         $('.bank-transactions-table tbody').html(res.html);
+                        $('#bank-pagination-area').html(res.pagination || '');
                     }
                 },
                 error: function() {
@@ -415,6 +422,14 @@
 
             loadBankTransactions(filters);
         }
+
+        $(document).on('click', '#bank-pagination-area a', function(event) {
+            event.preventDefault();
+            const page = new URL(this.href).searchParams.get('page') || 1;
+            loadBankTransactions({
+                date_range: $('#dateFilter').val(),
+            }, page);
+        });
 
         $('#filterButton').on('click', function() {
             triggerFilter()
@@ -718,6 +733,172 @@
 
             .bank-transaction-page .bank-create-action {
                 margin-left: 0;
+            }
+        }
+
+        .bank-transaction-page {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .bank-transaction-page .bank-table-scroll {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .bank-transaction-page .bank-scroll-hint {
+            color: #6c757d;
+            font-size: 12px;
+            margin: 0 0 8px;
+        }
+
+        .bank-transaction-page .bank-transactions-table {
+            min-width: 1890px;
+            width: max-content;
+            table-layout: auto;
+        }
+
+        .bank-transaction-page .bank-transactions-table th,
+        .bank-transaction-page .bank-transactions-table td {
+            box-sizing: border-box;
+        }
+
+        .bank-transaction-page .cash-col-id {
+            min-width: 70px !important;
+            width: 70px !important;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-col-date {
+            min-width: 105px !important;
+            width: 105px !important;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-col-account {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: normal;
+        }
+
+        .bank-transaction-page .cash-col-operation {
+            min-width: 180px !important;
+            width: 180px !important;
+            white-space: normal;
+        }
+
+        .bank-transaction-page .cash-col-contra {
+            min-width: 165px !important;
+            width: 165px !important;
+            white-space: normal;
+        }
+
+        .bank-transaction-page .cash-col-party {
+            min-width: 170px !important;
+            width: 170px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .bank-transaction-page .cash-col-document {
+            min-width: 165px !important;
+            width: 165px !important;
+            white-space: normal;
+        }
+
+        .bank-transaction-page .cash-col-description {
+            min-width: 250px !important;
+            width: 250px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .bank-transaction-page .cash-col-money {
+            min-width: 120px !important;
+            width: 120px !important;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-col-status {
+            min-width: 120px !important;
+            width: 120px !important;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-col-creator {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .bank-transaction-page .cash-col-file {
+            min-width: 110px !important;
+            width: 110px !important;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-col-action {
+            min-width: 80px !important;
+            width: 80px !important;
+            white-space: nowrap;
+        }
+
+        .bank-transaction-page .cash-cell-clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            max-height: 2.7em;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .bank-transaction-page .bank-pagination-area {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 12px 4px 0;
+        }
+
+        .bank-transaction-page .bank-pagination-area nav {
+            margin: 0;
+        }
+
+        .bank-transaction-page .bank-pagination-area .pagination {
+            margin: 0;
+            gap: 4px;
+        }
+
+        .bank-transaction-page .bank-pagination-area .page-link {
+            min-width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: .375rem .65rem;
+            line-height: 1;
+        }
+
+        @media (max-width: 767.98px) {
+            .bank-transaction-page .bank-transactions-table th,
+            .bank-transaction-page .bank-transactions-table td {
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .bank-transaction-page .bank-transactions-table th {
+                text-align: center;
+                vertical-align: middle;
+                white-space: nowrap;
             }
         }
     </style>

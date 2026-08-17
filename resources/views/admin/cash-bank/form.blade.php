@@ -38,15 +38,27 @@
                     </div>
                 @elseif ($type === 'bank' && empty($transaction))
                     <input type="hidden" id="collection-idempotency-key" name="idempotency_key">
-                    <div class="border-bottom p-3 bg-light">
-                        <label class="form-label required" for="entry-mode">Loại phiếu</label>
-                        <select class="form-select" id="entry-mode" name="entry_mode" required>
-                            <option value="generic">Phiếu {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }} thông thường
-                            </option>
-                            @if (auth()->user()?->hasPermission('receipt.create'))
-                                <option value="customer_debt_collection">Thu công nợ khách hàng</option>
-                            @endif
-                        </select>
+                    <div class="border-bottom p-3 bg-light cash-unified-header">
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <label class="form-label required" for="cash-transaction-type">Loại giao dịch</label>
+                                <select class="form-select" id="cash-transaction-type" name="direction" required>
+                                    <option value="receipt">Thu tiền</option>
+                                    <option value="payment">Chi tiền</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-6">
+                                <label class="form-label required" for="cash-operation">Nghiệp vụ</label>
+                                <select class="form-select" id="cash-operation" name="operation" required>
+                                    @if (auth()->user()?->hasPermission('receipt.create'))
+                                        <option value="customer_debt_collection" data-transaction-type="receipt">Thu công nợ khách hàng</option>
+                                    @endif
+                                    @if (auth()->user()?->hasPermission('expense.create'))
+                                        <option value="supplier_debt_payment" data-transaction-type="payment">Trả công nợ nhà cung cấp</option>
+                                    @endif
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 @endif
 
@@ -206,11 +218,12 @@
                                     </div>
                                 @endif
 
-                                @if ($type === 'cash' && empty($transaction))
+                                @if (in_array($type, ['cash', 'bank'], true) && empty($transaction))
                                     <div class="col-12 d-none" id="supplier-debt-panel"
-                                        data-company-search-url="{{ route('admin.transactions.cash.supplier-companies') }}"
-                                        data-imports-url="{{ route('admin.transactions.cash.supplier-imports', ['companyId' => '__COMPANY__']) }}"
-                                        data-store-url="{{ route('admin.transactions.cash.supplier-payment') }}">
+                                        data-company-search-url="{{ route("admin.transactions.$type.supplier-companies") }}"
+                                        data-imports-url="{{ route("admin.transactions.$type.supplier-imports", ['companyId' => '__COMPANY__']) }}"
+                                        data-store-url="{{ route("admin.transactions.$type.supplier-payment") }}"
+                                        data-payment-method="{{ $type === 'cash' ? 'cash' : 'bank_transfer' }}">
                                         {{-- <h6 class="mb-2">CÔNG NỢ NHÀ CUNG CẤP</h6>
                                         <div id="supplier-debt-status" class="mb-3">Chọn nhà cung cấp để tải công nợ
                                             canonical.</div> --}}
@@ -242,6 +255,20 @@
                                                 <div class="form-text">Thanh toán theo từng phiếu nhập theo semantics hiện
                                                     tại của SupplierPaymentService.</div>
                                             </div>
+                                            @if ($type === 'bank')
+                                                <div class="mt-3">
+                                                    <label class="form-label required" for="supplier-bank-account">Tài khoản ngân hàng chi</label>
+                                                    <select class="form-select" id="supplier-bank-account">
+                                                        <option value="">Chọn tài khoản ngân hàng</option>
+                                                        @foreach ($supplierMoneyAccounts as $supplierMoneyAccount)
+                                                            <option value="{{ $supplierMoneyAccount->id }}">
+                                                                {{ $supplierMoneyAccount->code }} - {{ $supplierMoneyAccount->name }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                    <div class="form-text">Chỉ gồm tài khoản đang hoạt động trực tiếp dưới TK112.</div>
+                                                </div>
+                                            @endif
                                         </div>
                                     </div>
                                 @endif
@@ -342,6 +369,8 @@
                 }
             });
             const isUnifiedCash = @json($type === 'cash' && empty($transaction));
+            const isUnifiedBank = @json($type === 'bank' && empty($transaction));
+            const isBankForm = @json($type === 'bank');
             const debtPanel = $('#customer-debt-panel');
             const supplierPanel = $('#supplier-debt-panel');
             const collectionPaymentMethod = debtPanel.data('payment-method') || 'cash';
@@ -363,16 +392,18 @@
             };
 
             function isCollectionMode() {
-                return isUnifiedCash ?
+                return (isUnifiedCash || isUnifiedBank) ?
                     $('#cash-operation').val() === 'customer_debt_collection' :
                     $('#entry-mode').val() === 'customer_debt_collection';
             }
 
             function isSupplierPaymentMode() {
-                return isUnifiedCash && $('#cash-operation').val() === 'supplier_debt_payment';
+                return (isUnifiedCash || isUnifiedBank) && $('#cash-operation').val() === 'supplier_debt_payment';
             }
 
             function isGenericMode() {
+                if (isUnifiedBank) return false;
+
                 return isUnifiedCash ?
                     !isCollectionMode() && !isSupplierPaymentMode() :
                     !isCollectionMode();
@@ -470,12 +501,15 @@
                 const bankAccountMissing = isCollectionMode() && isBankCollection &&
                     !$('#collection-money-account').val();
                 const supplierImportMissing = isSupplierPaymentMode() && !$('#supplier-import-id').val();
+                const supplierBankAccountMissing = isSupplierPaymentMode() && isBankForm &&
+                    !$('#supplier-bank-account').val();
                 const collectionAmountValid = !isCollectionMode() || validateCollectionAmount();
                 const disabled = genericState.submitting ||
                     collectionState.submitting ||
                     supplierState.submitting ||
                     (isCollectionMode() && (!collectionState.canSubmit || !collectionAmountValid || bankAccountMissing)) ||
-                    (isSupplierPaymentMode() && (!supplierState.canSubmit || supplierImportMissing));
+                    (isSupplierPaymentMode() &&
+                        (!supplierState.canSubmit || supplierImportMissing || supplierBankAccountMissing));
                 $('#submit-button').prop('disabled', disabled);
             }
 
@@ -514,6 +548,7 @@
                 $('#debt-items, #supplier-debt-items').empty();
                 $('#debt-content, #supplier-debt-content').addClass('d-none');
                 $('#supplier-import-id').html('<option value="">Chọn phiếu nhập</option>');
+                $('#supplier-bank-account').val('').trigger('change.select2');
                 $('#collection-idempotency-key').val(uuid());
                 if (fileInput) fileInput.value = '';
                 if (filePreviewArea) filePreviewArea.innerHTML = '';
@@ -547,11 +582,12 @@
                 $operation.val(next).trigger('change.select2');
             }
 
-            function applyUnifiedCashMode() {
-                const operation = $('#cash-operation').val() || 'generic_receipt';
+            function applyUnifiedMode() {
+                const operation = $('#cash-operation').val() ||
+                    (isUnifiedBank ? 'customer_debt_collection' : 'generic_receipt');
                 const collection = operation === 'customer_debt_collection';
                 const supplierPayment = operation === 'supplier_debt_payment';
-                const generic = !collection && !supplierPayment;
+                const generic = isUnifiedCash && !collection && !supplierPayment;
                 const transactionType = $('#cash-transaction-type').val() || 'receipt';
 
                 resetUnifiedContext();
@@ -589,12 +625,14 @@
                     }
                 } else if (supplierPayment) {
                     $('#object-type').val('');
+                    $('#supplier-bank-account').prop('required', isBankForm);
                     if (!$('#object_id').val()) {
                         setSupplierStatus('Chọn nhà cung cấp để tải công nợ canonical.');
                     }
                 } else {
                     collectionState.canSubmit = true;
                     supplierState.canSubmit = false;
+                    $('#supplier-bank-account').prop('required', false);
                     $('#object-type, #object_id, #object_code').val('');
                     $('#amount').prop('disabled', false);
                 }
@@ -603,8 +641,8 @@
             }
 
             function applyMode() {
-                if (isUnifiedCash) {
-                    applyUnifiedCashMode();
+                if (isUnifiedCash || isUnifiedBank) {
+                    applyUnifiedMode();
                     return;
                 }
 
@@ -694,7 +732,7 @@
                 formatPrice($(this));
             });
 
-            $('#object-type, #account_id, #collection-money-account, #cash-transaction-type, #cash-operation, #supplier-import-id, select#type')
+            $('#object-type, #account_id, #collection-money-account, #cash-transaction-type, #cash-operation, #supplier-import-id, #supplier-bank-account, select#type')
                 .select2({
                     placeholder: function() {
                         return $(this).attr('placeholder') || "Chọn một tùy chọn";
@@ -976,6 +1014,7 @@
             });
 
             $('#supplier-import-id').on('change', updateSupplierSubmitState);
+            $('#supplier-bank-account').on('change', updateSupplierSubmitState);
             $('#cash-transaction-type').on('change', function() {
                 syncCashOperationOptions();
                 applyMode();
@@ -1006,7 +1045,7 @@
                     }
                 } else if (isSupplierPaymentMode()) {
                     if (!supplierState.canSubmit || !$('#object_id').val() || !$('#supplier-import-id')
-                        .val() || !rawAmount()) {
+                        .val() || !rawAmount() || (isBankForm && !$('#supplier-bank-account').val())) {
                         Toast.fire({
                             icon: 'error',
                             title: 'Dữ liệu trả công nợ nhà cung cấp chưa hợp lệ hoặc chưa đối chiếu xong.'
@@ -1043,7 +1082,10 @@
                     formData = new FormData();
                     formData.set('import_coupon_id', $('#supplier-import-id').val());
                     formData.set('amount', rawAmount());
-                    formData.set('payment_method', 'cash');
+                    formData.set('payment_method', isBankForm ? 'bank_transfer' : 'cash');
+                    if (isBankForm) {
+                        formData.set('bank_account_id', $('#supplier-bank-account').val());
+                    }
                     formData.set('transaction_date', $('[name="transaction_date"]').val());
                     formData.set('idempotency_key', $('#collection-idempotency-key').val());
                     requestUrl = supplierPanel.data('store-url');
@@ -1112,12 +1154,22 @@
                             if (filePreviewArea) filePreviewArea.innerHTML = '';
                             loadDebtPreview({ resetCollectible: true });
                         } else if (supplierPayment) {
+                            const supplierAccount = res.money_account?.code && res.money_account?.name
+                                ? `${res.money_account.code} - ${res.money_account.name}`
+                                : ($('#supplier-bank-account option:selected').text() || '—');
+                            const supplierStatus = res.transaction?.status === 'completed'
+                                ? 'Đã hạch toán'
+                                : (res.transaction?.status || '—');
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Trả công nợ NCC thành công',
+                                title: 'Trả công nợ thành công',
                                 html: `<div class="text-start">
                                     <p class="mb-1"><strong>Phiếu nhập:</strong> ${escapeHtml(res.import_coupon?.coupon_code || `#${res.import_coupon?.id || ''}`)}</p>
-                                    <p class="mb-1"><strong>Số tiền:</strong> ${money(res.summary?.paid_amount || rawAmount())}</p>
+                                    <p class="mb-1"><strong>Số tiền:</strong> ${money(res.amount || rawAmount())}</p>
+                                    <p class="mb-1"><strong>Phương thức:</strong> ${isBankForm ? 'Chuyển khoản' : 'Tiền mặt'}</p>
+                                    ${isBankForm ? `<p class="mb-1"><strong>Tài khoản:</strong> ${escapeHtml(supplierAccount)}</p>` : ''}
+                                    <p class="mb-1"><strong>Nhà cung cấp:</strong> ${escapeHtml($('#object_code').val() || '—')}</p>
+                                    <p class="mb-1"><strong>Trạng thái:</strong> ${escapeHtml(supplierStatus)}</p>
                                     <p><strong>Còn phải trả:</strong> ${money(res.summary?.remaining || res.import_coupon?.debt_amount || 0)}</p>
                                 </div>`
                             });
@@ -1213,7 +1265,7 @@
                 return isValid;
             }
 
-            if (isUnifiedCash) syncCashOperationOptions();
+            if (isUnifiedCash || isUnifiedBank) syncCashOperationOptions();
             applyMode();
         });
     </script>

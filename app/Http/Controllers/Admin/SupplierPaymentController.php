@@ -88,14 +88,42 @@ class SupplierPaymentController extends Controller
         StoreSupplierPaymentRequest $request,
         SupplierPaymentService $service
     ): JsonResponse {
+        return $this->storeFromUnifiedInstrument($request, $service);
+    }
+
+    public function storeFromBank(
+        StoreSupplierPaymentRequest $request,
+        SupplierPaymentService $service
+    ): JsonResponse {
+        return $this->storeFromUnifiedInstrument($request, $service);
+    }
+
+    private function storeFromUnifiedInstrument(
+        StoreSupplierPaymentRequest $request,
+        SupplierPaymentService $service
+    ): JsonResponse {
         $result = $service->pay($request->user(), $request->validated());
+        $transaction = $result['transaction'];
+        $moneyEntry = $transaction->entries
+            ->first(fn ($entry): bool => (string) $entry->credit_amount !== '0.00');
 
         return response()->json([
             'message' => $result['replayed']
                 ? 'Yêu cầu đã được xử lý trước đó.'
                 : 'Trả công nợ nhà cung cấp thành công.',
             'replayed' => $result['replayed'],
-            'transaction_id' => (int) $result['transaction']->id,
+            'transaction_id' => (int) $transaction->id,
+            'amount' => (int) $request->validated()['amount'],
+            'transaction' => [
+                'id' => (int) $transaction->id,
+                'status' => $transaction->status,
+                'reference_number' => $transaction->reference_number,
+            ],
+            'money_account' => [
+                'id' => (int) ($moneyEntry?->account?->id ?? 0),
+                'code' => $moneyEntry?->account?->code,
+                'name' => $moneyEntry?->account?->name,
+            ],
             'import_coupon' => [
                 'id' => (int) $result['import_coupon']->id,
                 'coupon_code' => $result['import_coupon']->coupon_code,

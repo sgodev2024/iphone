@@ -1120,6 +1120,18 @@ Route::middleware(['auth'])
                         ->middleware('permission:bank_transaction.create')
                         ->name('save');
 
+                    Route::get('supplier-companies', [SupplierPaymentController::class, 'companies'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-companies');
+
+                    Route::get('supplier-companies/{companyId}/imports', [SupplierPaymentController::class, 'imports'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-imports');
+
+                    Route::post('supplier-payment', [SupplierPaymentController::class, 'storeFromBank'])
+                        ->middleware('permission:expense.create')
+                        ->name('supplier-payment');
+
                     Route::post('store', 'store')
                         ->middleware('permission:bank_transaction.create')
                         ->name('store');

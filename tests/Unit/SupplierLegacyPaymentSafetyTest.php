@@ -22,12 +22,21 @@ class SupplierLegacyPaymentSafetyTest extends TestCase
         $this->assertLegacyRouteIsGone(CashTransactionController::class, 'store');
     }
 
-    public function test_bank_supplier_payment_route_is_gone_until_canonical_payment_service_exists(): void
+    public function test_legacy_bank_supplier_payment_route_remains_disabled_after_canonical_route_is_added(): void
     {
         $this->assertLegacyRouteIsGone(BankTransactionController::class, 'store');
     }
 
-    private function assertLegacyRouteIsGone(string $controllerClass, string $methodName): void
+    public function test_generic_bank_endpoint_returns_410_without_legacy_payload_fields(): void
+    {
+        $this->assertLegacyRouteIsGone(BankTransactionController::class, 'store', []);
+    }
+
+    private function assertLegacyRouteIsGone(
+        string $controllerClass,
+        string $methodName,
+        array $payload = ['obj_type' => 'supplier']
+    ): void
     {
         $reflection = new ReflectionClass($controllerClass);
         $controller = $reflection->newInstanceWithoutConstructor();
@@ -35,9 +44,7 @@ class SupplierLegacyPaymentSafetyTest extends TestCase
         $method->setAccessible(true);
 
         try {
-            $method->invoke($controller, Request::create('/legacy-supplier-payment', 'POST', [
-                'obj_type' => 'supplier',
-            ]));
+            $method->invoke($controller, Request::create('/legacy-supplier-payment', 'POST', $payload));
             $this->fail('The legacy supplier payment route must be disabled.');
         } catch (HttpException $exception) {
             $this->assertSame(410, $exception->getStatusCode());
