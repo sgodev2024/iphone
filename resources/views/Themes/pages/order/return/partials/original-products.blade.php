@@ -99,10 +99,9 @@
                                             class="btn  btn-sm return-add-btn"
                                             data-detail-id="{{ $item['order_detail_id'] }}">
                                             <i class=" fa-solid
-                                    fa-solid fa-trash me-1
-                                    me-1
-                                    text-danger"></i>
-                                           
+                                                    fa-solid fa-trash me-1
+                                                    me-1
+                                                    text-danger"></i>
                                         </button>
                                         @else
                                         <span class="badge bg-secondary">

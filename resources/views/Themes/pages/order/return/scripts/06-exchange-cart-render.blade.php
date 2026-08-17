@@ -117,6 +117,7 @@
             }
 
         </div>
+        
 
 
         <div class="exchange-cart-price">
@@ -207,6 +208,24 @@
             <i class="fa-solid fa-xmark"></i>
         </button>
     `;
+    const clearExchangeCartBtn = document.querySelector(
+    '#clearExchangeCartBtn'
+);
+
+clearExchangeCartBtn?.addEventListener(
+    'click',
+    function () {
+
+        if (exchangeCart.size === 0) {
+            return;
+        }
+
+        exchangeCart.clear();
+
+        renderExchangeCart();
+    }
+);
+
 
 
                 /*
