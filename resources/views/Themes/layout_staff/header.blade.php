@@ -115,6 +115,108 @@
             margin-bottom: 10px;
         }
     }
+
+    #header {
+    min-height: 58px;
+    position: relative;
+}
+
+.staff-header-logo {
+    width: 180px;
+    display: flex;
+    align-items: center;
+}
+
+.staff-header-logo img {
+    max-width: 120px;
+    max-height: 42px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+
+/* MENU NẰM CHÍNH GIỮA HEADER */
+.staff-header-menu {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+
+    transform: translate(-50%, -50%);
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+
+/* Chức năng */
+.staff-header-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 9px 15px;
+    border-radius: 7px;
+
+    color: #fff !important;
+    text-decoration: none;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    transition: background-color .2s ease;
+}
+
+.staff-header-link i {
+    color: #fff;
+    font-size: 14px;
+}
+
+.staff-header-link:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .12);
+}
+
+.staff-header-link.active {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .18);
+}
+
+
+/* Tài khoản bên phải */
+.staff-header-account {
+    width: 180px;
+
+    display: flex;
+    justify-content: flex-end;
+}
+
+.staff-account-btn {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    color: #fff !important;
+    text-decoration: none;
+
+    background: rgba(255, 255, 255, .12);
+}
+
+.staff-account-btn:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .22);
+}
+
+.staff-account-btn i {
+    color: #fff;
+}
+
 </style>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -175,40 +277,92 @@
 @endif
 
 <body style="overflow-x: hidden; ">
-    <header class="header bg-primary py-2" id="header">
-        <div class="container-fluid">
-            <div class="d-flex align-items-center justify-content-between">
-                <!-- Left side: Search bar -->
-                <div class="text-center">
-                    <a href="{{ route('staff.index') }}">
-                        <img src="{{ showImage(optional($config)->logo, 'images/aicrm1.png') }}" alt="logo"
-                            style="max-width: 120px; height: auto; object-fit: contain;" />
-                    </a>
-                </div>
-                <!-- Right side: Icons -->
-                <div class="">
-                    <a href="#" class="home-icon" id="homeIcon" style="font-size: 20px;">
-                        <i style="color: white;" class="fas fa-user-tag"></i>
-                    </a>
-                    <div id="submenu" class="submenu">
-                        <ul>
-                            <li><a href="{{ route('staff.Inventory.get') }}">Kiểm kho</a></li>
-                            <li><a style="padding: 0px" class="dropdown-item" href="{{ route('staff.order') }}">Lịch sử
-                                    mua hàng</a></li>
-                            <li>
-                                <form id="logoutForm" action="{{ route('admin.logout') }}" method="POST"
-                                    style="display: none;">
-                                    @csrf
-                                </form>
-                                <a style="padding: 0px" class="dropdown-item" href="#"
-                                    onclick="event.preventDefault(); document.getElementById('logoutForm').submit();">
-                                    Đăng xuất
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
+<header class="header bg-primary py-2" id="header">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center justify-content-between">
+
+            {{-- ================= LOGO ================= --}}
+            <div class="staff-header-logo">
+                <a href="{{ route('staff.index') }}">
+                    <img
+                        src="{{ showImage(optional($config)->logo, 'images/aicrm1.png') }}"
+                        alt="logo"
+                    >
+                </a>
+            </div>
+
+
+            {{-- ================= CHỨC NĂNG ================= --}}
+            <nav class="staff-header-menu">
+
+                <a
+                    href="{{ route('staff.index') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span>Bán hàng</span>
+                </a>
+
+                <a
+                    href="{{ route('staff.order') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-receipt"></i>
+                    <span>Đơn hàng</span>
+                </a>
+
+                <a
+                    href="{{ route('staff.Inventory.get') }}"
+                    class="staff-header-link"
+                >
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    <span>Kiểm kho</span>
+                </a>
+
+            </nav>
+
+
+            {{-- ================= TÀI KHOẢN ================= --}}
+            <div class="staff-header-account position-relative">
+
+                <a
+                    href="#"
+                    class="staff-account-btn"
+                    id="homeIcon"
+                    title="Tài khoản"
+                >
+                    <i class="fa-solid fa-user"></i>
+                </a>
+
+                <div id="submenu" class="submenu">
+                    <ul>
+                        <li>
+                            <form
+                                id="logoutForm"
+                                action="{{ route('admin.logout') }}"
+                                method="POST"
+                                style="display: none;"
+                            >
+                                @csrf
+                            </form>
+
+                            <a
+                                href="#"
+                                class="dropdown-item"
+                                onclick="
+                                    event.preventDefault();
+                                    document.getElementById('logoutForm').submit();
+                                "
+                            >
+                                <i class="fa-solid fa-right-from-bracket me-2"></i>
+                                Đăng xuất
+                            </a>
+                        </li>
+                    </ul>
                 </div>
 
             </div>
+
         </div>
-    </header>
+    </div>
+</header>

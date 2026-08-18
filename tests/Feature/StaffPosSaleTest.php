@@ -9,6 +9,7 @@ use App\Models\Config;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
 use App\Models\Order;
+use App\Models\OrderReturnDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
@@ -39,6 +40,315 @@ class StaffPosSaleTest extends TestCase
         ]);
 
         $this->createSchema();
+    }
+
+    public function test_order_return_safety_normal_cash_sale_creates_accounting_once(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['price' => 100000, 'price_buy' => 70000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($staff);
+        $order = $this->createServiceSale($staff, $product, $storage->id, 'cash');
+
+        $sale = Transaction::query()
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->where('type', 'sale')
+            ->sole();
+        $payment = Transaction::query()
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->where('type', 'income')
+            ->sole();
+
+        $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
+        $this->assertSame(1, Transaction::query()->where('type', 'income')->count());
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $sale->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 100000,
+            'credit_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $sale->id,
+            'account_id' => $accounts['revenue']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 100000,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['cashParent']->id,
+            'debit_amount' => 100000,
+            'credit_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 100000,
+        ]);
+    }
+
+    public function test_order_return_safety_normal_bank_sale_uses_selected_bank_account_once(): void
+    {
+        $accounts = $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['price' => 120000, 'price_buy' => 80000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($staff);
+        $order = $this->createServiceSale($staff, $product, $storage->id, 'bank');
+        $payment = Transaction::query()
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->where('type', 'credit_notice')
+            ->sole();
+
+        $this->assertSame(1, Transaction::query()->where('type', 'sale')->count());
+        $this->assertSame(1, Transaction::query()->where('type', 'credit_notice')->count());
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['bank']->id,
+            'debit_amount' => 120000,
+            'credit_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('transaction_entries', [
+            'transaction_id' => $payment->id,
+            'account_id' => $accounts['receivable']->id,
+            'debit_amount' => 0,
+            'credit_amount' => 120000,
+        ]);
+    }
+
+    public function test_order_return_exchange_does_not_create_duplicate_sale_or_payment_accounting(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $originalProduct = $this->createProduct(['price' => 100000, 'price_buy' => 70000]);
+        $replacementProduct = $this->createProduct(['price' => 150000, 'price_buy' => 90000]);
+        ProductStorage::create([
+            'product_id' => $originalProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+        ProductStorage::create([
+            'product_id' => $replacementProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($staff);
+        $originalOrder = $this->createServiceSale($staff, $originalProduct, $storage->id, 'cash');
+        $originalDetail = $originalOrder->orderDetails()->sole();
+        $transactionsBefore = Transaction::query()->count();
+        $entriesBefore = DB::table('transaction_entries')->count();
+
+        $saleService = \Mockery::mock(SaleService::class)->makePartial();
+        $saleService->shouldReceive('createPosOrder')
+            ->once()
+            ->withArgs(function (User $user, array $data, int $storageId, bool $createAccountingEntries): bool {
+                return $createAccountingEntries === false;
+            })
+            ->passthru();
+        $this->app->instance(SaleService::class, $saleService);
+
+        $orderReturn = app(\App\Services\OrderReturnService::class)->createReturn($staff, [
+            'original_order_id' => $originalOrder->id,
+            'return_items' => [[
+                'order_detail_id' => $originalDetail->id,
+                'quantity' => 1,
+            ]],
+            'new_items' => [[
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'unit_price' => 150000,
+            ]],
+        ]);
+
+        $exchangeOrder = Order::query()->findOrFail($orderReturn->exchange_order_id);
+        $this->assertSame('exchange', $exchangeOrder->payment_method);
+        $this->assertSame(0, Transaction::query()->count() - $transactionsBefore);
+        $this->assertSame(0, DB::table('transaction_entries')->count() - $entriesBefore);
+        $this->assertSame(0, Transaction::query()
+            ->where('reference_number', (string) $exchangeOrder->id)
+            ->count());
+    }
+
+    public function test_order_return_safety_imei_must_pass_storage_and_status_guards_and_can_be_resold_after_return(): void
+    {
+        $this->seedAccounts();
+        [$storage, $otherStorage, $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'price' => 200000,
+            'price_buy' => 120000,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $otherStorage->id,
+            'quantity' => 1,
+        ]);
+        $imei = $this->createImeiInStorage($product, $storage, 'IMEI-RETURN-001');
+
+        $this->actingAs($staff);
+        $this->assertValidationFailure(fn () => $this->createServiceSale(
+            $staff,
+            $product,
+            $otherStorage->id,
+            'cash',
+            $imei
+        ));
+
+        $originalOrder = $this->createServiceSale($staff, $product, $storage->id, 'cash', $imei);
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+        $this->assertValidationFailure(fn () => $this->createServiceSale(
+            $staff,
+            $product,
+            $storage->id,
+            'cash',
+            $imei
+        ));
+
+        $originalDetail = $originalOrder->orderDetails()->sole();
+        app(\App\Services\OrderReturnService::class)->createReturn($staff, [
+            'original_order_id' => $originalOrder->id,
+            'return_items' => [[
+                'order_detail_id' => $originalDetail->id,
+                'quantity' => 1,
+            ]],
+        ]);
+
+        $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
+        $this->assertSame($storage->id, (int) $imei->fresh()->storage_id);
+        $this->assertSame(1, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+
+        $resaleOrder = $this->createServiceSale($staff, $product, $storage->id, 'cash', $imei);
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+        $this->assertSame(2, Order::query()->count());
+        $this->assertSame(2, $product->orderDetails()->where('product_imei_id', $imei->id)->count());
+        $this->assertSame(0, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+        $this->assertNotSame($originalOrder->id, $resaleOrder->id);
+    }
+
+    public function test_order_return_safety_rejects_over_return_and_repeated_quantity_over_original(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct(['price' => 100000, 'price_buy' => 70000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 2,
+        ]);
+
+        $this->actingAs($staff);
+        $order = $this->createServiceSale($staff, $product, $storage->id, 'cash', null, 2);
+        $detail = $order->orderDetails()->sole();
+        $returnService = app(\App\Services\OrderReturnService::class);
+
+        $returnData = [
+            'original_order_id' => $order->id,
+            'return_items' => [[
+                'order_detail_id' => $detail->id,
+                'quantity' => 3,
+            ]],
+        ];
+        $this->assertValidationFailure(fn () => $returnService->createReturn($staff, $returnData));
+        $this->assertSame(0, OrderReturnDetail::query()->count());
+        $this->assertSame(0, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+
+        $returnData['return_items'][0]['quantity'] = 1;
+        $returnService->createReturn($staff, $returnData);
+        $this->assertSame(1, OrderReturnDetail::query()->count());
+        $this->assertSame(1, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+
+        $returnData['return_items'][0]['quantity'] = 2;
+        $this->assertValidationFailure(fn () => $returnService->createReturn($staff, $returnData));
+        $this->assertSame(1, OrderReturnDetail::query()->count());
+        $this->assertSame(1, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+    }
+
+    public function test_order_return_safety_rolls_back_stock_imei_and_orders_when_exchange_fails(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $originalProduct = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'price' => 200000,
+            'price_buy' => 120000,
+        ]);
+        $replacementProduct = $this->createProduct(['price' => 150000, 'price_buy' => 90000]);
+        ProductStorage::create([
+            'product_id' => $originalProduct->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+        $imei = $this->createImeiInStorage($originalProduct, $storage, 'IMEI-RETURN-ROLLBACK');
+
+        $this->actingAs($staff);
+        $originalOrder = $this->createServiceSale(
+            $staff,
+            $originalProduct,
+            $storage->id,
+            'cash',
+            $imei
+        );
+        $originalDetail = $originalOrder->orderDetails()->sole();
+        $transactionsBefore = Transaction::query()->count();
+
+        $this->assertValidationFailure(fn () => app(\App\Services\OrderReturnService::class)->createReturn($staff, [
+            'original_order_id' => $originalOrder->id,
+            'return_items' => [[
+                'order_detail_id' => $originalDetail->id,
+                'quantity' => 1,
+            ]],
+            'new_items' => [[
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+                'product_id' => $replacementProduct->id,
+                'quantity' => 1,
+                'unit_price' => 150000,
+            ]],
+        ]));
+
+        $this->assertSame(1, Order::query()->count());
+        $this->assertSame(0, \App\Models\OrderReturn::query()->count());
+        $this->assertSame(0, (int) ProductStorage::query()
+            ->where('product_id', $originalProduct->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+        $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
+        $this->assertSame($transactionsBefore, Transaction::query()->count());
     }
 
     public function test_staff_can_sell_from_assigned_storage(): void
@@ -2625,6 +2935,7 @@ class StaffPosSaleTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
@@ -2827,6 +3138,40 @@ class StaffPosSaleTest extends TestCase
             $table->timestamps();
             $table->unique(['owner_id', 'client_id']);
         });
+
+        Schema::create('order_returns', function (Blueprint $table) {
+            $table->id();
+            $table->string('code', 50)->unique();
+            $table->unsignedBigInteger('original_order_id');
+            $table->unsignedBigInteger('exchange_order_id')->nullable()->unique();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('client_id')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('return_amount')->default(0);
+            $table->unsignedBigInteger('exchange_amount')->default(0);
+            $table->unsignedBigInteger('fee_amount')->default(0);
+            $table->unsignedBigInteger('refund_amount')->default(0);
+            $table->unsignedBigInteger('additional_payment')->default(0);
+            $table->string('status', 20)->default('completed');
+            $table->string('note', 1000)->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('order_return_details', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('order_return_id');
+            $table->unsignedBigInteger('order_detail_id');
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('product_imei_id')->nullable();
+            $table->unsignedBigInteger('storage_id');
+            $table->unsignedInteger('quantity');
+            $table->unsignedBigInteger('original_unit_price');
+            $table->unsignedBigInteger('gross_amount');
+            $table->unsignedBigInteger('discount_amount')->default(0);
+            $table->unsignedBigInteger('return_amount');
+            $table->timestamps();
+        });
     }
 
     private function createStaffContext(): array
@@ -2919,6 +3264,7 @@ class StaffPosSaleTest extends TestCase
         $productImei = ProductImei::create(array_merge([
             'product_id' => $product->id,
             'import_detail_id' => $detail->id,
+            'storage_id' => $storage->id,
             'imei' => $imei,
             'status' => ProductImei::STATUS_IN_STOCK,
         ], $overrides));
@@ -2930,6 +3276,72 @@ class StaffPosSaleTest extends TestCase
         }
 
         return $productImei->fresh();
+    }
+
+    private function createServiceSale(
+        User $staff,
+        Product $product,
+        int $storageId,
+        string $payment = 'cash',
+        ?ProductImei $imei = null,
+        int $quantity = 1
+    ): Order {
+        $total = (int) $product->price * ($imei ? 1 : $quantity);
+        $item = $imei
+            ? [
+                'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
+                'product_id' => $product->id,
+                'product_imei_id' => $imei->id,
+                'quantity' => 1,
+                'unit_price' => (int) $product->price,
+            ]
+            : [
+                'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
+                'product_id' => $product->id,
+                'quantity' => $quantity,
+                'unit_price' => (int) $product->price,
+            ];
+
+        $data = [
+            'items' => [$item],
+            'subtotal' => $total,
+            'discountType' => 'amount',
+            'discountInput' => 0,
+            'grand' => $total,
+            'payment_method' => $payment === 'bank'
+                ? Order::PAYMENT_METHOD_BANK_TRANSFER
+                : Order::PAYMENT_METHOD_CASH,
+            'customer' => [
+                'id' => null,
+                'name' => 'Test Customer',
+                'email' => null,
+                'phone' => null,
+                'address' => null,
+                'payment' => $payment === 'bank'
+                    ? Order::PAYMENT_METHOD_BANK_TRANSFER
+                    : Order::PAYMENT_METHOD_CASH,
+                'note' => null,
+            ],
+        ];
+
+        if ($payment === 'bank') {
+            $data['paid_amount'] = $total;
+            $data['bank_account_id'] = Account::query()->where('code', '112BANK')->value('id');
+        } else {
+            $data['cash_tendered'] = $total;
+        }
+
+        return app(SaleService::class)->createPosOrder($staff, $data, $storageId);
+    }
+
+    private function assertValidationFailure(\Closure $callback): void
+    {
+        try {
+            $callback();
+            $this->fail('Expected a validation failure.');
+        } catch (ValidationException) {
+            $this->addToAssertionCount(1);
+        }
     }
 
     private function assertTransactionIsBalanced(Transaction $transaction): void

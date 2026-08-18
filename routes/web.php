@@ -52,6 +52,7 @@ use App\Http\Controllers\SuperAdmin\StoreController;
 use App\Http\Controllers\SuperAdmin\SuperAdminController;
 use App\Http\Middleware\CheckLoginSuperAdmin;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Staff\OrderReturnController;
 
 Route::post('/check-account', [SignUpController::class, 'checkAccount'])
     ->middleware('permission:signup.check_account')
@@ -1174,6 +1175,14 @@ Route::middleware('role:staff')->prefix('ban-hang')->name('staff.')->group(funct
     Route::get('order', [StaffOrderController::class, 'index'])->name('order');
     Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])->name('orderFetch');
     Route::get('product', [StaffProductController::class, 'product'])->name('product.get');
+    Route::post(
+        '/orders/{order}/returns',
+        [OrderReturnController::class, 'store']
+    )->name('orders.returns.store');
+    Route::get(
+        '/orders/{order}/returns/create',
+        [OrderReturnController::class, 'create']
+    )->name('orders.returns.create');
 
         Route::get('checkInventory', [StaffCheckController::class, 'index'])
             ->name('Inventory.get');

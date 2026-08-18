@@ -105,15 +105,15 @@ class BarcodeController extends Controller
             return $this->error('Thiết bị đã có trong giỏ.');
         }
 
-        if (
-            OrderDetail::query()
-                ->where('product_imei_id', $imei->id)
-                ->exists()
-        ) {
-            return $this->error(
-                'Thiết bị đang được gắn với đơn hàng khác.'
-            );
-        }
+        // if (
+        //     OrderDetail::query()
+        //         ->where('product_imei_id', $imei->id)
+        //         ->exists()
+        // ) {
+        //     return $this->error(
+        //         'Thiết bị đang được gắn với đơn hàng khác.'
+        //     );
+        // }
 
         $stock = ProductStorage::query()
             ->where('storage_id', $storageId)
@@ -200,6 +200,13 @@ class BarcodeController extends Controller
 
     private function resolveImeiStorageId(ProductImei $imei): ?int
     {
+        // $storageId = $imei->importDetail?->import?->storage_id;
+
+        // return $storageId ? (int) $storageId : null;
+        if ($imei->storage_id) {
+            return (int) $imei->storage_id;
+        }
+
         $storageId = $imei->importDetail?->import?->storage_id;
 
         return $storageId ? (int) $storageId : null;

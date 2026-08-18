@@ -18,9 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 class SaleService
 {
-    public function createPosOrder(User $user, array $data, int $storageId): Order
+    public function createPosOrder(User $user, array $data, int $storageId, bool $createAccountingEntries = true): Order
     {
-        return DB::transaction(function () use ($user, $data, $storageId) {
+        return DB::transaction(function () use ($user, $data, $storageId,  $createAccountingEntries) {
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = (string) ($data['payment_method']
                 ?? data_get($data, 'customer.payment', Order::PAYMENT_METHOD_CASH));
@@ -95,13 +95,13 @@ class SaleService
                 ->get()
                 ->keyBy('product_id');
 
-            $existingImeiOrderDetails = $imeiIds->isEmpty()
-                ? collect()
-                : OrderDetail::query()
-                    ->whereIn('product_imei_id', $imeiIds->all())
-                    ->pluck('product_imei_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->flip();
+            // $existingImeiOrderDetails = $imeiIds->isEmpty()
+            //     ? collect()
+            //     : OrderDetail::query()
+            //         ->whereIn('product_imei_id', $imeiIds->all())
+            //         ->pluck('product_imei_id')
+            //         ->map(fn ($id) => (int) $id)
+            //         ->flip();
 
             $orderItems = collect();
             $requiredByProduct = collect();
@@ -113,8 +113,8 @@ class SaleService
                         $item,
                         $imeis,
                         $products,
-                        $storageId,
-                        $existingImeiOrderDetails
+                        $storageId
+                        // $existingImeiOrderDetails
                     )
                     : $this->prepareQuantityOrderItem($item, $products);
 
@@ -264,7 +264,9 @@ class SaleService
                 $this->syncProductTotalQuantity((int) $productId);
             }
 
-            $this->createAccountingEntries($order, $user, $ownerId, $bankAccountId);
+            if ($createAccountingEntries) {
+                $this->createAccountingEntries($order, $user, $ownerId, $bankAccountId);
+            }
 
             return $order;
         }, 3);
@@ -386,7 +388,7 @@ class SaleService
         Collection $imeis,
         Collection $products,
         int $storageId,
-        Collection $existingImeiOrderDetails
+        // Collection $existingImeiOrderDetails
     ): array {
         $imei = $imeis->get((int) $item['product_imei_id']);
         $product = $imei?->product;
@@ -429,11 +431,11 @@ class SaleService
             ]);
         }
 
-        if ($existingImeiOrderDetails->has((int) $imei->id)) {
-            throw ValidationException::withMessages([
-                'items' => 'Thiết bị đang được gắn với đơn hàng khác.',
-            ]);
-        }
+        // if ($existingImeiOrderDetails->has((int) $imei->id)) {
+        //     throw ValidationException::withMessages([
+        //         'items' => 'Thiết bị đang được gắn với đơn hàng khác.',
+        //     ]);
+        // }
 
         $price = (float) $item['unit_price'];
 
@@ -506,6 +508,14 @@ class SaleService
 
     private function resolveImeiStorageId(ProductImei $imei): ?int
     {
+        // $storageId = $imei->importDetail?->import?->storage_id;
+
+        // return $storageId ? (int) $storageId : null;
+
+        if ($imei->storage_id) {
+            return (int) $imei->storage_id;
+        }
+
         $storageId = $imei->importDetail?->import?->storage_id;
 
         return $storageId ? (int) $storageId : null;
