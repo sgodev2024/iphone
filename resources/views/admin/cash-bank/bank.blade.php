@@ -188,10 +188,12 @@
             $('#dateFilter').on('apply.daterangepicker', function(ev, picker) {
                 $(this).val(picker.startDate.format('DD/MM/YYYY') + ' - ' + picker.endDate.format(
                     'DD/MM/YYYY'));
+                loadBankTransactions();
             });
 
             $('#dateFilter').on('cancel.daterangepicker', function(ev, picker) {
                 $(this).val('');
+                loadBankTransactions();
             });
 
             // Khi click vào checkbox "checked-all"

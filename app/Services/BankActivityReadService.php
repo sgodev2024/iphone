@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Data\BankActivityItem;
 use App\Models\BankVoucher;
 use App\Models\User;
+use App\Support\DecimalAmount;
 use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -18,6 +19,7 @@ class BankActivityReadService
     /**
      * @param  array<int, int>  $transactionOwnerIds
      * @param  Collection<int, int>  $bankAccountIds
+     * @return array{paginator: LengthAwarePaginator, totals: array<string, string>}
      */
     public function read(
         User $actor,
@@ -27,7 +29,7 @@ class BankActivityReadService
         string $to,
         int $page = 1,
         int $perPage = 25
-    ): LengthAwarePaginator {
+    ): array {
         $posted = $this->transactionList
             ->entries($transactionOwnerIds, $bankAccountIds, $from, $to)
             ->map(fn (object $entry): BankActivityItem => $this->postedItem($entry));
@@ -37,6 +39,21 @@ class BankActivityReadService
             ->where('owner_id', (int) $actor->ownerId())
             ->whereDate('transaction_date', '>=', $from)
             ->whereDate('transaction_date', '<=', $to)
+            ->whereIn('bank_account_id', $bankAccountIds)
+            ->where('accounting_status', BankVoucher::STATUS_PENDING_ACCOUNTING)
+            ->where(function ($query): void {
+                $query
+                    ->where(function ($query): void {
+                        $query
+                            ->where('operation', BankVoucher::OPERATION_GENERIC_RECEIPT)
+                            ->where('direction', BankVoucher::DIRECTION_RECEIPT);
+                    })
+                    ->orWhere(function ($query): void {
+                        $query
+                            ->where('operation', BankVoucher::OPERATION_GENERIC_PAYMENT)
+                            ->where('direction', BankVoucher::DIRECTION_PAYMENT);
+                    });
+            })
             ->get()
             ->map(fn (BankVoucher $voucher): BankActivityItem => $this->pendingItem($voucher));
 
@@ -61,13 +78,21 @@ class BankActivityReadService
             })
             ->values();
 
-        return new LengthAwarePaginator(
-            $activities->forPage($page, $perPage)->values(),
-            $activities->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
+        return [
+            'paginator' => new LengthAwarePaginator(
+                $activities->forPage($page, $perPage)->values(),
+                $activities->count(),
+                $perPage,
+                $page,
+                ['path' => request()->url(), 'query' => request()->query()]
+            ),
+            'totals' => [
+                'posted_receipt' => $this->sum($posted, 'receiptAmount'),
+                'posted_payment' => $this->sum($posted, 'paymentAmount'),
+                'pending_receipt' => $this->sum($pending, 'receiptAmount'),
+                'pending_payment' => $this->sum($pending, 'paymentAmount'),
+            ],
+        ];
     }
 
     private function postedItem(object $entry): BankActivityItem
@@ -117,6 +142,8 @@ class BankActivityReadService
 
     private function pendingItem(BankVoucher $voucher): BankActivityItem
     {
+        $isReceipt = $voucher->operation === BankVoucher::OPERATION_GENERIC_RECEIPT;
+
         return new BankActivityItem(
             sourceType: 'bank_voucher',
             sourceId: (int) $voucher->id,
@@ -124,7 +151,7 @@ class BankActivityReadService
             date: substr((string) $voucher->getRawOriginal('transaction_date'), 0, 10),
             createdAt: CarbonImmutable::parse((string) $voucher->created_at),
             bankAccountLabel: "{$voucher->bankAccount->code} - {$voucher->bankAccount->name}",
-            operationLabel: $voucher->direction === BankVoucher::DIRECTION_RECEIPT
+            operationLabel: $isReceipt
                 ? 'Thu tiền thông thường'
                 : 'Chi tiền thông thường',
             counterAccountLabel: 'Chưa hạch toán',
@@ -132,8 +159,8 @@ class BankActivityReadService
             documentType: $voucher->document_type,
             referenceNumber: $voucher->reference_number,
             description: $voucher->description,
-            receiptAmount: $voucher->direction === BankVoucher::DIRECTION_RECEIPT ? $voucher->amount : '0.00',
-            paymentAmount: $voucher->direction === BankVoucher::DIRECTION_PAYMENT ? $voucher->amount : '0.00',
+            receiptAmount: $isReceipt ? $voucher->amount : '0.00',
+            paymentAmount: $isReceipt ? '0.00' : $voucher->amount,
             accountingStatus: BankVoucher::STATUS_PENDING_ACCOUNTING,
             accountingStatusLabel: 'Chờ hạch toán',
             creatorName: $voucher->creator?->name,
@@ -141,6 +168,15 @@ class BankActivityReadService
                 ? route('admin.transactions.bank.vouchers.attachment', $voucher)
                 : null,
             detailUrl: route('admin.transactions.bank.vouchers.show', $voucher),
+        );
+    }
+
+    /** @param Collection<int, BankActivityItem> $items */
+    private function sum(Collection $items, string $property): string
+    {
+        return $items->reduce(
+            fn (string $total, BankActivityItem $item): string => DecimalAmount::add($total, $item->{$property}),
+            '0.00'
         );
     }
 

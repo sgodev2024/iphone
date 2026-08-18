@@ -53,7 +53,7 @@ class BankTransactionController extends Controller
             })
             ->pluck('id');
 
-        $activities = $activityRead->read(
+        $result = $activityRead->read(
             $request->user(),
             $this->transactionOwnerIds(),
             $bankAccountIds,
@@ -62,11 +62,13 @@ class BankTransactionController extends Controller
             max(1, (int) $request->query('page', 1))
         );
 
+        $activities = $result['paginator'];
+        $totals = $result['totals'];
         $type = 'bank';
 
         return response()->json([
             'success' => true,
-            'html' => view('admin.cash-bank._table', compact('activities', 'type'))->render(),
+            'html' => view('admin.cash-bank._table', compact('activities', 'totals', 'type'))->render(),
             'pagination' => view('admin.cash-bank._pagination', compact('activities'))->render(),
         ]);
     }

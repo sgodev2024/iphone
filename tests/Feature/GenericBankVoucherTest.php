@@ -288,13 +288,19 @@ class GenericBankVoucherTest extends TestCase
             'SUPPLIER POSTED'
         );
 
-        $activities = app(BankActivityReadService::class)->read(
+        $result = app(BankActivityReadService::class)->read(
             $this->owner,
             [$this->owner->id],
             collect([$this->bank->id]),
             '2026-08-18',
             '2026-08-18'
         );
+        $activities = $result['paginator'];
+
+        $this->assertSame('123000.00', $result['totals']['posted_receipt']);
+        $this->assertSame('123000.00', $result['totals']['posted_payment']);
+        $this->assertSame('123000.00', $result['totals']['pending_receipt']);
+        $this->assertSame('123000.00', $result['totals']['pending_payment']);
 
         $this->assertSame([
             'SUPPLIER POSTED',
@@ -328,6 +334,8 @@ class GenericBankVoucherTest extends TestCase
         $this->assertStringContainsString('Trả công nợ nhà cung cấp', $html);
         $this->assertStringContainsString('Chờ hạch toán', $html);
         $this->assertStringContainsString('Đã hạch toán', $html);
+        $this->assertStringContainsString('Chờ hạch toán (không thuộc ledger)', $html);
+        $this->assertStringContainsString('123.000', $html);
         $this->assertStringNotContainsString($receipt->voucher_number, $html);
     }
 
@@ -349,8 +357,9 @@ class GenericBankVoucherTest extends TestCase
         }
 
         $keys = collect();
+        $summary = null;
         foreach ([1, 2, 3] as $page) {
-            $paginator = app(BankActivityReadService::class)->read(
+            $result = app(BankActivityReadService::class)->read(
                 $this->owner,
                 [$this->owner->id],
                 collect([$this->bank->id]),
@@ -359,6 +368,9 @@ class GenericBankVoucherTest extends TestCase
                 $page,
                 10
             );
+            $paginator = $result['paginator'];
+            $summary ??= $result['totals'];
+            $this->assertSame($summary, $result['totals']);
             $this->assertSame(26, $paginator->total());
             $keys = $keys->concat($paginator->getCollection()->map(
                 fn ($item): string => $item->sourceType.':'.$item->sourceId
@@ -375,14 +387,133 @@ class GenericBankVoucherTest extends TestCase
             '2026-08-18',
             1,
             10
-        )->first()->description);
+        )['paginator']->first()->description);
     }
 
-    private function createPendingVoucher(string $direction, string $createdAt, string $description): BankVoucher
+    public function test_bank_summary_separates_directions_and_applies_date_filter(): void
     {
+        $this->createPostedBankActivity(
+            'posted_transaction',
+            '2026-08-18 10:00:00',
+            'POSTED RECEIPT',
+            '2026-08-18',
+            '100000.00'
+        );
+        $this->createPostedBankActivity(
+            'supplier_payment',
+            '2026-08-18 11:00:00',
+            'POSTED PAYMENT',
+            '2026-08-18',
+            '300000.00'
+        );
+        $this->createPendingVoucher(
+            BankVoucher::DIRECTION_RECEIPT,
+            '2026-08-18 12:00:00',
+            'PENDING RECEIPT',
+            '2026-08-18',
+            '200000.00'
+        );
+        $this->createPendingVoucher(
+            BankVoucher::DIRECTION_PAYMENT,
+            '2026-08-19 12:00:00',
+            'PENDING PAYMENT OUTSIDE FILTER',
+            '2026-08-19',
+            '400000.00'
+        );
+
+        $result = app(BankActivityReadService::class)->read(
+            $this->owner,
+            [$this->owner->id],
+            collect([$this->bank->id]),
+            '2026-08-18',
+            '2026-08-18'
+        );
+
+        $this->assertSame([
+            'posted_receipt' => '100000.00',
+            'posted_payment' => '300000.00',
+            'pending_receipt' => '200000.00',
+            'pending_payment' => '0.00',
+        ], $result['totals']);
+        $this->assertSame(3, $result['paginator']->total());
+        $this->assertStringNotContainsString(
+            'PENDING PAYMENT OUTSIDE FILTER',
+            $result['paginator']->getCollection()->pluck('description')->implode('|')
+        );
+    }
+
+    public function test_bank_summary_is_owner_scoped_and_customer_collection_is_grouped_once(): void
+    {
+        $customer = $this->createPostedBankActivity(
+            'customer_collection',
+            '2026-08-18 10:00:00',
+            'CUSTOMER COLLECTION',
+            '2026-08-18',
+            '100000.00'
+        );
+        $clientId = DB::table('customer_debt_collections')
+            ->where('id', $customer['collection_id'])
+            ->value('client_id');
+        $child = Transaction::create([
+            'user_id' => $this->owner->id,
+            'transaction_date' => '2026-08-18',
+            'description' => 'CUSTOMER COLLECTION CHILD',
+            'reference_number' => 'ORDER-CHILD',
+            'type' => 'credit_notice',
+            'document_type' => 'order',
+            'created_by' => $this->owner->id,
+            'status' => Transaction::STATUS_COMPLETED,
+            'collection_id' => $customer['collection_id'],
+        ]);
+        $child->entries()->create([
+            'account_id' => $this->bank->id,
+            'debit_amount' => '50000.00',
+            'credit_amount' => '0.00',
+        ]);
+        $child->entries()->create([
+            'account_id' => Account::where('code', '131')->value('id'),
+            'debit_amount' => '0.00',
+            'credit_amount' => '50000.00',
+            'tableable_type' => 'App\\Models\\Client',
+            'tableable_id' => $clientId,
+        ]);
+        $this->createPendingVoucher(
+            BankVoucher::DIRECTION_RECEIPT,
+            '2026-08-18 12:00:00',
+            'OTHER OWNER PENDING',
+            '2026-08-18',
+            '900000.00',
+            $this->otherOwner
+        );
+
+        $result = app(BankActivityReadService::class)->read(
+            $this->owner,
+            [$this->owner->id],
+            collect([$this->bank->id]),
+            '2026-08-18',
+            '2026-08-18'
+        );
+
+        $this->assertSame('150000.00', $result['totals']['posted_receipt']);
+        $this->assertSame('0.00', $result['totals']['pending_receipt']);
+        $this->assertCount(
+            1,
+            $result['paginator']->getCollection()->where('sourceType', 'customer_collection')
+        );
+    }
+
+    private function createPendingVoucher(
+        string $direction,
+        string $createdAt,
+        string $description,
+        string $transactionDate = '2026-08-18',
+        string $amount = '123000.00',
+        ?User $owner = null
+    ): BankVoucher {
+        $owner ??= $this->owner;
         $receipt = $direction === BankVoucher::DIRECTION_RECEIPT;
         $voucher = BankVoucher::create([
-            'owner_id' => $this->owner->id,
+            'owner_id' => $owner->id,
             'voucher_number' => ($receipt ? 'PTNH-' : 'PCNH-').str_pad(
                 (string) (BankVoucher::where('direction', $direction)->count() + 1),
                 6,
@@ -393,12 +524,12 @@ class GenericBankVoucherTest extends TestCase
             'operation' => $receipt
                 ? BankVoucher::OPERATION_GENERIC_RECEIPT
                 : BankVoucher::OPERATION_GENERIC_PAYMENT,
-            'transaction_date' => '2026-08-18',
+            'transaction_date' => $transactionDate,
             'bank_account_id' => $this->bank->id,
-            'amount' => '123000.00',
+            'amount' => $amount,
             'description' => $description,
             'accounting_status' => BankVoucher::STATUS_PENDING_ACCOUNTING,
-            'created_by' => $this->owner->id,
+            'created_by' => $owner->id,
         ]);
         $voucher->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->saveQuietly();
 
@@ -406,8 +537,16 @@ class GenericBankVoucherTest extends TestCase
     }
 
     /** @return array{transaction: Transaction, collection_id: int|null} */
-    private function createPostedBankActivity(string $kind, string $createdAt, string $description): array
+    private function createPostedBankActivity(
+        string $kind,
+        string $createdAt,
+        string $description,
+        string $transactionDate = '2026-08-18',
+        string $amount = '123000.00',
+        ?User $owner = null
+    ): array
     {
+        $owner ??= $this->owner;
         $collectionId = null;
         $documentType = null;
         $referenceNumber = 'BANK-'.str_replace(' ', '-', $description);
@@ -417,7 +556,7 @@ class GenericBankVoucherTest extends TestCase
 
         if ($kind === 'customer_collection') {
             $clientId = DB::table('clients')->insertGetId([
-                'user_id' => $this->owner->id,
+                'user_id' => $owner->id,
                 'name' => 'Customer A',
                 'phone' => '0901',
                 'created_at' => $createdAt,
@@ -433,7 +572,7 @@ class GenericBankVoucherTest extends TestCase
             $partyId = $clientId;
         } elseif ($kind === 'supplier_payment') {
             $company = Company::create([
-                'user_id' => $this->owner->id,
+                'user_id' => $owner->id,
                 'name' => 'Company A',
                 'phone' => '0902',
             ]);
@@ -446,26 +585,26 @@ class GenericBankVoucherTest extends TestCase
 
         $payment = $kind === 'supplier_payment';
         $transaction = Transaction::create([
-            'user_id' => $this->owner->id,
-            'transaction_date' => '2026-08-18',
+            'user_id' => $owner->id,
+            'transaction_date' => $transactionDate,
             'description' => $description,
             'reference_number' => $referenceNumber,
             'type' => $payment ? 'expense' : 'income',
             'document_type' => $documentType,
-            'created_by' => $this->owner->id,
+            'created_by' => $owner->id,
             'status' => Transaction::STATUS_COMPLETED,
             'collection_id' => $collectionId,
         ]);
         $transaction->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->saveQuietly();
         $transaction->entries()->create([
             'account_id' => $this->bank->id,
-            'debit_amount' => $payment ? '0.00' : '123000.00',
-            'credit_amount' => $payment ? '123000.00' : '0.00',
+            'debit_amount' => $payment ? '0.00' : $amount,
+            'credit_amount' => $payment ? $amount : '0.00',
         ]);
         $transaction->entries()->create([
             'account_id' => Account::where('code', $contraCode)->value('id'),
-            'debit_amount' => $payment ? '123000.00' : '0.00',
-            'credit_amount' => $payment ? '0.00' : '123000.00',
+            'debit_amount' => $payment ? $amount : '0.00',
+            'credit_amount' => $payment ? '0.00' : $amount,
             'tableable_type' => $partyType,
             'tableable_id' => $partyId,
         ]);
