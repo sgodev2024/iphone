@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\ImportProductController;
 use App\Models\Company;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
@@ -10,7 +11,10 @@ use App\Models\ProductStorage;
 use App\Models\Storage;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\View;
 use Tests\TestCase;
 
 class ImportProductBulkDeleteTest extends TestCase
@@ -227,6 +231,101 @@ class ImportProductBulkDeleteTest extends TestCase
         $this->assertStringContainsString('Bạn có chắc chắn muốn xóa các phiếu nhập đã chọn không?', $view);
     }
 
+    public function test_import_product_index_filters_by_company_and_search_with_owner_scope(): void
+    {
+        $owner = $this->createUser(roleId: 4, email: 'filter-owner@example.com');
+        $otherOwner = $this->createUser(roleId: 4, email: 'filter-other@example.com');
+        $companyA = Company::create(['user_id' => $owner->id, 'name' => 'Company A']);
+        $companyB = Company::create(['user_id' => $owner->id, 'name' => 'Company B']);
+        $otherCompany = Company::create(['user_id' => $otherOwner->id, 'name' => 'Company Other']);
+
+        $this->createCouponForCompany($owner, $companyA, 'MP000014-A');
+        $this->createCouponForCompany($owner, $companyA, 'MP000015-A');
+        $this->createCouponForCompany($owner, $companyB, 'MP000014-B');
+        $this->createCouponForCompany($otherOwner, $otherCompany, 'MP000014-OTHER');
+
+        $request = Request::create('/admin/importproduct', 'GET', [
+            'search' => 'MP000014',
+            'company_id' => $companyA->id,
+        ]);
+        $request->setUserResolver(fn (): User => $owner);
+
+        $view = app(ImportProductController::class)->index($request);
+        $imports = $view->getData()['import'];
+        $companies = $view->getData()['companies'];
+
+        $this->assertSame(['MP000014-A'], $imports->pluck('coupon_code')->all());
+        $this->assertSame($companyA->id, $view->getData()['companyId']);
+        $this->assertSame(
+            [$companyA->id, $companyB->id],
+            $companies->pluck('id')->sort()->values()->all()
+        );
+        $this->assertSame(
+            [$companyA->id],
+            $imports->getCollection()->map(fn (ImportCoupon $import): int => (int) $import->companyRelation->id)->all()
+        );
+
+        $this->actingAs($owner);
+        $this->disableAdminLayoutComposers();
+        $html = $view->render();
+
+        $this->assertMatchesRegularExpression(
+            '/<option value="'.$companyA->id.'"\s+selected>.*?Company A/s',
+            $html
+        );
+        $this->assertStringContainsString('MP000014-A', $html);
+        $this->assertStringNotContainsString('MP000014-B', $html);
+    }
+
+    public function test_import_product_index_without_company_is_normal_and_invalid_company_is_empty(): void
+    {
+        $owner = $this->createUser(roleId: 4, email: 'all-owner@example.com');
+        $otherOwner = $this->createUser(roleId: 4, email: 'all-other@example.com');
+        $companyA = Company::create(['user_id' => $owner->id, 'name' => 'Company A']);
+        $companyB = Company::create(['user_id' => $owner->id, 'name' => 'Company B']);
+        $otherCompany = Company::create(['user_id' => $otherOwner->id, 'name' => 'Company Other']);
+
+        $this->createCouponForCompany($owner, $companyA, 'MP000014-A');
+        $this->createCouponForCompany($owner, $companyB, 'MP000015-B');
+        $this->createCouponForCompany($otherOwner, $otherCompany, 'MP000016-OTHER');
+
+        $allRequest = Request::create('/admin/importproduct', 'GET');
+        $allRequest->setUserResolver(fn (): User => $owner);
+        $allView = app(ImportProductController::class)->index($allRequest);
+
+        $this->assertSame(2, $allView->getData()['import']->total());
+
+        $invalidRequest = Request::create('/admin/importproduct', 'GET', [
+            'company_id' => 999999,
+        ]);
+        $invalidRequest->setUserResolver(fn (): User => $owner);
+        $invalidView = app(ImportProductController::class)->index($invalidRequest);
+
+        $this->assertSame(999999, $invalidView->getData()['companyId']);
+        $this->assertSame(0, $invalidView->getData()['import']->total());
+
+        $outOfScopeRequest = Request::create('/admin/importproduct', 'GET', [
+            'company_id' => $otherCompany->id,
+        ]);
+        $outOfScopeRequest->setUserResolver(fn (): User => $owner);
+        $outOfScopeView = app(ImportProductController::class)->index($outOfScopeRequest);
+
+        $this->assertSame(0, $outOfScopeView->getData()['import']->total());
+    }
+
+    public function test_import_product_filter_ui_preserves_company_query_on_pagination(): void
+    {
+        $view = file_get_contents(resource_path('views/admin/Importproduct/index.blade.php'));
+
+        $this->assertStringContainsString('name="company_id"', $view);
+        $this->assertStringContainsString('Tất cả nhà cung cấp', $view);
+        $this->assertStringContainsString('@selected($companyId === (int) $company->id)', $view);
+        $this->assertStringContainsString('$import->withQueryString()', $view);
+        $this->assertStringContainsString('class="d-flex align-items-center gap-2 import-product-search"', $view);
+        $this->assertStringContainsString('gap: 8px;', $view);
+        $this->assertStringContainsString("$('.import-product-company-filter').on('change'", $view);
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -336,6 +435,15 @@ class ImportProductBulkDeleteTest extends TestCase
         });
     }
 
+    private function disableAdminLayoutComposers(): void
+    {
+        Event::forget('composing: *');
+        Event::forget('composing: admin.layout.header');
+        View::share('config', null);
+        View::share('notifications', collect());
+        auth()->user()?->setRelation('userInfo', null);
+    }
+
     private function createUser(int $roleId, string $email = 'warehouse@example.com'): User
     {
         return User::create([
@@ -346,6 +454,22 @@ class ImportProductBulkDeleteTest extends TestCase
             'role_id' => $roleId,
             'status' => 'active',
         ]);
+    }
+
+    private function createCouponForCompany(User $user, Company $company, string $couponCode): ImportCoupon
+    {
+        $coupon = ImportCoupon::create([
+            'user_id' => $user->id,
+            'companies_id' => $company->id,
+            'supplier_id' => null,
+            'total' => 0,
+            'payment_ncc' => 0,
+            'status' => null,
+            'storage_id' => null,
+        ]);
+        $coupon->update(['coupon_code' => $couponCode]);
+
+        return $coupon->fresh();
     }
 
     private function createProduct(array $overrides = []): Product

@@ -49,6 +49,21 @@ class CompanyService
             throw new Exception('Failed to fetch owner-scoped companies');
         }
     }
+
+    public function getCompanyOptionsForOwner(int $ownerId)
+    {
+        try {
+            return $this->company
+                ->newQuery()
+                ->where('user_id', $ownerId)
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch owner-scoped company options: ' . $e->getMessage());
+            throw new Exception('Failed to fetch owner-scoped company options');
+        }
+    }
+
     public function companyFilter($name, $city_id)
     {
         try {

@@ -7,6 +7,12 @@
             display: none;
         }
 
+        .import-product-page .import-product-company-filter {
+            width: 220px;
+            min-width: 180px;
+            height: 40px;
+        }
+
         @media (max-width: 767.98px) {
             .main-panel > .container:has(.import-product-page) {
                 overflow-x: clip;
@@ -65,16 +71,18 @@
             }
 
             .import-product-page .import-product-search {
-                display: flex !important;
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) 40px;
                 grid-row: 1;
                 grid-column: 1 / -1;
-                gap: 6px;
+                gap: 8px;
                 width: 100%;
                 min-width: 0;
             }
 
             .import-product-page .import-product-search-input {
-                flex: 1 1 auto;
+                grid-row: 1;
+                grid-column: 1;
                 width: auto !important;
                 min-width: 0;
                 height: 40px;
@@ -82,9 +90,18 @@
                 font-size: 14px;
             }
 
+            .import-product-page .import-product-company-filter {
+                grid-row: 2;
+                grid-column: 1 / -1;
+                width: 100%;
+                min-width: 0;
+                margin-right: 0 !important;
+            }
+
             .import-product-page .import-product-refresh {
                 display: inline-flex;
-                flex: 0 0 40px;
+                grid-row: 1;
+                grid-column: 2;
                 align-items: center;
                 justify-content: center;
                 width: 40px;
@@ -295,10 +312,20 @@
 
                             {{-- Form tìm kiếm --}}
                             <form method="GET" action="{{ route('admin.importproduct.index') }}"
-                                class="d-flex align-items-center import-product-search">
+                                class="d-flex align-items-center gap-2 import-product-search">
                                 <!-- Ô tìm kiếm -->
                                 <input type="search" name="search" value="{{ request('search') }}"
-                                    class="form-control me-2 import-product-search-input" style="width: 300px;" placeholder="Tìm kiếm...">
+                                    class="form-control import-product-search-input" style="width: 300px;" placeholder="Tìm kiếm...">
+                                <select name="company_id" class="form-select import-product-company-filter"
+                                    aria-label="Nhà cung cấp">
+                                    <option value="">Tất cả nhà cung cấp</option>
+                                    @foreach ($companies as $company)
+                                        <option value="{{ $company->id }}"
+                                            @selected($companyId === (int) $company->id)>
+                                            {{ $company->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
                                 <!-- Nút reset -->
                                 <button type="button" class="btn import-product-refresh" id="btn-reset">
                                     <i class="fa-solid fa-rotate"></i>
@@ -373,7 +400,7 @@
 
                         {{-- Pagination --}}
                         @php
-                            $importPaginator = $import->appends(['search' => request('search')]);
+                            $importPaginator = $import->withQueryString();
                         @endphp
                         <div class="d-flex justify-content-end import-product-pagination-desktop">
                             {{ $importPaginator->links('pagination::bootstrap-4') }}
@@ -474,6 +501,10 @@
 
             $('#btn-reset').on('click', function() {
                 window.location.href = indexUrl;
+            });
+
+            $('.import-product-company-filter').on('change', function() {
+                this.form.submit();
             });
 
             updateSelectAllState();

@@ -23,13 +23,25 @@ class ImportProductService
         $this->importDetail = $importDetail;
     }
 
-    public function getImportCoupon($perPage = 10, $search = null, ?int $ownerId = null)
+    public function getImportCoupon(
+        $perPage = 10,
+        $search = null,
+        ?int $ownerId = null,
+        ?int $companyId = null
+    )
     {
         $query = ImportCoupon::query()
             ->with(['user', 'companyRelation']);
 
         if ($ownerId !== null) {
             $query->where('user_id', $ownerId);
+        }
+
+        if ($companyId !== null) {
+            $query->whereHas('companyRelation', function ($companyQuery) use ($companyId, $ownerId): void {
+                $companyQuery->whereKey($companyId)
+                    ->when($ownerId !== null, fn ($companyQuery) => $companyQuery->where('user_id', $ownerId));
+            });
         }
 
         if (! empty($search)) {

@@ -47,9 +47,12 @@ class ImportProductController extends Controller
     {
         $title = 'Nhập hàng';
         $search = $request->input('search');
-        $import = $this->importProductService->getImportCoupon(10, $search, (int) $request->user()->ownerId());
+        $ownerId = (int) $request->user()->ownerId();
+        $companyId = $request->filled('company_id') ? $request->integer('company_id') : null;
+        $import = $this->importProductService->getImportCoupon(10, $search, $ownerId, $companyId);
+        $companies = $this->companyService->getCompanyOptionsForOwner($ownerId);
 
-        return view('admin.Importproduct.index', compact('title', 'import', 'search'));
+        return view('admin.Importproduct.index', compact('title', 'import', 'search', 'companies', 'companyId'));
     }
 
     public function bulkDelete(Request $request)

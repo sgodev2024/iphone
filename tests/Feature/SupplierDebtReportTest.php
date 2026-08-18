@@ -313,6 +313,28 @@ class SupplierDebtReportTest extends TestCase
         $this->assertSame(1, substr_count($footer, '<th'));
     }
 
+    public function test_supplier_company_name_links_to_company_filtered_import_list(): void
+    {
+        $this->addLedgerEntry('2026-08-15', '0.00', '1000000.00', $this->company->id);
+
+        $request = Request::create('/admin/debts/supplier', 'GET', [
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-20',
+        ]);
+        $request->setUserResolver(fn (): User => $this->owner);
+        $this->actingAs($this->owner);
+        $this->disableAdminLayoutComposers();
+
+        $view = app(DebtController::class)->supplier($request, $this->service);
+        $html = $view->render();
+        $companyUrl = route('admin.importproduct.index', ['company_id' => $this->company->id]);
+
+        $this->assertStringContainsString('href="'.$companyUrl.'"', $html);
+        $this->assertStringContainsString('supplier-name text-decoration-none', $html);
+        $this->assertStringContainsString('Company Alpha', $html);
+        $this->assertStringContainsString('SĐT: 0900000001', $html);
+    }
+
     private function createSchema(): void
     {
         Schema::create('users', function (Blueprint $table): void {

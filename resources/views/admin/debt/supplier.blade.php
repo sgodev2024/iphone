@@ -77,7 +77,10 @@
                         <tr>
                             <td>{{ $index + 1 }}</td>
                             <td class="text-start supplier-cell">
-                                <span class="supplier-name">{{ $debt->company_name }}</span>
+                                <a class="supplier-name text-decoration-none"
+                                    href="{{ route('admin.importproduct.index', ['company_id' => $debt->company_id]) }}">
+                                    {{ $debt->company_name }}
+                                </a>
                                 <span class="supplier-phone">SĐT: {{ $debt->company_phone ?: '—' }}</span>
                             </td>
                             <td class="text-end money-cell">{{ formatExactMoney((string) $debt->opening_debit) }}</td>
@@ -248,6 +251,10 @@
 
         .supplier-debt-page .supplier-name {
             font-weight: 600;
+        }
+
+        .supplier-debt-page .supplier-name:hover {
+            text-decoration: underline !important;
         }
 
         .supplier-debt-page .supplier-phone {
