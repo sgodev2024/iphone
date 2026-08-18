@@ -25,6 +25,12 @@ class Order extends Model
 
     public const PAYMENT_STATUS_DEBT = 'debt';
 
+    /**
+     * Query-only sentinel for rows whose persisted payment_status is not one
+     * of the canonical paid/partial/debt values.
+     */
+    public const PAYMENT_STATUS_FILTER_UNKNOWN = 'unknown';
+
     protected $fillable = [
         'user_id',
         'client_id',
@@ -95,11 +101,30 @@ class Order extends Model
     public function paymentStatusLabel(): string
     {
         return match ($this->payment_status) {
-            self::PAYMENT_STATUS_PAID => 'Đã thanh toán',
+            self::PAYMENT_STATUS_PAID => 'Đã hoàn thành',
             self::PAYMENT_STATUS_PARTIAL => 'Thanh toán một phần',
-            self::PAYMENT_STATUS_DEBT => 'Còn nợ',
+            self::PAYMENT_STATUS_DEBT => 'Công nợ',
             default => 'Chưa xác định',
         };
+    }
+
+    public static function paymentStatusValues(): array
+    {
+        return [
+            self::PAYMENT_STATUS_PAID,
+            self::PAYMENT_STATUS_PARTIAL,
+            self::PAYMENT_STATUS_DEBT,
+        ];
+    }
+
+    public static function paymentStatusFilterOptions(): array
+    {
+        return [
+            self::PAYMENT_STATUS_FILTER_UNKNOWN => 'Chưa xác định',
+            self::PAYMENT_STATUS_DEBT => 'Công nợ',
+            self::PAYMENT_STATUS_PARTIAL => 'Thanh toán một phần',
+            self::PAYMENT_STATUS_PAID => 'Đã hoàn thành',
+        ];
     }
 
     public function paymentStatusBadgeClass(): string

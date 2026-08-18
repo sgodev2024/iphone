@@ -327,9 +327,12 @@ class SupplierDebtReportTest extends TestCase
 
         $view = app(DebtController::class)->supplier($request, $this->service);
         $html = $view->render();
-        $companyUrl = route('admin.importproduct.index', ['company_id' => $this->company->id]);
+        $companyUrl = route('admin.importproduct.index', [
+            'company_id' => $this->company->id,
+            'outstanding_only' => 1,
+        ]);
 
-        $this->assertStringContainsString('href="'.$companyUrl.'"', $html);
+        $this->assertStringContainsString('href="'.$companyUrl.'"', html_entity_decode($html));
         $this->assertStringContainsString('supplier-name text-decoration-none', $html);
         $this->assertStringContainsString('Company Alpha', $html);
         $this->assertStringContainsString('SĐT: 0900000001', $html);

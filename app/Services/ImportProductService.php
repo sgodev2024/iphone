@@ -27,7 +27,9 @@ class ImportProductService
         $perPage = 10,
         $search = null,
         ?int $ownerId = null,
-        ?int $companyId = null
+        ?int $companyId = null,
+        ?string $paymentStatus = null,
+        bool $outstandingOnly = false
     )
     {
         $query = ImportCoupon::query()
@@ -42,6 +44,15 @@ class ImportProductService
                 $companyQuery->whereKey($companyId)
                     ->when($ownerId !== null, fn ($companyQuery) => $companyQuery->where('user_id', $ownerId));
             });
+        }
+
+        if ($paymentStatus !== null) {
+            $query->where('payment_status', $paymentStatus);
+        } elseif ($outstandingOnly) {
+            $query->whereIn('payment_status', [
+                ImportCoupon::PAYMENT_STATUS_DEBT,
+                ImportCoupon::PAYMENT_STATUS_PARTIAL,
+            ]);
         }
 
         if (! empty($search)) {

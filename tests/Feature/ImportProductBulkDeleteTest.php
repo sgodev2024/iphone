@@ -313,6 +313,98 @@ class ImportProductBulkDeleteTest extends TestCase
         $this->assertSame(0, $outOfScopeView->getData()['import']->total());
     }
 
+    public function test_import_product_index_filters_by_outstanding_scope(): void
+    {
+        $owner = $this->createUser(roleId: 4, email: 'status-owner@example.com');
+        $company = Company::create(['user_id' => $owner->id, 'name' => 'Status Company']);
+
+        $this->createCouponForCompany($owner, $company, 'MP-STATUS-DEBT', ImportCoupon::PAYMENT_STATUS_DEBT);
+        $this->createCouponForCompany($owner, $company, 'MP-STATUS-PARTIAL', ImportCoupon::PAYMENT_STATUS_PARTIAL);
+        $this->createCouponForCompany($owner, $company, 'MP-STATUS-PAID', ImportCoupon::PAYMENT_STATUS_PAID);
+
+        $request = Request::create('/admin/importproduct', 'GET', [
+            'company_id' => $company->id,
+            'outstanding_only' => 1,
+        ]);
+        $request->setUserResolver(fn (): User => $owner);
+
+        $view = app(ImportProductController::class)->index($request);
+        $imports = $view->getData()['import'];
+
+        $this->assertSame(
+            ['MP-STATUS-DEBT', 'MP-STATUS-PARTIAL'],
+            $imports->pluck('coupon_code')->sort()->values()->all()
+        );
+
+        $this->actingAs($owner);
+        $this->disableAdminLayoutComposers();
+        $html = $view->render();
+
+        $this->assertStringContainsString('value="">-- Trạng thái thanh toán --</option>', preg_replace('/\s+/', ' ', $html));
+        $this->assertStringContainsString('name="outstanding_only" value="1"', $html);
+        $this->assertStringNotContainsString('import-product-status-option', $html);
+        $this->assertStringNotContainsString('Áp dụng', $html);
+        $this->assertStringNotContainsString('MP-STATUS-PAID', $html);
+    }
+
+    public function test_import_product_status_override_has_priority_over_outstanding_scope(): void
+    {
+        $owner = $this->createUser(roleId: 4, email: 'status-priority-owner@example.com');
+        $company = Company::create(['user_id' => $owner->id, 'name' => 'Priority Company']);
+
+        $this->createCouponForCompany($owner, $company, 'MP-PRIORITY-DEBT', ImportCoupon::PAYMENT_STATUS_DEBT);
+        $this->createCouponForCompany($owner, $company, 'MP-PRIORITY-PARTIAL', ImportCoupon::PAYMENT_STATUS_PARTIAL);
+        $this->createCouponForCompany($owner, $company, 'MP-PRIORITY-PAID', ImportCoupon::PAYMENT_STATUS_PAID);
+
+        $request = function (array $query) use ($owner): \Illuminate\View\View {
+            $request = Request::create('/admin/importproduct', 'GET', $query);
+            $request->setUserResolver(fn (): User => $owner);
+
+            return app(ImportProductController::class)->index($request);
+        };
+
+        $outstanding = $request([
+            'company_id' => $company->id,
+            'outstanding_only' => 1,
+        ]);
+        $this->assertSame(
+            ['MP-PRIORITY-DEBT', 'MP-PRIORITY-PARTIAL'],
+            $outstanding->getData()['import']->pluck('coupon_code')->sort()->values()->all()
+        );
+
+        foreach ([
+            ImportCoupon::PAYMENT_STATUS_DEBT => 'MP-PRIORITY-DEBT',
+            ImportCoupon::PAYMENT_STATUS_PARTIAL => 'MP-PRIORITY-PARTIAL',
+        ] as $status => $expectedCode) {
+            $explicit = $request([
+                'company_id' => $company->id,
+                'payment_status' => $status,
+                'outstanding_only' => 1,
+            ]);
+
+            $this->assertSame([$expectedCode], $explicit->getData()['import']->pluck('coupon_code')->all());
+        }
+
+        $paid = $request([
+            'company_id' => $company->id,
+            'payment_status' => ImportCoupon::PAYMENT_STATUS_PAID,
+            'outstanding_only' => 1,
+        ]);
+        $this->assertSame(['MP-PRIORITY-PAID'], $paid->getData()['import']->pluck('coupon_code')->all());
+
+        $all = $request(['company_id' => $company->id]);
+        $this->assertSame(3, $all->getData()['import']->total());
+
+        $this->actingAs($owner);
+        $this->disableAdminLayoutComposers();
+        $paidHtml = $paid->render();
+        $normalizedPaidHtml = preg_replace('/\s+/', ' ', $paidHtml);
+
+        $this->assertStringContainsString('value="paid" selected', $normalizedPaidHtml);
+        $this->assertStringNotContainsString('type="hidden" name="outstanding_only"', $paidHtml);
+        $this->assertStringContainsString('name="payment_status"', $paidHtml);
+    }
+
     public function test_import_product_filter_ui_preserves_company_query_on_pagination(): void
     {
         $view = file_get_contents(resource_path('views/admin/Importproduct/index.blade.php'));
@@ -324,6 +416,10 @@ class ImportProductBulkDeleteTest extends TestCase
         $this->assertStringContainsString('class="d-flex align-items-center gap-2 import-product-search"', $view);
         $this->assertStringContainsString('gap: 8px;', $view);
         $this->assertStringContainsString("$('.import-product-company-filter').on('change'", $view);
+        $this->assertStringContainsString('name="payment_status"', $view);
+        $this->assertStringContainsString('-- Trạng thái thanh toán --', $view);
+        $this->assertStringNotContainsString('import-product-status-option', $view);
+        $this->assertStringNotContainsString('Áp dụng', $view);
     }
 
     private function createSchema(): void
@@ -403,6 +499,7 @@ class ImportProductBulkDeleteTest extends TestCase
             $table->unsignedBigInteger('supplier_id')->nullable();
             $table->integer('total')->nullable();
             $table->integer('payment_ncc')->nullable();
+            $table->string('payment_status', 20)->nullable();
             $table->string('status')->nullable();
             $table->string('coupon_code')->nullable()->unique();
             $table->unsignedBigInteger('storage_id')->nullable();
@@ -456,7 +553,12 @@ class ImportProductBulkDeleteTest extends TestCase
         ]);
     }
 
-    private function createCouponForCompany(User $user, Company $company, string $couponCode): ImportCoupon
+    private function createCouponForCompany(
+        User $user,
+        Company $company,
+        string $couponCode,
+        ?string $paymentStatus = null
+    ): ImportCoupon
     {
         $coupon = ImportCoupon::create([
             'user_id' => $user->id,
@@ -464,6 +566,7 @@ class ImportProductBulkDeleteTest extends TestCase
             'supplier_id' => null,
             'total' => 0,
             'payment_ncc' => 0,
+            'payment_status' => $paymentStatus,
             'status' => null,
             'storage_id' => null,
         ]);

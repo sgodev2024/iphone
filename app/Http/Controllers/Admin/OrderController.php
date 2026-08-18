@@ -43,12 +43,22 @@ class OrderController extends Controller
                 ->orderBy('id')
                 ->get(['id', 'name']);
 
-            return view('admin.order.index', compact('clients'));
+            $paymentStatusOptions = Order::paymentStatusFilterOptions();
+            $paymentStatus = $this->normalizePaymentStatus($request->query('payment_status'));
+            $outstandingOnly = $paymentStatus === null && $request->boolean('outstanding_only');
+
+            return view('admin.order.index', compact(
+                'clients',
+                'paymentStatusOptions',
+                'paymentStatus',
+                'outstandingOnly'
+            ));
         }
 
         $searchText = trim((string) $request->query('s', ''));
         $dateRange = trim((string) $request->query('date_range', ''));
-        $paymentStatus = $request->query('payment_status');
+        $paymentStatus = $this->normalizePaymentStatus($request->query('payment_status'));
+        $outstandingOnly = $paymentStatus === null && $request->boolean('outstanding_only');
         $paymentMethod = $request->query('payment_method');
         $clientIdParam = trim((string) $request->query('client_id', ''));
         $clientFilterRequested = $clientIdParam !== '';
@@ -154,16 +164,24 @@ class OrderController extends Controller
                 $query->whereBetween('created_at', [$startDate, $endDate]);
             })
 
-            ->when(
-                in_array($paymentStatus, [
-                    Order::PAYMENT_STATUS_PAID,
-                    Order::PAYMENT_STATUS_PARTIAL,
-                    Order::PAYMENT_STATUS_DEBT,
-                ], true),
-                function ($query) use ($paymentStatus) {
-                    $query->where('payment_status', $paymentStatus);
+            ->when($paymentStatus !== null || $outstandingOnly, function ($query) use ($paymentStatus, $outstandingOnly): void {
+                if ($paymentStatus === Order::PAYMENT_STATUS_FILTER_UNKNOWN) {
+                    $query->where(function ($unknownQuery): void {
+                        $unknownQuery
+                            ->whereNull('orders.payment_status')
+                            ->orWhereNotIn('orders.payment_status', Order::paymentStatusValues());
+                    });
+
+                    return;
                 }
-            )
+
+                $query->whereIn(
+                    'orders.payment_status',
+                    $paymentStatus !== null
+                        ? [$paymentStatus]
+                        : [Order::PAYMENT_STATUS_DEBT, Order::PAYMENT_STATUS_PARTIAL]
+                );
+            })
 
             ->when(
                 in_array($paymentMethod, ['cash', 'bank_transfer', 'debt'], true),
@@ -208,6 +226,18 @@ class OrderController extends Controller
         return response()->json([
             'html' => view('admin.order.table', compact('orders', 'totalOrders', 'totalRevenue'))->render(),
         ]);
+    }
+
+    private function normalizePaymentStatus(mixed $value): ?string
+    {
+        $values = is_array($value) ? $value : ($value === null ? [] : [$value]);
+        $allowed = array_keys(Order::paymentStatusFilterOptions());
+
+        return collect($values)
+            ->filter(fn ($status): bool => is_string($status) || is_numeric($status))
+            ->map(fn ($status): string => trim((string) $status))
+            ->intersect($allowed)
+            ->first();
     }
 
     public function show(string $id)

@@ -35,7 +35,7 @@ class ImportCouponPaymentStatusTest extends TestCase
                     'payment_status' => ImportCoupon::PAYMENT_STATUS_PAID,
                 ],
                 ImportCoupon::PAYMENT_STATUS_PAID,
-                'Đã thanh toán',
+                'Đã hoàn thành',
                 'badge-success',
             ],
             'partial' => [
@@ -80,7 +80,7 @@ class ImportCouponPaymentStatusTest extends TestCase
                     'payment_status' => null,
                 ],
                 ImportCoupon::PAYMENT_STATUS_PAID,
-                'Đã thanh toán',
+                'Đã hoàn thành',
                 'badge-success',
             ],
             'legacy unpaid fallback' => [

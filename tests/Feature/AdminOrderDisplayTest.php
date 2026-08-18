@@ -225,9 +225,9 @@ class AdminOrderDisplayTest extends TestCase
         $this->assertStringContainsString('PARTIAL-ORDER', $html);
         $this->assertStringContainsString('DEBT-ORDER', $html);
         $this->assertStringContainsString('IMEI-ORDER', $html);
-        $this->assertStringContainsString('Đã thanh toán', $html);
+        $this->assertStringContainsString('Đã hoàn thành', $html);
         $this->assertStringContainsString('Thanh toán một phần', $html);
-        $this->assertStringContainsString('Còn nợ', $html);
+        $this->assertStringContainsString('Công nợ', $html);
         $this->assertMatchesRegularExpression(
             '/PARTIAL-ORDER.*?order-col-quantity">\s*6\s*<\/td>/s',
             $html
@@ -540,6 +540,211 @@ class AdminOrderDisplayTest extends TestCase
         $this->assertStringNotContainsString('CLIENT-A-001', $methodHtml);
     }
 
+    public function test_outstanding_scope_uses_debt_and_partial_and_summary(): void
+    {
+        $client = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Client A',
+        ]);
+
+        $this->createOrder(
+            'DEBT-CLIENT-PAID',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            10000000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Client A',
+            null,
+            10,
+            '2026-08-18 10:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'DEBT-CLIENT-DEBT',
+            Order::PAYMENT_STATUS_DEBT,
+            true,
+            0,
+            5000000,
+            Order::PAYMENT_METHOD_DEBT,
+            'Client A',
+            null,
+            10,
+            '2026-08-18 11:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'DEBT-CLIENT-PARTIAL',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            1000000,
+            2000000,
+            Order::PAYMENT_METHOD_CASH,
+            'Client A',
+            null,
+            10,
+            '2026-08-18 12:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'DEBT-CLIENT-UNKNOWN',
+            'exchange',
+            true,
+            0,
+            0,
+            Order::PAYMENT_METHOD_DEBT,
+            'Client A',
+            null,
+            10,
+            '2026-08-18 13:00:00',
+            $client->id
+        );
+
+        $html = $this->getOrderListHtml([
+            'client_id' => $client->id,
+            'outstanding_only' => 1,
+        ]);
+
+        $this->assertStringContainsString('DEBT-CLIENT-DEBT', $html);
+        $this->assertStringContainsString('DEBT-CLIENT-PARTIAL', $html);
+        $this->assertStringNotContainsString('DEBT-CLIENT-PAID', $html);
+        $this->assertStringNotContainsString('DEBT-CLIENT-UNKNOWN', $html);
+        $this->assertStringContainsString('>2</strong>', $html);
+        $this->assertStringContainsString('8.000.000 VND', $html);
+    }
+
+    public function test_unknown_status_filter_matches_noncanonical_persisted_values(): void
+    {
+        $this->createOrder('UNKNOWN-ORDER', 'exchange', true, 0, 0);
+        $this->createOrder('KNOWN-ORDER', Order::PAYMENT_STATUS_PAID, true, 1000, 0);
+
+        $html = $this->getOrderListHtml([
+            'payment_status' => Order::PAYMENT_STATUS_FILTER_UNKNOWN,
+        ]);
+
+        $this->assertStringContainsString('UNKNOWN-ORDER', $html);
+        $this->assertDoesNotMatchRegularExpression('/>\s*KNOWN-ORDER\s*</', $html);
+        $this->assertStringContainsString('Chưa xác định', $html);
+    }
+
+    public function test_order_status_filter_is_single_select_with_a_reset_option(): void
+    {
+        $response = $this->withoutMiddleware()
+            ->actingAs($this->admin)
+            ->get('/admin/order?'.http_build_query([
+                'payment_status' => Order::PAYMENT_STATUS_PARTIAL,
+            ]));
+
+        $response->assertOk();
+        $normalizedHtml = preg_replace('/\s+/', ' ', $response->getContent());
+        $this->assertStringContainsString('<select id="filter-payment-status"', $normalizedHtml);
+        $this->assertStringContainsString('<option value="">-- Trạng thái thanh toán --</option>', $normalizedHtml);
+        $this->assertStringContainsString('<option value="partial" selected>', $normalizedHtml);
+        $this->assertStringNotContainsString('order-payment-status-option', $response->getContent());
+        $this->assertStringNotContainsString('id="clear-payment-status"', $response->getContent());
+        $this->assertStringNotContainsString('Tất cả trạng thái', $response->getContent());
+    }
+
+    public function test_explicit_status_overrides_outstanding_scope_and_default_restores_all(): void
+    {
+        $client = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Override Client',
+        ]);
+
+        $this->createOrder(
+            'OVERRIDE-PAID',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            10000000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Override Client',
+            null,
+            10,
+            '2026-08-18 10:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'OVERRIDE-DEBT',
+            Order::PAYMENT_STATUS_DEBT,
+            true,
+            0,
+            5000000,
+            Order::PAYMENT_METHOD_DEBT,
+            'Override Client',
+            null,
+            10,
+            '2026-08-18 11:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'OVERRIDE-PARTIAL',
+            Order::PAYMENT_STATUS_PARTIAL,
+            true,
+            1000000,
+            2000000,
+            Order::PAYMENT_METHOD_CASH,
+            'Override Client',
+            null,
+            10,
+            '2026-08-18 12:00:00',
+            $client->id
+        );
+        $this->createOrder(
+            'OVERRIDE-UNKNOWN',
+            'exchange',
+            true,
+            0,
+            0,
+            Order::PAYMENT_METHOD_DEBT,
+            'Override Client',
+            null,
+            10,
+            '2026-08-18 13:00:00',
+            $client->id
+        );
+
+        $outstandingHtml = $this->getOrderListHtml([
+            'client_id' => $client->id,
+            'outstanding_only' => 1,
+        ]);
+        $this->assertStringContainsString('OVERRIDE-DEBT', $outstandingHtml);
+        $this->assertStringContainsString('OVERRIDE-PARTIAL', $outstandingHtml);
+        $this->assertStringNotContainsString('OVERRIDE-PAID', $outstandingHtml);
+        $this->assertStringNotContainsString('OVERRIDE-UNKNOWN', $outstandingHtml);
+        $this->assertStringContainsString('>2</strong>', $outstandingHtml);
+        $this->assertStringContainsString('8.000.000 VND', $outstandingHtml);
+
+        $paidHtml = $this->getOrderListHtml([
+            'client_id' => $client->id,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'outstanding_only' => 1,
+        ]);
+        $this->assertStringContainsString('OVERRIDE-PAID', $paidHtml);
+        $this->assertStringNotContainsString('OVERRIDE-DEBT', $paidHtml);
+        $this->assertStringNotContainsString('OVERRIDE-PARTIAL', $paidHtml);
+        $this->assertStringNotContainsString('OVERRIDE-UNKNOWN', $paidHtml);
+        $this->assertStringContainsString('>1</strong>', $paidHtml);
+        $this->assertStringContainsString('10.000.000 VND', $paidHtml);
+
+        $defaultHtml = $this->getOrderListHtml(['client_id' => $client->id]);
+        foreach (['OVERRIDE-PAID', 'OVERRIDE-DEBT', 'OVERRIDE-PARTIAL', 'OVERRIDE-UNKNOWN'] as $code) {
+            $this->assertStringContainsString($code, $defaultHtml);
+        }
+        $this->assertStringContainsString('>4</strong>', $defaultHtml);
+        $this->assertStringContainsString('18.000.000 VND', $defaultHtml);
+
+        $unknownHtml = $this->getOrderListHtml([
+            'client_id' => $client->id,
+            'payment_status' => Order::PAYMENT_STATUS_FILTER_UNKNOWN,
+        ]);
+        $this->assertStringContainsString('OVERRIDE-UNKNOWN', $unknownHtml);
+        $this->assertStringNotContainsString('OVERRIDE-PAID', $unknownHtml);
+        $this->assertStringNotContainsString('OVERRIDE-DEBT', $unknownHtml);
+        $this->assertStringNotContainsString('OVERRIDE-PARTIAL', $unknownHtml);
+    }
+
     public function test_client_filter_keeps_summary_and_query_string_across_pagination(): void
     {
         $client = Client::create([
@@ -603,9 +808,9 @@ class AdminOrderDisplayTest extends TestCase
     public function test_list_and_detail_share_the_same_canonical_payment_badge(): void
     {
         foreach ([
-            Order::PAYMENT_STATUS_PAID => ['Đã thanh toán', 'bg-success'],
+            Order::PAYMENT_STATUS_PAID => ['Đã hoàn thành', 'bg-success'],
             Order::PAYMENT_STATUS_PARTIAL => ['Thanh toán một phần', 'bg-warning text-dark'],
-            Order::PAYMENT_STATUS_DEBT => ['Còn nợ', 'bg-danger'],
+            Order::PAYMENT_STATUS_DEBT => ['Công nợ', 'bg-danger'],
         ] as $status => [$label, $class]) {
             $order = new Order(['payment_status' => $status]);
 

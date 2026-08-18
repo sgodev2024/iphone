@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Import;
+use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Services\CategoryService;
 use App\Services\CompanyService;
@@ -49,10 +50,29 @@ class ImportProductController extends Controller
         $search = $request->input('search');
         $ownerId = (int) $request->user()->ownerId();
         $companyId = $request->filled('company_id') ? $request->integer('company_id') : null;
-        $import = $this->importProductService->getImportCoupon(10, $search, $ownerId, $companyId);
+        $paymentStatus = $this->normalizePaymentStatus($request->query('payment_status'));
+        $outstandingOnly = $paymentStatus === null && $request->boolean('outstanding_only');
+        $import = $this->importProductService->getImportCoupon(
+            10,
+            $search,
+            $ownerId,
+            $companyId,
+            $paymentStatus,
+            $outstandingOnly
+        );
         $companies = $this->companyService->getCompanyOptionsForOwner($ownerId);
+        $paymentStatusOptions = ImportCoupon::paymentStatusFilterOptions();
 
-        return view('admin.Importproduct.index', compact('title', 'import', 'search', 'companies', 'companyId'));
+        return view('admin.Importproduct.index', compact(
+            'title',
+            'import',
+            'search',
+            'companies',
+            'companyId',
+            'paymentStatus',
+            'outstandingOnly',
+            'paymentStatusOptions'
+        ));
     }
 
     public function bulkDelete(Request $request)
@@ -356,5 +376,16 @@ class ImportProductController extends Controller
         $user = Auth::user();
 
         return $user ? [(int) $user->ownerId()] : [];
+    }
+
+    private function normalizePaymentStatus(mixed $value): ?string
+    {
+        $values = is_array($value) ? $value : ($value === null ? [] : [$value]);
+
+        return collect($values)
+            ->filter(fn ($status): bool => is_string($status) || is_numeric($status))
+            ->map(fn ($status): string => trim((string) $status))
+            ->intersect(ImportCoupon::paymentStatusValues())
+            ->first();
     }
 }

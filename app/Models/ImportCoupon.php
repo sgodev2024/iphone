@@ -63,6 +63,24 @@ class ImportCoupon extends Model
         ];
     }
 
+    public static function paymentStatusValues(): array
+    {
+        return [
+            self::PAYMENT_STATUS_PAID,
+            self::PAYMENT_STATUS_PARTIAL,
+            self::PAYMENT_STATUS_DEBT,
+        ];
+    }
+
+    public static function paymentStatusFilterOptions(): array
+    {
+        return [
+            self::PAYMENT_STATUS_DEBT => 'Công nợ',
+            self::PAYMENT_STATUS_PARTIAL => 'Thanh toán một phần',
+            self::PAYMENT_STATUS_PAID => 'Đã hoàn thành',
+        ];
+    }
+
     public function getResolvedPaidAmountAttribute(): int
     {
         $total = max((int) ($this->attributes['total'] ?? 0), 0);
@@ -121,7 +139,7 @@ class ImportCoupon extends Model
     public function getPaymentStatusLabelAttribute(): string
     {
         return match ($this->resolved_payment_status) {
-            self::PAYMENT_STATUS_PAID => 'Đã thanh toán',
+            self::PAYMENT_STATUS_PAID => 'Đã hoàn thành',
             self::PAYMENT_STATUS_PARTIAL => 'Thanh toán một phần',
             default => 'Công nợ',
         };

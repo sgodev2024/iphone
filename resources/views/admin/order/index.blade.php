@@ -13,11 +13,14 @@
                     </div>
 
                     <div class="col-xl-2 col-md-3 col-12 order-filter-status">
-                        <select id="filter-payment-status" class="form-select">
+                        {{-- <div class="order-filter-title">Trạng thái thanh toán</div> --}}
+                        <select id="filter-payment-status" class="form-select" aria-label="Trạng thái thanh toán">
                             <option value="">-- Trạng thái thanh toán --</option>
-                            <option value="paid">Đã thanh toán</option>
-                            <option value="partial">Thanh toán một phần</option>
-                            <option value="debt">Còn nợ</option>
+                            @foreach ($paymentStatusOptions as $status => $label)
+                                <option value="{{ $status }}" @selected($paymentStatus === $status)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
                         </select>
                     </div>
 
@@ -34,8 +37,7 @@
                         <select id="filter-client" class="form-select" aria-label="Khách hàng">
                             <option value="">Tất cả khách hàng</option>
                             @foreach ($clients as $client)
-                                <option value="{{ $client->id }}"
-                                    @selected((string) request()->query('client_id', '') === (string) $client->id)>
+                                <option value="{{ $client->id }}" @selected((string) request()->query('client_id', '') === (string) $client->id)>
                                     {{ $client->name ?: 'Khách hàng #' . $client->id }}
                                 </option>
                             @endforeach
@@ -78,11 +80,13 @@
             const $tableWrapper = $('#table-wrapper');
             const $dateFilter = $('#dateFilter');
             const $clientFilter = $('#filter-client');
+            const $paymentStatus = $('#filter-payment-status');
             const initialUrl = new URL(window.location.href);
             const initialParams = initialUrl.searchParams;
 
             let currentRequest = null;
             let clientFilterValue = initialParams.get('client_id') || '';
+            let outstandingOnly = @json($outstandingOnly);
 
             const pickerStart = moment().subtract(1, 'month');
             const pickerEnd = moment();
@@ -143,15 +147,17 @@
             });
 
             const initialDateRange = initialParams.get('date_range') || '';
-            const initialPaymentStatus = initialParams.get('payment_status') || '';
             const initialPaymentMethod = initialParams.get('payment_method') || '';
             const initialSearch = initialParams.get('s') || '';
 
             $dateFilter.val(initialDateRange);
-            $('#filter-payment-status').val(initialPaymentStatus);
             $('#filter-payment').val(initialPaymentMethod);
             $('#order-search').val(initialSearch);
             $clientFilter.val(clientFilterValue);
+
+            function selectedPaymentStatus() {
+                return $paymentStatus.val() || '';
+            }
 
             if (initialDateRange) {
                 const dateParts = initialDateRange.split(/\s+-\s+/);
@@ -181,7 +187,6 @@
                 const url = new URL(window.location.href);
                 const filters = {
                     date_range: $dateFilter.val().trim(),
-                    payment_status: $('#filter-payment-status').val(),
                     payment_method: $('#filter-payment').val(),
                     client_id: clientFilterValue,
                     s: $('#order-search').val().trim()
@@ -194,6 +199,25 @@
                         url.searchParams.set(key, value);
                     }
                 });
+
+                Array.from(url.searchParams.keys()).forEach(key => {
+                    if (
+                        key === 'payment_status' ||
+                        key === 'payment_status[]' ||
+                        /^payment_status\[\d+\]$/.test(key) ||
+                        key === 'outstanding_only'
+                    ) {
+                        url.searchParams.delete(key);
+                    }
+                });
+
+                const paymentStatusValue = selectedPaymentStatus();
+
+                if (paymentStatusValue) {
+                    url.searchParams.set('payment_status', paymentStatusValue);
+                } else if (outstandingOnly) {
+                    url.searchParams.set('outstanding_only', '1');
+                }
 
                 url.searchParams.delete('page');
 
@@ -215,10 +239,17 @@
                     page: page,
                     s: $('#order-search').val().trim(),
                     date_range: $dateFilter.val().trim(),
-                    payment_status: $('#filter-payment-status').val(),
                     payment_method: $('#filter-payment').val(),
                     client_id: clientFilterValue
                 };
+
+                const paymentStatusValue = selectedPaymentStatus();
+
+                if (paymentStatusValue) {
+                    requestData.payment_status = paymentStatusValue;
+                } else if (outstandingOnly) {
+                    requestData.outstanding_only = 1;
+                }
 
                 $tableWrapper.css({
                     opacity: 0.55,
@@ -295,7 +326,12 @@
                 fetchOrders(1);
             }));
 
-            $('#filter-payment-status, #filter-payment').on('change', function() {
+            $paymentStatus.on('change', function() {
+                outstandingOnly = false;
+                fetchOrders(1);
+            });
+
+            $('#filter-payment').on('change', function() {
                 fetchOrders(1);
             });
 
@@ -325,7 +361,8 @@
 
             $('#btn-reset').on('click', function() {
                 $('#order-search').val('');
-                $('#filter-payment-status').val('');
+                $paymentStatus.val('');
+                outstandingOnly = false;
                 $('#filter-payment').val('');
                 $clientFilter.val('');
                 clientFilterValue = '';
@@ -351,6 +388,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
 
     <style>
+        .order-page .order-filter-title {
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.2;
+        }
+
         .order-page #table-wrapper {
             transition: opacity 0.2s ease;
         }
@@ -398,7 +442,7 @@
                 margin-right: 0;
             }
 
-            .order-page .order-filter-row > [class*="col-"] {
+            .order-page .order-filter-row>[class*="col-"] {
                 padding-left: 0;
                 padding-right: 0;
             }

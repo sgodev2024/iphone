@@ -308,8 +308,11 @@ class CustomerDebtReportTest extends TestCase
         $this->assertStringContainsString('4.000.000', $footer);
         $this->assertStringNotContainsString('90.000.000', $footer);
         $this->assertStringContainsString(
-            'href="'.route('admin.order.index', ['client_id' => $debitClient]).'"',
-            $response->getContent()
+            'href="'.route('admin.order.index', [
+                'client_id' => $debitClient,
+                'outstanding_only' => 1,
+            ]).'"',
+            html_entity_decode($response->getContent())
         );
         $this->assertStringContainsString('class="customer-name text-primary text-decoration-none"', $response->getContent());
         $this->assertStringContainsString('Footer Debit', $response->getContent());

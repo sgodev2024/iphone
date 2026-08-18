@@ -98,7 +98,10 @@
                             <td>{{ $index + 1 }}</td>
                             <td class="text-start customer-cell">
                                 <a class="customer-name text-primary text-decoration-none"
-                                    href="{{ route('admin.order.index', ['client_id' => $debt->client_id]) }}">
+                                    href="{{ route('admin.order.index', [
+                                        'client_id' => $debt->client_id,
+                                        'outstanding_only' => 1,
+                                    ]) }}">
                                     {{ $debt->client_name }}
                                 </a>
                                 <span class="customer-phone">SĐT: {{ $debt->client_phone ?: '—' }}</span>

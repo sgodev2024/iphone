@@ -13,8 +13,25 @@
             height: 40px;
         }
 
+        .import-product-page .import-product-status-field {
+            width: 220px;
+            min-width: 200px;
+        }
+
+        .import-product-page .import-product-filter-title {
+            margin-bottom: 4px;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.2;
+        }
+
+        .import-product-page .import-product-status-filter {
+            width: 100%;
+            height: 40px;
+        }
+
         @media (max-width: 767.98px) {
-            .main-panel > .container:has(.import-product-page) {
+            .main-panel>.container:has(.import-product-page) {
                 overflow-x: clip;
             }
 
@@ -38,13 +55,13 @@
                 margin-left: 0;
             }
 
-            .import-product-page > .row {
+            .import-product-page>.row {
                 --bs-gutter-x: 0;
                 margin-right: 0;
                 margin-left: 0;
             }
 
-            .import-product-page > .row > [class*="col-"] {
+            .import-product-page>.row>[class*="col-"] {
                 min-width: 0;
                 padding-right: 0;
                 padding-left: 0;
@@ -98,6 +115,13 @@
                 margin-right: 0 !important;
             }
 
+            .import-product-page .import-product-status-field {
+                grid-row: 3;
+                grid-column: 1 / -1;
+                width: 100%;
+                min-width: 0;
+            }
+
             .import-product-page .import-product-refresh {
                 display: inline-flex;
                 grid-row: 1;
@@ -119,7 +143,7 @@
                 min-width: 0;
             }
 
-            .import-product-page .import-product-action > .btn {
+            .import-product-page .import-product-action>.btn {
                 display: inline-flex;
                 align-items: center;
                 height: 40px;
@@ -315,17 +339,32 @@
                                 class="d-flex align-items-center gap-2 import-product-search">
                                 <!-- Ô tìm kiếm -->
                                 <input type="search" name="search" value="{{ request('search') }}"
-                                    class="form-control import-product-search-input" style="width: 300px;" placeholder="Tìm kiếm...">
+                                    class="form-control import-product-search-input" style="width: 300px;"
+                                    placeholder="Tìm kiếm...">
                                 <select name="company_id" class="form-select import-product-company-filter"
                                     aria-label="Nhà cung cấp">
                                     <option value="">Tất cả nhà cung cấp</option>
                                     @foreach ($companies as $company)
-                                        <option value="{{ $company->id }}"
-                                            @selected($companyId === (int) $company->id)>
+                                        <option value="{{ $company->id }}" @selected($companyId === (int) $company->id)>
                                             {{ $company->name }}
                                         </option>
                                     @endforeach
                                 </select>
+                                <div class="import-product-status-field">
+                                    {{-- <div class="import-product-filter-title">Trạng thái thanh toán</div> --}}
+                                    <select name="payment_status" id="filter-payment-status"
+                                        class="form-select import-product-status-filter" aria-label="Trạng thái thanh toán">
+                                        <option value="">-- Trạng thái thanh toán --</option>
+                                        @foreach ($paymentStatusOptions as $status => $label)
+                                            <option value="{{ $status }}" @selected($paymentStatus === $status)>
+                                                {{ $label }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @if ($outstandingOnly)
+                                        <input type="hidden" name="outstanding_only" value="1">
+                                    @endif
+                                </div>
                                 <!-- Nút reset -->
                                 <button type="button" class="btn import-product-refresh" id="btn-reset">
                                     <i class="fa-solid fa-rotate"></i>
@@ -341,7 +380,8 @@
                     <div class="card-body">
                         <p class="import-product-table-hint">Vuốt ngang để xem đầy đủ bảng</p>
                         <div class="table-responsive import-product-table-wrapper">
-                            <table id="basic-datatables" class="display table table-striped table-hover import-product-table">
+                            <table id="basic-datatables"
+                                class="display table table-striped table-hover import-product-table">
                                 <thead>
                                     <tr>
                                         <th><input type="checkbox" id="select-all"></th>
@@ -434,6 +474,7 @@
             const $selectAll = $('#select-all');
             const bulkDeleteUrl = @json(route('admin.importproduct.bulk-delete'));
             const indexUrl = @json(route('admin.importproduct.index'));
+            const $searchForm = $('.import-product-search');
 
             const getRowCheckboxes = () => $('.row-checkbox');
 
@@ -503,8 +544,28 @@
                 window.location.href = indexUrl;
             });
 
+            const submitSearchForm = (form) => {
+                const statusField = form.querySelector('#filter-payment-status');
+
+                if (statusField && !statusField.value) {
+                    statusField.removeAttribute('name');
+                }
+
+                form.submit();
+            };
+
             $('.import-product-company-filter').on('change', function() {
-                this.form.submit();
+                submitSearchForm(this.form);
+            });
+
+            $('#filter-payment-status').on('change', function() {
+                $searchForm.find('input[name="outstanding_only"]').remove();
+
+                if (!this.value) {
+                    this.removeAttribute('name');
+                }
+
+                submitSearchForm(this.form);
             });
 
             updateSelectAllState();

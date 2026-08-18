@@ -78,7 +78,10 @@
                             <td>{{ $index + 1 }}</td>
                             <td class="text-start supplier-cell">
                                 <a class="supplier-name text-decoration-none"
-                                    href="{{ route('admin.importproduct.index', ['company_id' => $debt->company_id]) }}">
+                                    href="{{ route('admin.importproduct.index', [
+                                        'company_id' => $debt->company_id,
+                                        'outstanding_only' => 1,
+                                    ]) }}">
                                     {{ $debt->company_name }}
                                 </a>
                                 <span class="supplier-phone">SĐT: {{ $debt->company_phone ?: '—' }}</span>
