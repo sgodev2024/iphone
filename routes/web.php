@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Admin\BrandController;
 use App\Http\Controllers\Admin\CashTransactionController;
 use App\Http\Controllers\Admin\GenericCashVoucherController;
+use App\Http\Controllers\Admin\GenericBankVoucherController;
 use App\Http\Controllers\Admin\CategorieController;
 use App\Http\Controllers\Admin\CheckInventoryController;
 use App\Http\Controllers\Admin\ClientController;
@@ -1119,6 +1120,18 @@ Route::middleware(['auth'])
                     Route::get('save', 'save')
                         ->middleware('permission:bank_transaction.create')
                         ->name('save');
+
+                    Route::post('vouchers', [GenericBankVoucherController::class, 'store'])
+                        ->middleware('permission:bank_transaction.create')
+                        ->name('vouchers.store');
+
+                    Route::get('vouchers/{voucher}', [GenericBankVoucherController::class, 'show'])
+                        ->middleware('permission:bank_transaction.view')
+                        ->name('vouchers.show');
+
+                    Route::get('vouchers/{voucher}/attachment', [GenericBankVoucherController::class, 'attachment'])
+                        ->middleware('permission:bank_transaction.view')
+                        ->name('vouchers.attachment');
 
                     Route::get('supplier-companies', [SupplierPaymentController::class, 'companies'])
                         ->middleware('permission:expense.create')

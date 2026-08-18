@@ -13,10 +13,9 @@ use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
+use App\Services\BankActivityReadService;
 use App\Services\SupplierPaymentService;
-use App\Services\TransactionBusinessListService;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +30,7 @@ class BankTransactionController extends Controller
         return view('admin.cash-bank.bank');
     }
 
-    public function list(Request $request, TransactionBusinessListService $businessList)
+    public function list(Request $request, BankActivityReadService $activityRead)
     {
         $dateRange = $request->query('date_range');
 
@@ -54,37 +53,21 @@ class BankTransactionController extends Controller
             })
             ->pluck('id');
 
-        $entries = $businessList
-            ->entries($this->transactionOwnerIds(), $bankAccountIds, $from, $to)
-            ->map(function (object $entry): object {
-                if (
-                    $entry->document_type === 'import_payment'
-                    && preg_match('/^IMP-(\d+)-PAY-/', (string) $entry->reference_number, $matches)
-                ) {
-                    $entry->supplier_import_id = (int) $matches[1];
-                }
-
-                return $entry;
-            });
-
-        $page = max(1, (int) $request->query('page', 1));
-        $perPage = 25;
-        $entries = new LengthAwarePaginator(
-            $entries->forPage($page, $perPage)->values(),
-            $entries->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
+        $activities = $activityRead->read(
+            $request->user(),
+            $this->transactionOwnerIds(),
+            $bankAccountIds,
+            $from,
+            $to,
+            max(1, (int) $request->query('page', 1))
         );
 
         $type = 'bank';
 
         return response()->json([
             'success' => true,
-            'html' => view('admin.cash-bank._table', compact('entries', 'type'))->render(),
-            'pagination' => view('admin.cash-bank._pagination', [
-                'activities' => $entries,
-            ])->render(),
+            'html' => view('admin.cash-bank._table', compact('activities', 'type'))->render(),
+            'pagination' => view('admin.cash-bank._pagination', compact('activities'))->render(),
         ]);
     }
 
@@ -104,9 +87,8 @@ class BankTransactionController extends Controller
         // Lấy danh sách tài khoản ngân hàng (con của 112)
         $moneyAccounts = Account::query()
             ->whereHas('parent', function ($q) {
-                $q->where('code', 112);
+                $q->where('code', 112)->where('status', true);
             })
-            ->where('is_default', false)
             ->where('status', true)
             ->orderBy('code')
             ->get();

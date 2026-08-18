@@ -2665,6 +2665,15 @@ class StaffPosSaleTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('companies', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+            $table->string('phone')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('accounts', function (Blueprint $table) {
             $table->id();
             $table->string('code')->nullable();
@@ -2759,6 +2768,26 @@ class StaffPosSaleTest extends TestCase
             $table->string('tableable_type')->nullable();
             $table->unsignedBigInteger('tableable_id')->nullable();
             $table->string('note')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('bank_vouchers', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('owner_id');
+            $table->string('voucher_number', 32);
+            $table->string('direction', 20);
+            $table->string('operation', 30);
+            $table->date('transaction_date');
+            $table->unsignedBigInteger('bank_account_id');
+            $table->decimal('amount', 20, 2);
+            $table->string('document_type')->nullable();
+            $table->string('reference_number')->nullable();
+            $table->text('description')->nullable();
+            $table->string('attachment')->nullable();
+            $table->string('accounting_status', 30)->default('pending_accounting');
+            $table->unsignedBigInteger('counter_account_id')->nullable();
+            $table->unsignedBigInteger('accounting_transaction_id')->nullable();
+            $table->unsignedBigInteger('created_by');
             $table->timestamps();
         });
 

@@ -50,9 +50,11 @@
                             <div class="col-lg-6">
                                 <label class="form-label required" for="cash-operation">Nghiệp vụ</label>
                                 <select class="form-select" id="cash-operation" name="operation" required>
+                                    <option value="generic_receipt" data-transaction-type="receipt">Thu tiền thông thường</option>
                                     @if (auth()->user()?->hasPermission('receipt.create'))
                                         <option value="customer_debt_collection" data-transaction-type="receipt">Thu công nợ khách hàng</option>
                                     @endif
+                                    <option value="generic_payment" data-transaction-type="payment">Chi tiền thông thường</option>
                                     @if (auth()->user()?->hasPermission('expense.create'))
                                         <option value="supplier_debt_payment" data-transaction-type="payment">Trả công nợ nhà cung cấp</option>
                                     @endif
@@ -89,7 +91,9 @@
                                 <div class="col-md-6 generic-only-field" id="generic-account-field">
                                     <label class="form-label required">Tài khoản
                                         {{ $type === 'cash' ? 'tiền mặt' : 'ngân hàng' }}</label>
-                                    <select class="form-select" name="account_id" id="account_id" required>
+                                    <select class="form-select"
+                                        name="{{ $type === 'bank' && empty($transaction) ? 'bank_account_id' : 'account_id' }}"
+                                        id="account_id" required>
                                         <option value="">Chọn tài khoản</option>
                                         @foreach ($moneyAccounts as $moneyAccount)
                                             <option value="{{ $moneyAccount->id }}" @selected(optional($mainEntry)->account_id == $moneyAccount->id)>
@@ -152,7 +156,7 @@
                                     </div>
                                 </div>
 
-                                @if ($type === 'bank')
+                                @if ($type === 'bank' && !empty($transaction))
                                     <div class="col-md-6 generic-only-field" id="generic-voucher-type-field">
                                         <label class="form-label required">Loại phiếu</label>
                                         <select class="form-select" name="type" id="type" required>
@@ -371,6 +375,7 @@
             const isUnifiedCash = @json($type === 'cash' && empty($transaction));
             const isUnifiedBank = @json($type === 'bank' && empty($transaction));
             const isBankForm = @json($type === 'bank');
+            const bankVoucherStoreUrl = @json($type === 'bank' ? route('admin.transactions.bank.vouchers.store') : null);
             const debtPanel = $('#customer-debt-panel');
             const supplierPanel = $('#supplier-debt-panel');
             const collectionPaymentMethod = debtPanel.data('payment-method') || 'cash';
@@ -402,9 +407,7 @@
             }
 
             function isGenericMode() {
-                if (isUnifiedBank) return false;
-
-                return isUnifiedCash ?
+                return (isUnifiedCash || isUnifiedBank) ?
                     !isCollectionMode() && !isSupplierPaymentMode() :
                     !isCollectionMode();
             }
@@ -458,6 +461,26 @@
                 Swal.fire({
                     icon: 'success',
                     title: 'Thu tiền thành công',
+                    html,
+                    confirmButtonText: 'OK',
+                    allowOutsideClick: true
+                });
+            }
+
+            function showGenericBankSuccess(voucher) {
+                const bankAccount = voucher.bank_account || {};
+                const receipt = voucher.direction === 'receipt';
+                const html = `<div class="text-start">
+                    <p class="mb-1"><strong>Số phiếu:</strong> ${escapeHtml(voucher.voucher_number)}</p>
+                    <p class="mb-1"><strong>Phương thức:</strong> Ngân hàng</p>
+                    <p class="mb-1"><strong>Tài khoản:</strong> ${escapeHtml(`${bankAccount.code || ''} - ${bankAccount.name || ''}`)}</p>
+                    <p class="mb-1"><strong>${receipt ? 'Tổng thu' : 'Tổng chi'}:</strong> ${money(voucher.amount)}</p>
+                    <p class="mb-0"><strong>Trạng thái:</strong> ${escapeHtml(voucher.accounting_status_label || 'Chờ hạch toán')}</p>
+                </div>`;
+
+                Swal.fire({
+                    icon: 'success',
+                    title: receipt ? 'Thu tiền thành công' : 'Chi tiền thành công',
                     html,
                     confirmButtonText: 'OK',
                     allowOutsideClick: true
@@ -587,7 +610,7 @@
                     (isUnifiedBank ? 'customer_debt_collection' : 'generic_receipt');
                 const collection = operation === 'customer_debt_collection';
                 const supplierPayment = operation === 'supplier_debt_payment';
-                const generic = isUnifiedCash && !collection && !supplierPayment;
+                const generic = (isUnifiedCash || isUnifiedBank) && !collection && !supplierPayment;
                 const transactionType = $('#cash-transaction-type').val() || 'receipt';
 
                 resetUnifiedContext();
@@ -595,8 +618,9 @@
                 $('.generic-only-field').toggleClass('d-none', !generic);
                 $('.collection-only-field').toggleClass('d-none', !collection);
                 $('#supplier-debt-panel').toggleClass('d-none', !supplierPayment);
-                $('#generic-object-type-field, #generic-account-field').addClass('d-none');
-                $('#cash-generic-account-field').toggleClass('d-none', !generic);
+                $('#generic-object-type-field').addClass('d-none');
+                $('#generic-account-field').toggleClass('d-none', !(generic && isUnifiedBank));
+                $('#cash-generic-account-field').toggleClass('d-none', !(generic && isUnifiedCash));
                 $('#cash-object-field').toggleClass('d-none', generic);
                 $('#file-upload-section').toggleClass('d-none', supplierPayment);
                 $('#transaction-date-label').text(supplierPayment ? 'Ngày trả công nợ' : collection ?
@@ -609,7 +633,7 @@
                     collection ? 'Nhập ít nhất 2 ký tự để tìm khách hàng' : 'Nhập 3 ký tự để tìm đối tượng');
                 $('#object-type').prop('required', false);
                 $('#object_code').prop('required', !generic);
-                $('#account_id').prop('required', false);
+                $('#account_id').prop('required', generic && isUnifiedBank);
                 $('[name="transaction_date"]')
                     .attr('max', $('[name="transaction_date"]').data('today'));
                 $('#type').val(transactionType === 'payment' ? 'expense' : 'income');
@@ -618,8 +642,9 @@
                 if (collection) {
                     $('#object-type').val('client');
                     if (debtPanel.data('account-ready').toString() !== '1') {
-                        setDebtStatus('Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.',
-                            'danger');
+                        setDebtStatus(isBankCollection
+                            ? 'Không có tài khoản ngân hàng hợp lệ trực tiếp dưới TK112.'
+                            : 'Không tìm thấy tài khoản 111 đang hoạt động. Không thể thu công nợ.', 'danger');
                     } else if (!$('#object_id').val()) {
                         setDebtStatus('Chọn khách hàng để tải công nợ canonical từ ledger.');
                     }
@@ -1089,17 +1114,20 @@
                     formData.set('transaction_date', $('[name="transaction_date"]').val());
                     formData.set('idempotency_key', $('#collection-idempotency-key').val());
                     requestUrl = supplierPanel.data('store-url');
-                } else if (isUnifiedCash) {
+                } else if (isUnifiedCash || isUnifiedBank) {
                     formData = new FormData();
                     formData.set('direction', $('#cash-transaction-type').val());
                     formData.set('operation', $('#cash-operation').val());
                     formData.set('transaction_date', $('[name="transaction_date"]').val());
                     formData.set('amount', rawAmount());
+                    if (isUnifiedBank) {
+                        formData.set('bank_account_id', $('#account_id').val());
+                    }
                     formData.set('document_type', $('[name="document_type"]').val());
                     formData.set('reference_number', $('[name="reference_number"]').val());
                     formData.set('description', $('[name="description"]').val());
                     if (fileInput?.files[0]) formData.set('attachment', fileInput.files[0]);
-                    requestUrl = fullUrl;
+                    requestUrl = isUnifiedBank ? bankVoucherStoreUrl : fullUrl;
                 } else {
                     formData = new FormData(this);
                     const objId = $('#object_id').val();
@@ -1176,6 +1204,9 @@
                             $('#amount').val('');
                             $('#collection-idempotency-key').val(uuid());
                             loadSupplierImports();
+                        } else if (res.success && isUnifiedBank && isGenericMode()) {
+                            resetGenericReceiptForm();
+                            showGenericBankSuccess(res.voucher || {});
                         } else if (res.success && isGenericReceiptMode()) {
                             resetGenericReceiptForm();
                             showGenericReceiptSuccess(res.voucher || {});

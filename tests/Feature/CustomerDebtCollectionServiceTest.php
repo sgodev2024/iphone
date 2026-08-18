@@ -486,7 +486,7 @@ class CustomerDebtCollectionServiceTest extends TestCase
             ->assertSee("replace(/\\./g, '')", false);
     }
 
-    public function test_bank_add_form_reuses_collection_mode_and_lists_only_active_direct_children_of_112(): void
+    public function test_bank_add_form_combines_generic_and_canonical_modes_with_active_direct_children_of_112(): void
     {
         $defaultBank = Account::create([
             'code' => '112DEF',
@@ -519,8 +519,8 @@ class CustomerDebtCollectionServiceTest extends TestCase
             ->assertSee('Trả công nợ nhà cung cấp')
             ->assertSee('id="supplier-bank-account"', false)
             ->assertDontSee('id="entry-mode"', false)
-            ->assertDontSee('<option value="generic_receipt"', false)
-            ->assertDontSee('<option value="generic_payment"', false)
+            ->assertSee('<option value="generic_receipt"', false)
+            ->assertSee('<option value="generic_payment"', false)
             ->assertSee('id="collection-money-account"', false)
             ->assertSee("value=\"{$this->bank->id}\"", false)
             ->assertSee("value=\"{$defaultBank->id}\"", false)
