@@ -7,7 +7,7 @@
         <div class="card">
             <div class="card-header">
                 <div class="row g-2 align-items-center order-filter-row">
-                    <div class="col-xl-3 col-md-6 col-12 order-filter-date">
+                    <div class="col-xl-2 col-md-6 col-12 order-filter-date">
                         <input type="text" id="dateFilter" class="form-control" placeholder="Chọn khoảng ngày"
                             autocomplete="off">
                     </div>
@@ -30,7 +30,19 @@
                         </select>
                     </div>
 
-                    <div class="col-xl-4 col-md-10 col-10 ms-xl-auto order-filter-search">
+                    <div class="col-xl-2 col-md-6 col-12 order-filter-client">
+                        <select id="filter-client" class="form-select" aria-label="Khách hàng">
+                            <option value="">Tất cả khách hàng</option>
+                            @foreach ($clients as $client)
+                                <option value="{{ $client->id }}"
+                                    @selected((string) request()->query('client_id', '') === (string) $client->id)>
+                                    {{ $client->name ?: 'Khách hàng #' . $client->id }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-xl-3 col-md-10 col-10 ms-xl-auto order-filter-search">
                         <input type="search" id="order-search" class="form-control"
                             placeholder="Tìm mã đơn, khách hàng, số điện thoại..." autocomplete="off">
                     </div>
@@ -65,8 +77,12 @@
             const orderIndexUrl = @json(route('admin.order.index'));
             const $tableWrapper = $('#table-wrapper');
             const $dateFilter = $('#dateFilter');
+            const $clientFilter = $('#filter-client');
+            const initialUrl = new URL(window.location.href);
+            const initialParams = initialUrl.searchParams;
 
             let currentRequest = null;
+            let clientFilterValue = initialParams.get('client_id') || '';
 
             const pickerStart = moment().subtract(1, 'month');
             const pickerEnd = moment();
@@ -126,6 +142,29 @@
                 }
             });
 
+            const initialDateRange = initialParams.get('date_range') || '';
+            const initialPaymentStatus = initialParams.get('payment_status') || '';
+            const initialPaymentMethod = initialParams.get('payment_method') || '';
+            const initialSearch = initialParams.get('s') || '';
+
+            $dateFilter.val(initialDateRange);
+            $('#filter-payment-status').val(initialPaymentStatus);
+            $('#filter-payment').val(initialPaymentMethod);
+            $('#order-search').val(initialSearch);
+            $clientFilter.val(clientFilterValue);
+
+            if (initialDateRange) {
+                const dateParts = initialDateRange.split(/\s+-\s+/);
+                const parsedStart = moment(dateParts[0], 'DD/MM/YYYY', true);
+                const parsedEnd = moment(dateParts[1], 'DD/MM/YYYY', true);
+
+                if (dateParts.length === 2 && parsedStart.isValid() && parsedEnd.isValid()) {
+                    const picker = $dateFilter.data('daterangepicker');
+                    picker.setStartDate(parsedStart);
+                    picker.setEndDate(parsedEnd);
+                }
+            }
+
             function debounce(callback, delay = 500) {
                 let timer;
 
@@ -138,17 +177,47 @@
                 };
             }
 
+            function syncUrl(page = 1) {
+                const url = new URL(window.location.href);
+                const filters = {
+                    date_range: $dateFilter.val().trim(),
+                    payment_status: $('#filter-payment-status').val(),
+                    payment_method: $('#filter-payment').val(),
+                    client_id: clientFilterValue,
+                    s: $('#order-search').val().trim()
+                };
+
+                Object.entries(filters).forEach(([key, value]) => {
+                    url.searchParams.delete(key);
+
+                    if (value) {
+                        url.searchParams.set(key, value);
+                    }
+                });
+
+                url.searchParams.delete('page');
+
+                if (page > 1) {
+                    url.searchParams.set('page', page);
+                }
+
+                window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+            }
+
             function fetchOrders(page = 1) {
                 if (currentRequest) {
                     currentRequest.abort();
                 }
+
+                syncUrl(page);
 
                 const requestData = {
                     page: page,
                     s: $('#order-search').val().trim(),
                     date_range: $dateFilter.val().trim(),
                     payment_status: $('#filter-payment-status').val(),
-                    payment_method: $('#filter-payment').val()
+                    payment_method: $('#filter-payment').val(),
+                    client_id: clientFilterValue
                 };
 
                 $tableWrapper.css({
@@ -230,6 +299,11 @@
                 fetchOrders(1);
             });
 
+            $clientFilter.on('change', function() {
+                clientFilterValue = $(this).val() || '';
+                fetchOrders(1);
+            });
+
             $(document).on(
                 'click',
                 '#table-wrapper .pagination a.page-link, #table-wrapper .order-pagination-mobile a.page-link',
@@ -253,6 +327,8 @@
                 $('#order-search').val('');
                 $('#filter-payment-status').val('');
                 $('#filter-payment').val('');
+                $clientFilter.val('');
+                clientFilterValue = '';
                 $dateFilter.val('');
 
                 const picker = $dateFilter.data('daterangepicker');
@@ -329,7 +405,8 @@
 
             .order-page .order-filter-date,
             .order-page .order-filter-status,
-            .order-page .order-filter-payment {
+            .order-page .order-filter-payment,
+            .order-page .order-filter-client {
                 flex: 0 0 100%;
                 max-width: 100%;
                 width: 100%;
@@ -351,6 +428,7 @@
             .order-page #dateFilter,
             .order-page #filter-payment-status,
             .order-page #filter-payment,
+            .order-page #filter-client,
             .order-page #order-search,
             .order-page #btn-reset {
                 height: 40px;
@@ -359,6 +437,7 @@
 
             .order-page #filter-payment-status,
             .order-page #filter-payment,
+            .order-page #filter-client,
             .order-page #order-search,
             .order-page #dateFilter {
                 max-width: 100%;

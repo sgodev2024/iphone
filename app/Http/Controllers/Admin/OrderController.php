@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
+use App\Models\Client;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Services\OrderPaymentHistoryService;
@@ -33,14 +34,31 @@ class OrderController extends Controller
     }
     public function index(Request $request)
     {
+        $ownerId = (int) $request->user()->ownerId();
+
         if (!$request->ajax()) {
-            return view('admin.order.index');
+            $clients = Client::withTrashed()
+                ->where('user_id', $ownerId)
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name']);
+
+            return view('admin.order.index', compact('clients'));
         }
 
         $searchText = trim((string) $request->query('s', ''));
         $dateRange = trim((string) $request->query('date_range', ''));
         $paymentStatus = $request->query('payment_status');
         $paymentMethod = $request->query('payment_method');
+        $clientIdParam = trim((string) $request->query('client_id', ''));
+        $clientFilterRequested = $clientIdParam !== '';
+        $clientId = ctype_digit($clientIdParam) ? (int) $clientIdParam : null;
+        $clientFilterValid = $clientId !== null
+            && $clientId > 0
+            && Client::withTrashed()
+                ->whereKey($clientId)
+                ->where('user_id', $ownerId)
+                ->exists();
 
         $startDate = null;
         $endDate = null;
@@ -111,7 +129,7 @@ class OrderController extends Controller
                 'order_ledger.payment_credit_131',
                 'order_ledger.sale_entry_count_131',
             ])
-            // Admin xem toàn bộ đơn nên không lọc user_id theo tài khoản đăng nhập
+            // Giữ dữ liệu trong owner hiện tại và branch hiện tại của người dùng.
             ->when($searchText !== '', function ($query) use ($searchText) {
                 $query->where(function ($searchQuery) use ($searchText) {
                     $searchQuery
@@ -153,7 +171,17 @@ class OrderController extends Controller
                     $query->where('payment_method', $paymentMethod);
                 }
             )
-            ->where('orders.branch_id', auth()->user()->branch_id);
+            ->when($clientFilterRequested, function ($query) use ($clientFilterValid, $clientId) {
+                if ($clientFilterValid) {
+                    $query->where('orders.client_id', $clientId);
+
+                    return;
+                }
+
+                $query->whereRaw('1 = 0');
+            })
+            ->where('orders.user_id', $ownerId)
+            ->where('orders.branch_id', $request->user()->branch_id);
 
         $summary = (clone $baseOrdersQuery)
             ->toBase()

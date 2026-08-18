@@ -97,7 +97,10 @@
                         <tr>
                             <td>{{ $index + 1 }}</td>
                             <td class="text-start customer-cell">
-                                <span class="customer-name">{{ $debt->client_name }}</span>
+                                <a class="customer-name text-primary text-decoration-none"
+                                    href="{{ route('admin.order.index', ['client_id' => $debt->client_id]) }}">
+                                    {{ $debt->client_name }}
+                                </a>
                                 <span class="customer-phone">SĐT: {{ $debt->client_phone ?: '—' }}</span>
                             </td>
                             <td class="text-end money-cell">{{ formatExactMoney($debt->opening_debit) }}</td>
@@ -260,6 +263,10 @@
 
         .customer-debt-page .customer-name {
             font-weight: 600;
+        }
+
+        .customer-debt-page .customer-name:hover {
+            text-decoration: underline !important;
         }
 
         .customer-debt-page .customer-phone {

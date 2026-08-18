@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Admin\OrderController;
+use App\Models\Client;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\User;
@@ -346,6 +347,231 @@ class AdminOrderDisplayTest extends TestCase
         $this->assertStringContainsString('SUMMARY-SCOPE-11', $pageTwo);
         $this->assertStringNotContainsString('SUMMARY-SCOPE-EXCLUDED', $pageOne);
         $this->assertStringNotContainsString('SUMMARY-SCOPE-EXCLUDED', $pageTwo);
+    }
+
+    public function test_client_filter_uses_canonical_client_id_and_updates_summary(): void
+    {
+        $clientA = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Client A',
+            'phone' => '0900000001',
+        ]);
+        $clientB = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Client B',
+            'phone' => '0900000002',
+        ]);
+        $otherOwner = User::create([
+            'name' => 'Other owner',
+            'email' => 'other-owner-client-filter@example.test',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => $this->admin->branch_id,
+        ]);
+        $otherClient = Client::create([
+            'user_id' => $otherOwner->id,
+            'name' => 'Other owner client',
+        ]);
+
+        $this->createOrder(
+            'CLIENT-A-1',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            3000000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Client A',
+            '0900000001',
+            10,
+            '2026-08-18 10:00:00',
+            $clientA->id
+        );
+        $this->createOrder(
+            'CLIENT-A-2',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            4000000,
+            0,
+            'exchange',
+            'Client A',
+            '0900000001',
+            10,
+            '2026-08-18 11:00:00',
+            $clientA->id
+        );
+        $this->createOrder(
+            'CLIENT-B-1',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            10000000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Client B',
+            '0900000002',
+            10,
+            '2026-08-18 12:00:00',
+            $clientB->id
+        );
+        $this->createOrder(
+            'OTHER-OWNER-1',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            99000000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Other owner client',
+            null,
+            10,
+            '2026-08-18 13:00:00',
+            $otherClient->id
+        )->forceFill(['user_id' => $otherOwner->id])->saveQuietly();
+
+        $html = $this->getOrderListHtml(['client_id' => $clientA->id]);
+
+        $this->assertStringContainsString('CLIENT-A-1', $html);
+        $this->assertStringContainsString('CLIENT-A-2', $html);
+        $this->assertStringNotContainsString('CLIENT-B-1', $html);
+        $this->assertStringNotContainsString('OTHER-OWNER-1', $html);
+        $this->assertStringContainsString('>2</strong>', $html);
+        $this->assertStringContainsString('7.000.000 VND', $html);
+
+        $invalidHtml = $this->getOrderListHtml(['client_id' => 999999]);
+        $this->assertStringNotContainsString('CLIENT-A-1', $invalidHtml);
+        $this->assertStringNotContainsString('CLIENT-B-1', $invalidHtml);
+        $this->assertStringContainsString('>0</strong>', $invalidHtml);
+        $this->assertStringContainsString('0 VND', $invalidHtml);
+    }
+
+    public function test_order_view_marks_client_from_query_as_selected(): void
+    {
+        $client = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Selected Client',
+        ]);
+
+        $response = $this->withoutMiddleware()
+            ->actingAs($this->admin)
+            ->get('/admin/order?client_id='.$client->id);
+
+        $response->assertOk();
+        $response->assertSee('Tất cả khách hàng', false);
+        $normalizedHtml = preg_replace('/\s+/', ' ', $response->getContent());
+        $this->assertStringContainsString('value="'.$client->id.'" selected', $normalizedHtml);
+        $response->assertSee('Selected Client', false);
+    }
+
+    public function test_client_filter_intersects_search_date_status_and_method(): void
+    {
+        $clientA = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Filter Client A',
+        ]);
+        $clientB = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Filter Client B',
+        ]);
+
+        $this->createOrder(
+            'CLIENT-A-001',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Filter Client A',
+            null,
+            10,
+            '2026-08-18 10:00:00',
+            $clientA->id
+        );
+        $this->createOrder(
+            'CLIENT-A-002',
+            Order::PAYMENT_STATUS_DEBT,
+            true,
+            0,
+            2000,
+            Order::PAYMENT_METHOD_BANK_TRANSFER,
+            'Filter Client A',
+            null,
+            10,
+            '2026-08-17 10:00:00',
+            $clientA->id
+        );
+        $this->createOrder(
+            'CLIENT-B-001',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            3000,
+            0,
+            Order::PAYMENT_METHOD_CASH,
+            'Filter Client B',
+            null,
+            10,
+            '2026-08-18 10:00:00',
+            $clientB->id
+        );
+
+        $searchHtml = $this->getOrderListHtml([
+            'client_id' => $clientA->id,
+            's' => '001',
+        ]);
+        $this->assertStringContainsString('CLIENT-A-001', $searchHtml);
+        $this->assertStringNotContainsString('CLIENT-B-001', $searchHtml);
+
+        $dateHtml = $this->getOrderListHtml([
+            'client_id' => $clientA->id,
+            'date_range' => '18/08/2026 - 18/08/2026',
+        ]);
+        $this->assertStringContainsString('CLIENT-A-001', $dateHtml);
+        $this->assertStringNotContainsString('CLIENT-A-002', $dateHtml);
+
+        $statusHtml = $this->getOrderListHtml([
+            'client_id' => $clientA->id,
+            'payment_status' => Order::PAYMENT_STATUS_DEBT,
+        ]);
+        $this->assertStringContainsString('CLIENT-A-002', $statusHtml);
+        $this->assertStringNotContainsString('CLIENT-A-001', $statusHtml);
+
+        $methodHtml = $this->getOrderListHtml([
+            'client_id' => $clientA->id,
+            'payment_method' => Order::PAYMENT_METHOD_BANK_TRANSFER,
+        ]);
+        $this->assertStringContainsString('CLIENT-A-002', $methodHtml);
+        $this->assertStringNotContainsString('CLIENT-A-001', $methodHtml);
+    }
+
+    public function test_client_filter_keeps_summary_and_query_string_across_pagination(): void
+    {
+        $client = Client::create([
+            'user_id' => $this->admin->id,
+            'name' => 'Paginated Client',
+        ]);
+
+        for ($index = 1; $index <= 11; $index++) {
+            $this->createOrder(
+                "CLIENT-PAGE-{$index}",
+                Order::PAYMENT_STATUS_PAID,
+                true,
+                1000000,
+                0,
+                Order::PAYMENT_METHOD_CASH,
+                'Paginated Client',
+                null,
+                10,
+                '2026-08-18 10:00:00',
+                $client->id
+            );
+        }
+
+        $pageTwo = $this->getOrderListHtml([
+            'client_id' => $client->id,
+            'page' => 2,
+        ]);
+
+        $this->assertStringContainsString('CLIENT-PAGE-11', $pageTwo);
+        $this->assertStringContainsString('>11</strong>', $pageTwo);
+        $this->assertStringContainsString('11.000.000 VND', $pageTwo);
+        $this->assertStringContainsString('client_id='.$client->id, html_entity_decode($pageTwo));
     }
 
     public function test_payment_status_filter_does_not_use_workflow_status_or_payment_method(): void
@@ -1073,10 +1299,12 @@ class AdminOrderDisplayTest extends TestCase
         ?string $name = null,
         ?string $phone = null,
         ?int $branchId = null,
-        ?string $createdAt = null
+        ?string $createdAt = null,
+        ?int $clientId = null
     ): Order {
         $order = Order::create([
             'user_id' => $this->admin->id,
+            'client_id' => $clientId,
             'branch_id' => $branchId ?? $this->admin->branch_id,
             'code' => $code,
             'name' => 'Khách kiểm thử',
