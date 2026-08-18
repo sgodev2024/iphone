@@ -21,9 +21,7 @@
             </div>
         </div>
     </div>
-    @include(
-    'Themes.pages.order.return.partials.source-order-modal'
-)
+    @include('Themes.pages.order.return.partials.source-order-modal')
 @endsection
 
 @push('script')

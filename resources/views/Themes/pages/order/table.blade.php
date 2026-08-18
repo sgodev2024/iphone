@@ -77,6 +77,7 @@
                         'cash' => 'Tiền mặt',
                         'bank_transfer' => 'Chuyển khoản',
                         'debt' => 'Công nợ',
+                        'exchange' => 'Đổi trả'
                     ];
                 @endphp
 
