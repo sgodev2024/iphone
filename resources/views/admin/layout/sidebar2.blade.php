@@ -263,7 +263,7 @@
 
                 <ul class="nav nav-collapse">
 
-                    @if (Auth::user()->role_id === 1)
+                    @if (Auth::user()?->isAdministrator())
                     <li class="{{ request()->routeIs('admin.users.index') ? 'active' : '' }}">
                         <a href="{{ url('/admin/users') }}">
                             <span class="sub-item">Tạo chi nhánh cửa hàng</span>

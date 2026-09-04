@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Storage;
+use App\Models\Roles;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -11,17 +12,12 @@ use Illuminate\Validation\ValidationException;
 
 class SaleStorageResolver
 {
-    private const MANAGER_ROLE_IDS = [1, 2];
-
-    private const STAFF_ROLE_ID = 3;
-
-    private const BRANCH_ROLE_ID = 2;
 
     private const SESSION_KEY_PREFIX = 'sale.storage_id.';
 
     public function resolveSaleStorageId(User $user, mixed $requestedStorageId = null): int
     {
-        if ((int) $user->role_id === self::STAFF_ROLE_ID) {
+        if ($user->isStaff()) {
             if (! $user->storage_id || ! Storage::query()->whereKey($user->storage_id)->exists()) {
                 throw ValidationException::withMessages([
                     'storage_id' => 'Nhân viên chưa được gán kho bán hàng.',
@@ -65,7 +61,7 @@ class SaleStorageResolver
 
     public function selectSaleStorageId(User $user, mixed $requestedStorageId): int
     {
-        if ((int) $user->role_id === self::STAFF_ROLE_ID) {
+        if ($user->isStaff()) {
             throw ValidationException::withMessages([
                 'storage_id' => 'Nhân viên không được tự thay đổi kho bán hàng.',
             ]);
@@ -76,7 +72,7 @@ class SaleStorageResolver
 
     public function saleStorageContext(User $user): array
     {
-        if ((int) $user->role_id === self::STAFF_ROLE_ID) {
+        if ($user->isStaff()) {
             $storage = $user->storage_id
                 ? Storage::query()->find($user->storage_id)
                 : null;
@@ -127,7 +123,7 @@ class SaleStorageResolver
 
     public function managedStorages(User $user): Collection
     {
-        if (! in_array((int) $user->role_id, self::MANAGER_ROLE_IDS, true)) {
+        if (! $user->isAdministrator() && ! $user->isAdminStore()) {
             return collect();
         }
 
@@ -143,7 +139,7 @@ class SaleStorageResolver
             ->merge(
                 User::query()
                     ->where('manager_id', $user->id)
-                    ->where('role_id', self::BRANCH_ROLE_ID)
+                    ->whereIn('role_id', Roles::adminStoreIds())
                     ->pluck('id')
             )
             ->map(fn ($id) => (int) $id)

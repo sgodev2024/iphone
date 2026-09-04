@@ -77,7 +77,9 @@ class ImportProductController extends Controller
 
     public function bulkDelete(Request $request)
     {
-        if (! Auth::check() || ! in_array((int) Auth::user()->role_id, [1, 2, 4], true)) {
+        $user = Auth::user();
+
+        if (! $user || (! $user->isAdministrator() && ! $user->isAdminStore() && $user->roleKey() !== 'warehouse')) {
             return response()->json([
                 'message' => 'Bạn không có quyền xóa phiếu nhập.',
             ], Response::HTTP_FORBIDDEN);

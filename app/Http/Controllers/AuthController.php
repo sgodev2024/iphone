@@ -67,12 +67,9 @@ class AuthController extends Controller
 
     private function loginRedirectFor(User $user): ?string
     {
-        $fallback = $user->hasFullAccess()
+        $fallback = $user->isAdministrator() || $user->isAdminStore()
             ? route('admin.dashboard', absolute: false)
-            : match ($user->roleKey()) {
-                'staff' => route('staff.index', absolute: false),
-                default => null,
-            };
+            : ($user->isStaff() ? route('staff.index', absolute: false) : null);
 
         if ($fallback === null) {
             return null;

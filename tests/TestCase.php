@@ -31,8 +31,8 @@ abstract class TestCase extends BaseTestCase
         });
 
         DB::table('roles')->insert([
-            ['id' => 1, 'name' => 'store', 'created_at' => now(), 'updated_at' => now()],
-            ['id' => 2, 'name' => 'admin', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 1, 'name' => 'administrator', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'name' => 'admin_store', 'created_at' => now(), 'updated_at' => now()],
             ['id' => 3, 'name' => 'staff', 'created_at' => now(), 'updated_at' => now()],
             ['id' => 4, 'name' => 'warehouse', 'created_at' => now(), 'updated_at' => now()],
         ]);
@@ -78,6 +78,13 @@ abstract class TestCase extends BaseTestCase
             ]);
 
             DB::table('role_permission')->insert([
+                [
+                    'guard_name' => 'web',
+                    'role_id' => 2,
+                    'permission_id' => $permissionId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
                 [
                     'guard_name' => 'web',
                     'role_id' => 3,

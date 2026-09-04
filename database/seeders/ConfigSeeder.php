@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Bank;
+use App\Models\Roles;
 use App\Models\Config;
 use App\Models\User;
 use App\Models\UserInfo;
@@ -23,7 +24,7 @@ class ConfigSeeder extends Seeder
                 'phone' => '0900000001',
                 'password' => Hash::make('password'),
                 'status' => 'active',
-                'role_id' => 1,
+                'role_id' => Roles::administratorId(),
                 'address' => 'Chưa cấu hình địa chỉ',
                 'company_name' => 'Cửa hàng cấu hình mẫu',
                 'store_name' => 'Cửa hàng cấu hình mẫu',

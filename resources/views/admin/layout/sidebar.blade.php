@@ -490,7 +490,7 @@
                             data-bs-parent="#adminSidebarMenu"
                         >
                             <ul class="nav nav-collapse">
-                                @if (Auth::check() && (int) Auth::user()->role_id === 1 )
+                                @if (Auth::user()?->isAdministrator())
                                     @canany(['branch.view', 'branch.create', 'user.view'])
                                         <li class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                                             <a href="{{ route('admin.branchs.index') }}">

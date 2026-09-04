@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Models\User;
+use App\Models\Roles;
 use App\Services\SignUpService;
 use Exception;
 use Illuminate\Http\Request;
@@ -48,11 +49,11 @@ class SignUpController extends Controller
         $phone = $request->input('phone');
         $email = $request->input('email');
 
-        $phoneExists = User::where('role_id', 1)
+        $phoneExists = User::whereIn('role_id', Roles::administratorIds())
             ->where('phone', $phone)
             ->exists();
 
-        $emailExists = User::where('role_id', 1)
+        $emailExists = User::whereIn('role_id', Roles::administratorIds())
             ->where('email', $email)
             ->exists();
 

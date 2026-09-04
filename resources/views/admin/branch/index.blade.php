@@ -87,7 +87,16 @@
 
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Người quản lý</label>
-                                <input type="text" class="form-control" name="manager_name" id="branch-manager_name">
+                                @if (auth()->user()?->isAdministrator())
+                                    <select class="form-select" name="admin_store_user_id" id="branch-admin_store_user_id">
+                                        <option value="">Chưa gán Admin Store</option>
+                                        @foreach ($adminStoreUsers as $adminStoreUser)
+                                            <option value="{{ $adminStoreUser->id }}">{{ $adminStoreUser->name }} ({{ $adminStoreUser->email }})</option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <input type="text" class="form-control" name="manager_name" id="branch-manager_name" disabled>
+                                @endif
                             </div>
 
                             <div class="col-md-12">

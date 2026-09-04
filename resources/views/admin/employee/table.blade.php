@@ -20,7 +20,7 @@
 
         @forelse ($employees as $employee)
             @php
-                $isAdminAccount = (int) $employee->role_id === 1;
+                $isAdminAccount = $employee->isAdministrator();
                 $workplaceLabel = $isAdminAccount
                     ? ($adminWorkplaceLabel ?? 'Toàn hệ thống')
                     : optional($employee->storage)->name ?? '-';

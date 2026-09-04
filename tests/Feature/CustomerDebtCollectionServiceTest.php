@@ -59,7 +59,7 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->service = app(CustomerDebtCollectionService::class);
         $this->owner = $this->createUser('owner@example.com');
         $this->otherOwner = $this->createUser('other@example.com');
-        $fullAccessRole = Roles::create(['name' => 'store']);
+        $fullAccessRole = Roles::create(['name' => 'administrator']);
         $this->owner->forceFill(['role_id' => $fullAccessRole->id])->save();
         $this->otherOwner->forceFill(['role_id' => $fullAccessRole->id])->save();
         $this->client = Client::create(['user_id' => $this->owner->id, 'name' => 'Khách FIFO']);

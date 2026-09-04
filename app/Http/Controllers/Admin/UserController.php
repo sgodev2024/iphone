@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Responses\ApiResponse;
 use App\Mail\SendMailInfo;
 use App\Models\User;
+use App\Models\Roles;
 use App\Services\AdminService;
 use App\Services\StorageService;
 use App\Services\UserService;
@@ -24,7 +25,6 @@ use Throwable;
 
 class UserController extends Controller
 {
-    private const BRANCH_ROLE_ID = 2;
 
     protected $userService;
     protected $adminService;
@@ -48,7 +48,7 @@ class UserController extends Controller
             $users = User::query()
                 ->where('id', '<>', Auth::id())
                 ->where('manager_id', Auth::id())
-                ->where('role_id', self::BRANCH_ROLE_ID)
+                ->whereIn('role_id', Roles::adminStoreIds())
                 ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%");
                 })
@@ -79,7 +79,7 @@ class UserController extends Controller
 
         try {
             $user = DB::transaction(function () use ($credentials) {
-                $credentials['role_id'] = self::BRANCH_ROLE_ID;
+                $credentials['role_id'] = Roles::adminStoreId();
                 $credentials['manager_id'] = Auth::id();
                 $credentials['password'] = Hash::make($credentials['password']);
 
@@ -132,7 +132,7 @@ class UserController extends Controller
     public function edit(string $id)
     {
         $user = User::query()
-            ->where('role_id', self::BRANCH_ROLE_ID)
+            ->whereIn('role_id', Roles::adminStoreIds())
             ->where('manager_id', Auth::id())
             ->findOrFail($id);
         $title = "Sua tai khoan - {$user->name}";
@@ -147,7 +147,7 @@ class UserController extends Controller
 
         return transaction(function () use ($credentials, $id) {
             $user = User::query()
-                ->where('role_id', self::BRANCH_ROLE_ID)
+                ->whereIn('role_id', Roles::adminStoreIds())
                 ->where('manager_id', Auth::id())
                 ->find($id);
 

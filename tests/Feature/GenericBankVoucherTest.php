@@ -37,7 +37,7 @@ class GenericBankVoucherTest extends TestCase
         Schema::dropAllTables();
         $this->createSchema();
 
-        $storeRole = Roles::create(['name' => 'store']);
+        $storeRole = Roles::create(['name' => 'administrator']);
         $this->owner = $this->createUser($storeRole, 'Owner A', 'owner-a@example.com');
         $this->otherOwner = $this->createUser($storeRole, 'Owner B', 'owner-b@example.com');
         $this->createAccounts();

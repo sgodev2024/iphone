@@ -30,7 +30,7 @@ class GenericCashVoucherTest extends TestCase
         Schema::dropAllTables();
         $this->createSchema();
 
-        $storeRole = Roles::create(['name' => 'store']);
+        $storeRole = Roles::create(['name' => 'administrator']);
         $this->owner = User::create([
             'name' => 'Owner A',
             'email' => 'owner-a@example.com',
@@ -132,7 +132,7 @@ class GenericCashVoucherTest extends TestCase
 
     public function test_generic_payment_uses_staff_canonical_owner_and_never_touches_131_or_331(): void
     {
-        $storeRole = Roles::firstWhere('name', 'store');
+        $storeRole = Roles::firstWhere('name', 'administrator');
         $staff = User::create([
             'manager_id' => $this->owner->id,
             'name' => 'Staff A',

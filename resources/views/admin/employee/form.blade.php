@@ -2,7 +2,7 @@
 
 @section('content')
     @php
-        $isAdminAccount = ($accountType ?? null) === 'admin' || (int) optional($user)->role_id === 1;
+        $isAdminAccount = ($accountType ?? null) === 'administrator' || optional($user)->isAdministrator();
         $requiresStorage = $requiresStorage ?? false;
         $storages = $storages ?? collect();
         $accountLabel = $isAdminAccount ? 'Admin' : ($requiresStorage ? 'nhân viên' : 'chi nhánh');

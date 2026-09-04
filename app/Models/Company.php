@@ -11,6 +11,7 @@ class Company extends Model
     use HasFactory;
     protected $fillable = [
         'user_id',
+        'branch_id',
         'name',
         'phone',
         'address',
@@ -26,6 +27,11 @@ class Company extends Model
     protected $casts = [
         'status' => 'boolean',
     ];
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     public function city()
     {

@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Models\UserInfo;
-use App\Models\Storage;
 
 class User extends Authenticatable
 {
@@ -95,6 +94,11 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+    public function administeredBranch(): HasOne
+    {
+        return $this->hasOne(Branch::class, 'admin_store_user_id');
+    }
+
     public function owner(): User
     {
         if ($this->manager_id === null) {
@@ -151,16 +155,46 @@ class User extends Authenticatable
             return (int) $this->role_id === (int) $requiredRole;
         }
 
-        return $this->roleKey() === strtolower($requiredRole);
+        $requiredRole = strtolower($requiredRole);
+
+        if (in_array($requiredRole, Roles::ADMINISTRATOR_NAMES, true)) {
+            return $this->isAdministrator();
+        }
+
+        if (in_array($requiredRole, Roles::ADMIN_STORE_NAMES, true)) {
+            return $this->isAdminStore();
+        }
+
+        if (in_array($requiredRole, Roles::STAFF_NAMES, true)) {
+            return $this->isStaff();
+        }
+
+        return $this->roleKey() === $requiredRole;
     }
     public function transaction()
     {
         return $this->hasMany(Transaction::class, 'user_id');
     }
 
+    public function isAdministrator(): bool
+    {
+        return $this->role?->isAdministrator() ?? false;
+    }
+
+    public function isAdminStore(): bool
+    {
+        return $this->role?->isAdminStore() ?? false;
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role?->isStaff() ?? false;
+    }
+
+    /** @deprecated Use isAdminStore() explicitly for the legacy `admin` role. */
     public function isAdmin(): bool
     {
-        return $this->role?->normalizedName() === 'admin';
+        return $this->isAdminStore();
     }
 
     public function branchScopeId(): ?int

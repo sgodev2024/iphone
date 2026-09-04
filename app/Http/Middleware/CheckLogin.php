@@ -25,7 +25,10 @@ class CheckLogin
 
         $user = auth()->user();
 
-        if (!in_array($user->role_id, [1, 2, 3])) {
+        if (! $user->isAdministrator()
+            && ! $user->isAdminStore()
+            && ! $user->isStaff()
+            && $user->roleKey() !== 'warehouse') {
             abort(403, 'Access denied');
         }
 

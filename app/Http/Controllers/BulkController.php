@@ -7,6 +7,7 @@ use App\Models\Categories;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Product;
+use App\Models\Roles;
 use App\Models\Storage;
 use App\Models\User;
 use App\Services\ClientService;
@@ -19,9 +20,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BulkController extends Controller
 {
-    private const ADMIN_ROLE_ID = 1;
-    private const BRANCH_ROLE_ID = 2;
-    private const EMPLOYEE_ROLE_ID = 3;
 
     private const DELETE_MODELS = [
         'Brand' => Brand::class,
@@ -132,7 +130,7 @@ class BulkController extends Controller
         $authUser = Auth::user();
         $authId = (int) Auth::id();
 
-        if (! $authUser || (int) $authUser->role_id !== self::ADMIN_ROLE_ID) {
+        if (! $authUser || ! $authUser->isAdministrator()) {
             return errorResponse(
                 'Không có quyền ngừng hoạt động tài khoản nhân viên.',
                 Response::HTTP_FORBIDDEN
@@ -154,14 +152,14 @@ class BulkController extends Controller
             return errorResponse('Tài khoản không tồn tại.', Response::HTTP_NOT_FOUND);
         }
 
-        if ($users->contains(fn (User $user) => (int) $user->role_id === self::ADMIN_ROLE_ID)) {
+        if ($users->contains(fn (User $user) => $user->isAdministrator())) {
             return errorResponse(
                 'Không thể ngừng hoạt động tài khoản Admin.',
                 Response::HTTP_UNPROCESSABLE_ENTITY
             );
         }
 
-        if ($users->contains(fn (User $user) => (int) $user->role_id !== self::EMPLOYEE_ROLE_ID)) {
+        if ($users->contains(fn (User $user) => ! $user->isStaff())) {
             return errorResponse(
                 'Chỉ được ngừng hoạt động tài khoản nhân viên.',
                 Response::HTTP_UNPROCESSABLE_ENTITY
@@ -194,7 +192,7 @@ class BulkController extends Controller
         $managedStorageIds = $this->managedStorageIds();
 
         return User::query()
-            ->where('role_id', self::EMPLOYEE_ROLE_ID)
+            ->whereIn('role_id', Roles::staffIds())
             ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
                 if (empty($managedUserIds) && empty($managedStorageIds)) {
                     $query->whereRaw('1 = 0');
@@ -222,7 +220,7 @@ class BulkController extends Controller
 
         $branchIds = User::query()
             ->where('manager_id', $user->id)
-            ->where('role_id', self::BRANCH_ROLE_ID)
+            ->whereIn('role_id', Roles::adminStoreIds())
             ->pluck('id');
 
         return collect([(int) $user->id])

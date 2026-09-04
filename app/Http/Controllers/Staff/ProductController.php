@@ -328,7 +328,7 @@ class ProductController extends Controller
     {
         $user = Auth::user();
 
-        $userId = $user->role_id === 3 ? $user->manager_id : $user->id;
+        $userId = $user->isStaff() ? $user->manager_id : $user->id;
 
         $searchText = $request->input('searchText');
         $clients = Client::query()
@@ -493,7 +493,7 @@ class ProductController extends Controller
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
 
-        $userId = $user->role_id === 3 ? ($user->manager_id ?? $user->id) : $user->id;
+        $userId = $user->isStaff() ? ($user->manager_id ?? $user->id) : $user->id;
 
         $productStorages = ProductStorage::with('product')
             ->where('storage_id', $storage_id)

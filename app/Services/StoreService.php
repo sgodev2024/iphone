@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\UserRegistered;
 use App\Models\Config;
 use App\Models\User;
+use App\Models\Roles;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class StoreService
     public function getAllStore(): LengthAwarePaginator
     {
         try {
-            return $this->user->where('role_id', 1)->orderByDesc('created_at')->paginate(10);
+            return $this->user->whereIn('role_id', Roles::administratorIds())->orderByDesc('created_at')->paginate(10);
         } catch (Exception $e) {
             Log::error('Failed to fetch stores: ' . $e->getMessage());
             throw new Exception('Failed to fetch stores');
@@ -45,7 +46,7 @@ class StoreService
         try {
             $staff = $this->user
                 ->where('phone', $phone)
-                ->where('role_id', 1)
+                ->whereIn('role_id', Roles::administratorIds())
                 ->first();
             return $staff;
         } catch (Exception $e) {

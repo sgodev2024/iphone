@@ -141,6 +141,58 @@ class AdminCrudAuditTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_branch_can_assign_one_admin_store_and_rejects_staff_or_duplicate_assignment(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+        $adminStore = $this->createUser('admin-store@example.com', '0902000010', 2);
+        $staff = $this->createUser('staff-branch@example.com', '0902000011', 3);
+
+        $this->actingAs($administrator)->postJson('/admin/branchs', [
+            'name' => 'Store Ha Noi',
+            'admin_store_user_id' => $adminStore->id,
+            'address' => 'Ha Noi',
+            'status' => '1',
+        ])->assertCreated();
+
+        $branch = Branch::query()->where('name', 'Store Ha Noi')->firstOrFail();
+        $adminStore->refresh();
+
+        $this->assertSame($adminStore->id, (int) $branch->admin_store_user_id);
+        $this->assertSame($branch->id, (int) $adminStore->branch_id);
+        $this->assertTrue($branch->adminStore->is($adminStore));
+        $this->assertTrue($adminStore->branch->is($branch));
+
+        $this->actingAs($administrator)->postJson('/admin/branchs', [
+            'name' => 'Invalid Staff Branch',
+            'admin_store_user_id' => $staff->id,
+            'address' => 'Da Nang',
+            'status' => '1',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('admin_store_user_id');
+
+        $this->actingAs($administrator)->postJson('/admin/branchs', [
+            'name' => 'Duplicate Admin Store',
+            'admin_store_user_id' => $adminStore->id,
+            'address' => 'Sai Gon',
+            'status' => '1',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('admin_store_user_id');
+    }
+
+    public function test_admin_store_cannot_assign_branch_manager_through_direct_request(): void
+    {
+        $adminStore = $this->createUser('admin-store-owner@example.com', '0902000012', 2);
+        $otherAdminStore = $this->createUser('other-admin-store@example.com', '0902000013', 2);
+
+
+        $this->actingAs($adminStore)->postJson('/admin/branchs', [
+            'name' => 'Forbidden Assignment',
+            'admin_store_user_id' => $otherAdminStore->id,
+            'address' => 'Ha Noi',
+            'status' => '1',
+        ])->assertForbidden();
+    }
+
     public function test_storage_crud_validation_and_authorization(): void
     {
         $warehouseUser = $this->createUser(roleId: 4);
@@ -461,13 +513,23 @@ class AdminCrudAuditTest extends TestCase
             $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id');
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
 
+        Schema::create('user_info', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('img_url')->nullable();
+            $table->timestamps();
+        });
+
+
         Schema::create('branches', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('admin_store_user_id')->nullable()->unique();
             $table->string('name');
             $table->string('manager_name')->nullable();
             $table->string('address', 500);
@@ -482,6 +544,14 @@ class AdminCrudAuditTest extends TestCase
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('product_storage', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('storage_id');
+            $table->integer('quantity')->default(0);
             $table->timestamps();
         });
 

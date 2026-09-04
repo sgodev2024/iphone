@@ -88,7 +88,7 @@ Route::middleware(['auth'])
             ->name('logout');
 
 
-        Route::middleware(['role:store'])->group(function () {
+        Route::middleware(['role:administrator,admin_store'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -795,7 +795,7 @@ Route::middleware(['auth'])
         |--------------------------------------------------------------------------
         */
 
-        Route::middleware(['role:4'])->group(function () {
+        Route::middleware(['role:administrator,admin_store,4'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -956,7 +956,7 @@ Route::middleware(['auth'])
         |--------------------------------------------------------------------------
         */
 
-        Route::middleware(['role:staff'])->group(function () {
+        Route::middleware(['role:administrator,admin_store,staff'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
@@ -1159,7 +1159,7 @@ Route::middleware(['auth'])
     });
 
 // bán hàng
-Route::middleware('role:staff')->prefix('ban-hang')->name('staff.')->group(function () {
+Route::middleware('role:administrator,admin_store,staff')->prefix('ban-hang')->name('staff.')->group(function () {
     Route::post('storage/select', [StaffProductController::class, 'selectSaleStorage'])->name('storage.select');
     Route::get('product/search', [StaffProductController::class, 'search'])->name('product.search');
     Route::post('barcode/resolve', [StaffBarcodeController::class, 'resolve'])->name('barcode.resolve');

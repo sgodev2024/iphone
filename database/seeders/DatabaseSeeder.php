@@ -14,8 +14,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         DB::table('roles')->insertOrIgnore([
-            ['id' => 1, 'name' => 'store', 'description' => 'Store owner'],
-            ['id' => 2, 'name' => 'admin', 'description' => 'Administrator'],
+            ['id' => 1, 'name' => 'administrator', 'description' => 'Administrator'],
+            ['id' => 2, 'name' => 'admin_store', 'description' => 'Admin Store'],
             ['id' => 3, 'name' => 'staff', 'description' => 'Staff'],
         ]);
 

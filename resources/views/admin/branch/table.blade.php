@@ -4,6 +4,7 @@
             <th style="width: 10px;"><input type="checkbox" id="check-all"></th>
             <th style="width: 12%"># | NGÀY TẠO</th>
             <th>TÊN CHI NHÁNH</th>
+            <th>ADMIN STORE</th>
             <th>ĐỊA CHỈ</th>
             <th style="width: 18%">SỐ ĐIÊN THOẠI | EMAIL</th>
             <th style="width: 12%">TRẠNG THÁI</th>
@@ -21,6 +22,7 @@
                         {{ $loop->iteration }} | {{ $branch->created_at->format('d/m/Y') }}
                     </td>
                     <td>{{ $branch->name }}</td>
+                    <td>{{ $branch->adminStore?->name ?? $branch->manager_name ?? '-' }}</td>
                     <td>{{ $branch->address }}</td>
                     <td>
                         {{ $branch->phone ?? '-' }} <br> {{ $branch->email ?? '-' }}
@@ -43,7 +45,7 @@
             @endforeach
         @else
             <tr>
-                <td class="text-center" colspan="7">
+                <td class="text-center" colspan="8">
                     <div class="">
                         Không có chi nhánh
                     </div>

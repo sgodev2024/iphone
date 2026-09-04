@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Permission;
+use App\Models\Roles;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class PermissionSeeder extends Seeder
 {
@@ -824,6 +826,23 @@ class PermissionSeeder extends Seeder
                 ],
                 $permission
             );
+        }
+
+        $now = now();
+        $permissionIds = Permission::query()->pluck('id');
+        $rolePermissions = collect(Roles::adminStoreIds())
+            ->crossJoin($permissionIds)
+            ->map(fn (array $ids) => [
+                'guard_name' => 'web',
+                'role_id' => $ids[0],
+                'permission_id' => $ids[1],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->all();
+
+        if ($rolePermissions !== []) {
+            DB::table('role_permission')->insertOrIgnore($rolePermissions);
         }
     }
 }

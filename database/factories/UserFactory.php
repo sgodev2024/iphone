@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Roles;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -29,7 +30,7 @@ class UserFactory extends Factory
             // 'company_name' => $this->faker->company(),
             // 'tax_code' => $this->faker->regexify('[A-Z0-9]{10}'),
             'address' => $this->faker->address(),
-            'role_id' => 2,
+            'role_id' => Roles::adminStoreId(),
             // 'city_id' => $this->faker->numberBetween(1, 63),
             // 'field_id' => $this->faker->numberBetween(1, 12),
         ];

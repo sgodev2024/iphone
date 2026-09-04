@@ -16,7 +16,7 @@ class ClientController extends Controller
     public function addClient(Request $request)
     {
         $user = Auth::user();
-        $userId = $user->role_id === 3 ? $user->manager_id : $user->id;
+        $userId = $user->isStaff() ? $user->manager_id : $user->id;
 
         $data = Validator::make($request->all(), [
             'name' => ['required', 'max:255'],

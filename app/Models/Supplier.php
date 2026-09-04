@@ -16,7 +16,7 @@ class Supplier extends Model
         'company_id',
     ];
 
-    protected function company()
+    public function company()
     {
         return $this->belongsTo(Company::class);
     }

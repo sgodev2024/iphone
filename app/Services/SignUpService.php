@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Config;
 use App\Models\Field;
 use App\Models\SuperAdmin;
+use App\Models\Roles;
 use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +48,7 @@ class SignUpService
                 'dob' => $data['dob'],
                 'password' => $hashedPassword,
                 'status' => 'active',
-                'role_id' => 1,
+                'role_id' => Roles::administratorId(),
                 'city_id' => $data['city'],
                 'tax_code' => $data['tax_code'],
                 'store_name' => $data['store_name'],

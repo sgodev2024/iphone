@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Mail\SendMailInfo;
 use App\Models\Storage;
+use App\Models\Roles;
 use App\Models\User;
 use App\Services\SaleStorageResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,9 +21,6 @@ use Throwable;
 
 class EmployeeController extends Controller
 {
-    private const ADMIN_ROLE_ID = 1;
-    private const BRANCH_ROLE_ID = 2;
-    private const EMPLOYEE_ROLE_ID = 3;
 
     public function __construct(private SaleStorageResolver $saleStorageResolver)
     {
@@ -86,7 +84,7 @@ class EmployeeController extends Controller
                     $credentials['img_url'] = $avatar;
                 }
 
-                $credentials['role_id'] = self::EMPLOYEE_ROLE_ID;
+                $credentials['role_id'] = Roles::staffId();
                 $credentials['manager_id'] = Auth::id();
                 $credentials['password'] = Hash::make($credentials['password']);
                 $credentials['branch_id'] = Auth::user()->branch_id;
@@ -147,7 +145,7 @@ class EmployeeController extends Controller
         $api = "/admin/employees/$user->id";
         $storages = $isAdmin ? collect() : $this->storageOptions();
         $requiresStorage = ! $isAdmin;
-        $accountType = $isAdmin ? 'admin' : 'employee';
+        $accountType = $isAdmin ? 'administrator' : 'employee';
         $adminWorkplaceLabel = $isAdmin ? $this->adminWorkplaceLabel($user) : null;
 
         return view('admin.employee.form', compact('title', 'api', 'user', 'storages', 'requiresStorage', 'accountType', 'adminWorkplaceLabel'));
@@ -163,7 +161,7 @@ class EmployeeController extends Controller
             abort(Response::HTTP_FORBIDDEN);
         }
 
-        $accountType = $this->isAdminAccount($user) ? 'admin' : 'employee';
+        $accountType = $this->isAdminAccount($user) ? 'administrator' : 'employee';
         $credentials = $this->validateRequest($request, $id, $accountType);
 
         return transaction(function () use ($credentials, $request, $user, $accountType) {
@@ -180,12 +178,12 @@ class EmployeeController extends Controller
 
             $user->update($credentials);
 
-            if ($accountType === 'admin') {
+            if ($accountType === 'administrator') {
                 Auth::setUser($user->fresh('userInfo'));
             }
 
             return successResponse(
-                message: $accountType === 'admin'
+                message: $accountType === 'administrator'
                     ? 'Cập nhật tài khoản Admin thành công.'
                     : 'Cập nhật tài khoản nhân viên thành công.',
                 data: ['redirect' => '/admin/employees'],
@@ -207,7 +205,7 @@ class EmployeeController extends Controller
             'manager_id' => ['prohibited'],
         ];
 
-        if ($accountType === 'admin') {
+        if ($accountType === 'administrator') {
             $rules['address'] = ['prohibited'];
             $rules['storage_id'] = ['prohibited'];
             $rules['status'] = ['prohibited'];
@@ -245,9 +243,9 @@ class EmployeeController extends Controller
             ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
                 $query->where(function (Builder $query) {
                     $query->whereKey(Auth::id())
-                        ->where('role_id', self::ADMIN_ROLE_ID);
+                        ->whereIn('role_id', Roles::administratorIds());
                 })->orWhere(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
-                    $query->where('role_id', self::EMPLOYEE_ROLE_ID)
+                    $query->whereIn('role_id', Roles::staffIds())
                         ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
                             if (empty($managedUserIds) && empty($managedStorageIds)) {
                                 $query->whereRaw('1 = 0');
@@ -277,7 +275,7 @@ class EmployeeController extends Controller
 
         $branchIds = User::query()
             ->where('manager_id', $user->id)
-            ->where('role_id', self::BRANCH_ROLE_ID)
+            ->whereIn('role_id', Roles::adminStoreIds())
             ->pluck('id');
 
         return collect([(int) $user->id])
@@ -310,7 +308,7 @@ class EmployeeController extends Controller
 
     private function isAdminAccount(User $user): bool
     {
-        return (int) $user->role_id === self::ADMIN_ROLE_ID;
+        return $user->isAdministrator();
     }
 
     private function adminWorkplaceLabel(?User $user): string

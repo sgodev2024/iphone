@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
+use App\Models\Roles;
 use App\Models\User;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -115,7 +116,7 @@ class DashboardService
     {
         try {
             $newStaff = $this->user
-                ->where('role_id', 2)
+                ->whereIn('role_id', Roles::adminStoreIds())
                 ->orderByDesc('created_at', $this->currentMonth)
                 ->limit(6)
                 ->get();

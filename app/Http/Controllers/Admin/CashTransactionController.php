@@ -14,6 +14,7 @@ use App\Models\Employee;
 use App\Models\Supplier;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
+use App\Models\Roles;
 use App\Models\User;
 use App\Services\CashActivityReadService;
 use App\Support\DecimalAmount;
@@ -669,13 +670,13 @@ class CashTransactionController extends Controller
 
         $ownerIds = collect([(int) $user->id]);
 
-        if ((int) $user->role_id === 3 && $user->manager_id) {
+        if ($user->isStaff() && $user->manager_id) {
             $ownerIds->push((int) $user->manager_id);
         }
 
         $managedBranchIds = User::query()
             ->where('manager_id', $user->id)
-            ->where('role_id', 2)
+            ->whereIn('role_id', Roles::adminStoreIds())
             ->pluck('id');
 
         return $ownerIds

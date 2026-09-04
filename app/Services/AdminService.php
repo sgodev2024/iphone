@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SuperAdmin;
+use App\Models\Roles;
 use App\Models\User;
 use App\Models\UserInfo;
 use Exception;
@@ -152,7 +153,7 @@ class AdminService
     {
         DB::beginTransaction();
         try {
-            $admin = $this->user->where('role_id', 2)->orderByDesc('created_at')->paginate(10);
+            $admin = $this->user->whereIn('role_id', Roles::adminStoreIds())->orderByDesc('created_at')->paginate(10);
             DB::commit();
             return $admin;
         } catch (Exception $e) {
@@ -166,7 +167,7 @@ class AdminService
         try {
             $staff = $this->user
                 ->where('phone', $phone)
-                ->where('role_id', 2)
+                ->whereIn('role_id', Roles::adminStoreIds())
                 ->first();
             return $staff;
         } catch (Exception $e) {

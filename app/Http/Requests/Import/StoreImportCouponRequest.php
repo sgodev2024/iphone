@@ -15,8 +15,11 @@ class StoreImportCouponRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null
-            && in_array((int) $this->user()->role_id, [1, 2, 4], true);
+        $user = $this->user();
+
+        return $user !== null
+            && ($user->isAdministrator() || $user->isAdminStore()
+                || $user->roleKey() === 'warehouse');
     }
 
     protected function prepareForValidation(): void

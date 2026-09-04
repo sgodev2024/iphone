@@ -26,6 +26,7 @@ class AuthServiceProvider extends ServiceProvider
         $this->registerPolicies();
 
         Gate::before(function (User $user, string $ability) {
+            // hasFullAccess() is intentionally restricted to Administrator.
             if ($user->hasFullAccess()) {
                 return true;
             }

@@ -12,6 +12,7 @@ class Client extends Model
     protected $table = 'clients'; // Tên bảng trong cơ sở dữ liệu
     protected $fillable = [
         'user_id',
+        'branch_id',
         'name',
         'phone',
         'zip_code',
@@ -34,5 +35,10 @@ class Client extends Model
     public function customerDebtCollections()
     {
         return $this->hasMany(CustomerDebtCollection::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 }
