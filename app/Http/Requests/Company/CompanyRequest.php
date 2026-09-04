@@ -25,6 +25,9 @@ class CompanyRequest extends FormRequest
         $id = $this->route('id') ?? null;
 
         return [
+            'branch_id' => $this->user()?->isAdministrator()
+                ? ['nullable', 'integer', 'exists:branches,id']
+                : ['prohibited'],
             'name' => 'required|max:255|unique:companies,name,' . $id,
             'phone' => 'required|regex:/^[0-9]{10,11}$/|unique:companies,phone,' . $id,
             'email' => 'required|email|unique:companies,email,' . $id,

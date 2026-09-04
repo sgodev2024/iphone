@@ -12,7 +12,8 @@ class ClientsExport implements FromCollection, WithHeadings, WithMapping
     private int $rowNumber = 0;
 
     public function __construct(
-        private readonly string $searchText = ''
+        private readonly string $searchText = '',
+        private readonly ?int $branchId = null,
     ) {}
 
     public function collection()
@@ -26,6 +27,7 @@ class ClientsExport implements FromCollection, WithHeadings, WithMapping
                 'address',
                 'created_at',
             ])
+            ->when($this->branchId !== null, fn ($query) => $query->where('branch_id', $this->branchId))
             ->when($this->searchText !== '', function ($query) {
                 $searchText = $this->searchText;
 

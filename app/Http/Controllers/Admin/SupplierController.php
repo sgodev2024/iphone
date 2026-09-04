@@ -3,35 +3,38 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Supplier;
-use App\Services\SupplierService;
+use App\Support\BranchContext;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Throwable;
 
 class SupplierController extends Controller
 {
-    protected $supplierService;
-
-    public function __construct(SupplierService $supplierService)
+    public function __construct(private BranchContext $branchContext)
     {
-        $this->supplierService = $supplierService;
     }
 
     public function index($id)
     {
+        $company = $this->companyQuery()->findOrFail($id);
+
         try {
             $title = 'Nguoi dai dien';
-            $suppliers = $this->supplierService->getSuppliersByCompanyId($id);
+            $suppliers = Supplier::query()
+                ->where('company_id', $company->id)
+                ->latest()
+                ->paginate(10);
 
             return view('admin.supplier.index', [
                 'suppliers' => $suppliers,
                 'title' => $title,
-                'company_id' => $id,
+                'company_id' => $company->id,
             ]);
         } catch (Exception $e) {
             Log::error('Failed to fetch suppliers: ' . $e->getMessage());
@@ -43,14 +46,20 @@ class SupplierController extends Controller
     public function findByPhone(Request $request)
     {
         try {
-            $supplier = $this->supplierService->findSupplierByPhone($request->input('phone'));
+            $supplier = $this->supplierQuery()
+                ->where('phone', $request->input('phone'))
+                ->first();
 
             if (! $supplier) {
-                return redirect()->route('admin.supplier.index')->withErrors('Nha cung cap khong ton tai');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Nha cung cap khong ton tai',
+                ], 404);
             }
 
             $companyId = $supplier->company_id;
-            $suppliers = Supplier::where('company_id', $companyId)
+            $suppliers = $this->supplierQuery()
+                ->where('company_id', $companyId)
                 ->orderByDesc('created_at')
                 ->paginate(10);
 
@@ -72,12 +81,15 @@ class SupplierController extends Controller
 
     public function add($company_id)
     {
+        $this->companyQuery()->findOrFail($company_id);
+
         return view('admin.supplier.add', compact('company_id'));
     }
 
     public function store(Request $request)
     {
         $credentials = $this->validateSupplier($request);
+        $this->companyQuery()->findOrFail($credentials['company_id']);
 
         try {
             $supplier = Supplier::create($credentials);
@@ -97,7 +109,7 @@ class SupplierController extends Controller
     public function edit($id)
     {
         try {
-            $suppliers = $this->supplierService->findSupplierById($id);
+            $suppliers = $this->supplierQuery()->findOrFail($id);
 
             return view('admin.supplier.edit', compact('suppliers'));
         } catch (Exception $e) {
@@ -109,8 +121,9 @@ class SupplierController extends Controller
 
     public function update($id, Request $request)
     {
-        $supplier = Supplier::findOrFail($id);
+        $supplier = $this->supplierQuery()->findOrFail($id);
         $credentials = $this->validateSupplier($request, $id);
+        $this->companyQuery()->findOrFail($credentials['company_id']);
 
         try {
             $supplier->update($credentials);
@@ -129,10 +142,14 @@ class SupplierController extends Controller
 
     public function delete($id)
     {
-        try {
-            $companyId = $this->supplierService->deleteSupplier($id);
+        $supplier = $this->supplierQuery()->findOrFail($id);
 
-            $suppliers = Supplier::where('company_id', $companyId)
+        try {
+            $companyId = $supplier->company_id;
+            $supplier->delete();
+
+            $suppliers = $this->supplierQuery()
+                ->where('company_id', $companyId)
                 ->orderByDesc('created_at')
                 ->paginate(10);
 
@@ -172,5 +189,17 @@ class SupplierController extends Controller
                 'phone' => 'So dien thoai',
             ]
         );
+    }
+
+    private function companyQuery(): Builder
+    {
+        return $this->branchContext->scope(Company::query(), Auth::user());
+    }
+
+    private function supplierQuery(): Builder
+    {
+        $companies = $this->companyQuery()->select('id');
+
+        return Supplier::query()->whereIn('company_id', $companies);
     }
 }

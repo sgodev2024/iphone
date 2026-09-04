@@ -15,6 +15,7 @@ use App\Services\ClientGroupService;
 use App\Services\ClientService;
 use App\Services\ProductService;
 use App\Services\SaleStorageResolver;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -33,7 +34,8 @@ class ProductController extends Controller
         ProductService $productService,
         ClientService $clientService,
         ClientGroupService $clientGroupService,
-        SaleStorageResolver $saleStorageResolver
+        SaleStorageResolver $saleStorageResolver,
+        private BranchContext $branchContext,
     ) {
         $this->productService = $productService;
         $this->clientService = $clientService;
@@ -328,11 +330,9 @@ class ProductController extends Controller
     {
         $user = Auth::user();
 
-        $userId = $user->isStaff() ? $user->manager_id : $user->id;
-
         $searchText = $request->input('searchText');
-        $clients = Client::query()
-            ->where('user_id', $userId)
+        $clients = $this->branchContext
+            ->scope(Client::query(), $user)
             ->when(! empty($searchText), function ($query) use ($searchText) {
                 $query->where(function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%")

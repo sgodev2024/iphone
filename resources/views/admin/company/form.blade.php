@@ -16,6 +16,20 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="row gy-4">
+                                @if (auth()->user()->isAdministrator())
+                                    <div class="col-md-12">
+                                        <label for="branch_id" class="form-label mb-1 fw-bold">Cửa hàng</label>
+                                        <select name="branch_id" class="form-select form-control">
+                                            <option value="">Dữ liệu legacy / chưa gán cửa hàng</option>
+                                            @foreach (($branches ?? collect()) as $branch)
+                                                <option value="{{ $branch->id }}" @selected((string) old('branch_id', optional($company)->branch_id) === (string) $branch->id)>
+                                                    {{ $branch->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+
                                 <div class="col-md-12">
                                     <label for="name" class="form-label mb-1 fw-bold">Tên nhà cung cấp</label>
                                     <input type="text" class="form-control" name="name"

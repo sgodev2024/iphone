@@ -14,6 +14,7 @@ class Storage extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_id',
         'name',
         'location',
     ];

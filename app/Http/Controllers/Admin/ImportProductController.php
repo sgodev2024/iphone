@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Import;
 use App\Models\ImportCoupon;
+use App\Models\Company;
+use App\Models\User;
 use App\Models\Product;
 use App\Services\CategoryService;
 use App\Services\CompanyService;
@@ -13,6 +15,7 @@ use App\Services\ImportProductService;
 use App\Services\ProductService;
 use App\Services\StorageService;
 use App\Services\SupplierPaymentService;
+use App\Support\BranchContext;
 use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,13 +38,16 @@ class ImportProductController extends Controller
 
     protected $storageService;
 
-    public function __construct(ProductService $productService, CategoryService $categoryService, ImportProductService $importProductService, CompanyService $companyService, StorageService $storageService)
+    protected BranchContext $branchContext;
+
+    public function __construct(ProductService $productService, CategoryService $categoryService, ImportProductService $importProductService, CompanyService $companyService, StorageService $storageService, BranchContext $branchContext)
     {
         $this->productService = $productService;
         $this->categoryService = $categoryService;
         $this->importProductService = $importProductService;
         $this->companyService = $companyService;
         $this->storageService = $storageService;
+        $this->branchContext = $branchContext;
     }
 
     public function index(Request $request)
@@ -60,7 +66,7 @@ class ImportProductController extends Controller
             $paymentStatus,
             $outstandingOnly
         );
-        $companies = $this->companyService->getCompanyOptionsForOwner($ownerId);
+        $companies = $this->companyOptions($request->user(), ['id', 'name']);
         $paymentStatusOptions = ImportCoupon::paymentStatusFilterOptions();
 
         return view('admin.Importproduct.index', compact(
@@ -162,7 +168,7 @@ class ImportProductController extends Controller
             ->get();
         $category = $this->categoryService->getCategoryAllStaff();
         $user = Auth::user();
-        $supplier = $this->companyService->getCompanyForOwner((int) $user->ownerId());
+        $supplier = $this->companyOptions($user);
         $storage = $this->storageService->getAllStorage();
         $bankAccounts = collect();
 
@@ -378,6 +384,19 @@ class ImportProductController extends Controller
         $user = Auth::user();
 
         return $user ? [(int) $user->ownerId()] : [];
+    }
+
+    private function companyOptions(User $user, array $columns = ['*'])
+    {
+        $query = Company::query();
+
+        if ($user->roleKey() === 'warehouse') {
+            $query->where('user_id', $user->ownerId());
+        } else {
+            $this->branchContext->scope($query, $user);
+        }
+
+        return $query->orderBy('name')->get($columns);
     }
 
     private function normalizePaymentStatus(mixed $value): ?string

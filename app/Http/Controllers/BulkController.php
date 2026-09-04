@@ -11,6 +11,7 @@ use App\Models\Roles;
 use App\Models\Storage;
 use App\Models\User;
 use App\Services\ClientService;
+use App\Support\BranchContext;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -39,7 +40,10 @@ class BulkController extends Controller
         'Storage' => Storage::class,
     ];
 
-    public function __construct(private ClientService $clientService)
+    public function __construct(
+        private ClientService $clientService,
+        private BranchContext $branchContext,
+    )
     {
     }
 
@@ -61,6 +65,17 @@ class BulkController extends Controller
 
         if (empty($ids)) {
             return errorResponse('Vui lòng chọn ít nhất 1 bản ghi!', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if (in_array($modelClass, [Client::class, Company::class], true)) {
+            $allowed = $this->branchContext
+                ->scope($modelClass::query(), Auth::user())
+                ->whereIn('id', $ids)
+                ->count();
+
+            if ($allowed !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
         }
 
         if ($type === 'delete' && $modelClass === User::class) {
@@ -130,7 +145,7 @@ class BulkController extends Controller
         $authUser = Auth::user();
         $authId = (int) Auth::id();
 
-        if (! $authUser || ! $authUser->isAdministrator()) {
+        if (! $authUser || (! $authUser->isAdministrator() && ! $authUser->isAdminStore())) {
             return errorResponse(
                 'Không có quyền ngừng hoạt động tài khoản nhân viên.',
                 Response::HTTP_FORBIDDEN
@@ -188,66 +203,9 @@ class BulkController extends Controller
 
     private function managedEmployeeQuery(): Builder
     {
-        $managedUserIds = $this->managedUserIds();
-        $managedStorageIds = $this->managedStorageIds();
-
-        return User::query()
-            ->whereIn('role_id', Roles::staffIds())
-            ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
-                if (empty($managedUserIds) && empty($managedStorageIds)) {
-                    $query->whereRaw('1 = 0');
-
-                    return;
-                }
-
-                if (!empty($managedUserIds)) {
-                    $query->whereIn('manager_id', $managedUserIds);
-                }
-
-                if (!empty($managedStorageIds)) {
-                    $query->orWhereIn('storage_id', $managedStorageIds);
-                }
-            });
-    }
-
-    private function managedUserIds(): array
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return [];
-        }
-
-        $branchIds = User::query()
-            ->where('manager_id', $user->id)
-            ->whereIn('role_id', Roles::adminStoreIds())
-            ->pluck('id');
-
-        return collect([(int) $user->id])
-            ->merge($branchIds)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    private function managedStorageIds(): array
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return [];
-        }
-
-        $storageIds = Storage::query()
-            ->whereIn('user_id', $this->managedUserIds())
-            ->pluck('id');
-
-        return collect([$user->storage_id])
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->merge($storageIds)
-            ->unique()
-            ->values()
-            ->all();
+        return $this->branchContext->scope(
+            User::query()->whereIn('role_id', Roles::staffIds()),
+            Auth::user()
+        );
     }
 }

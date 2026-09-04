@@ -23,7 +23,7 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title">Danh sách chi nhánh</h5>
-                        <button class="btn btn-primary" id="show-modal">Thêm
+                        <button class="btn btn-primary" id="show-modal" @disabled(auth()->user()?->isAdministrator() && $adminStoreUsers->isEmpty())>Thêm
                             mới</button>
                     </div>
                     <div class="card-body">
@@ -86,14 +86,17 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label class="form-label fw-bold">Người quản lý</label>
+                                <label class="form-label fw-bold">Admin Store</label>
                                 @if (auth()->user()?->isAdministrator())
-                                    <select class="form-select" name="admin_store_user_id" id="branch-admin_store_user_id">
-                                        <option value="">Chưa gán Admin Store</option>
+                                    <select class="form-select" name="admin_store_user_id" id="branch-admin_store_user_id" required>
+                                        <option value="">Chọn Admin Store</option>
                                         @foreach ($adminStoreUsers as $adminStoreUser)
                                             <option value="{{ $adminStoreUser->id }}">{{ $adminStoreUser->name }} ({{ $adminStoreUser->email }})</option>
                                         @endforeach
                                     </select>
+                                    @if ($adminStoreUsers->isEmpty())
+                                        <div class="form-text text-warning" id="admin-store-empty-message">Không còn tài khoản Admin Store chưa được gán cửa hàng.</div>
+                                    @endif
                                 @else
                                     <input type="text" class="form-control" name="manager_name" id="branch-manager_name" disabled>
                                 @endif
@@ -153,6 +156,8 @@
             $('#show-modal').click(function() {
                 $('#branchModal').modal('show')
                 $('#branchForm')[0].reset()
+                $('#branch-admin_store_user_id option[data-current-admin-store]').remove()
+                $('#branch-admin_store_user_id').prop('disabled', $('#branch-admin_store_user_id option').length <= 1)
                 $('#branchForm').attr({
                     'data-method': 'POST',
                     'data-id': ''
@@ -214,6 +219,12 @@
                     url: `/admin/branchs/${id}/show`,
                     type: 'GET',
                     success: (res) => {
+                        const current = res.data.admin_store;
+                        const $select = $('#branch-admin_store_user_id');
+                        if (current && !$select.find(`option[value="${current.id}"]`).length) {
+                            $select.append(new Option(`${current.name} (${current.email})`, current.id, false, false)).find('option:last').attr('data-current-admin-store', '1');
+                        }
+                        $select.prop('disabled', false);
 
                         $.each(res.data, function(key, item) {
                             $(`input[name="${key}"], select[name="${key}"]`).val(item)

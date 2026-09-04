@@ -504,13 +504,13 @@ Route::middleware(['auth'])
             ->name('supplier.')
             ->group(function () {
 
-                Route::get('/{company_id}', [SupplierController::class, 'index'])
-                    ->middleware('permission:supplier.view')
-                    ->name('index');
-
                 Route::get('/findByPhone', [SupplierController::class, 'findByPhone'])
                     ->middleware('permission:supplier.search')
                     ->name('findByPhone');
+
+                Route::get('/{company_id}', [SupplierController::class, 'index'])
+                    ->middleware('permission:supplier.view')
+                    ->name('index');
 
                 Route::get('/add/{company_id}', [SupplierController::class, 'add'])
                     ->middleware('permission:supplier.create')

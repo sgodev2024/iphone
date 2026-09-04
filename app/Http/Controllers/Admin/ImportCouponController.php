@@ -11,11 +11,13 @@ use App\Models\Import;
 use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Models\ProductImei;
+use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Services\CompanyProductService;
 use App\Services\ImportProductService;
 use App\Services\ProductStorageService;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +35,7 @@ class ImportCouponController extends Controller
         protected ProductStorageService $productStorageService,
         protected CompanyProductService $companyProductService,
         protected InternalBarcodeService $internalBarcodeService,
+        protected BranchContext $branchContext,
     ) {}
 
     public function add(StoreImportCouponRequest $request): RedirectResponse
@@ -77,10 +80,18 @@ class ImportCouponController extends Controller
         $storageId = (int) $request->validated('storage');
         $ownerId = (int) $user->ownerId();
 
-        $companyExists = Company::query()
-            ->whereKey($supplierId)
-            ->where('user_id', $ownerId)
-            ->exists();
+        $companyQuery = Company::query();
+        $storageQuery = Storage::query();
+
+        if ($user->roleKey() === 'warehouse') {
+            $companyQuery->where('user_id', $ownerId);
+            $storageQuery->where('user_id', $ownerId);
+        } else {
+            $this->branchContext->scope($companyQuery, $user);
+            $this->branchContext->scope($storageQuery, $user);
+        }
+
+        $companyExists = $companyQuery->whereKey($supplierId)->exists();
 
         if (! $companyExists) {
             throw ValidationException::withMessages([
@@ -94,7 +105,7 @@ class ImportCouponController extends Controller
             ]);
         }
 
-        if (! DB::table('storages')->where('id', $storageId)->where('user_id', $ownerId)->exists()) {
+        if (! $storageQuery->whereKey($storageId)->exists()) {
             throw ValidationException::withMessages([
                 'storage' => 'Kho nhập không hợp lệ hoặc không thuộc phạm vi dữ liệu của bạn.',
             ]);

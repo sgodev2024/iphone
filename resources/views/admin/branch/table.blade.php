@@ -22,7 +22,7 @@
                         {{ $loop->iteration }} | {{ $branch->created_at->format('d/m/Y') }}
                     </td>
                     <td>{{ $branch->name }}</td>
-                    <td>{{ $branch->adminStore?->name ?? $branch->manager_name ?? '-' }}</td>
+                    <td>{{ $branch->adminStore?->name ?? '-' }}</td>
                     <td>{{ $branch->address }}</td>
                     <td>
                         {{ $branch->phone ?? '-' }} <br> {{ $branch->email ?? '-' }}

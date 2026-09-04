@@ -8,6 +8,7 @@ use App\Models\Storage;
 use App\Models\Roles;
 use App\Models\User;
 use App\Services\SaleStorageResolver;
+use App\Support\BranchContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +23,10 @@ use Throwable;
 class EmployeeController extends Controller
 {
 
-    public function __construct(private SaleStorageResolver $saleStorageResolver)
+    public function __construct(
+        private SaleStorageResolver $saleStorageResolver,
+        private BranchContext $branchContext,
+    )
     {
     }
 
@@ -87,7 +91,13 @@ class EmployeeController extends Controller
                 $credentials['role_id'] = Roles::staffId();
                 $credentials['manager_id'] = Auth::id();
                 $credentials['password'] = Hash::make($credentials['password']);
-                $credentials['branch_id'] = Auth::user()->branch_id;
+                $actor = $this->authorizedManager();
+                $storage = $this->branchContext
+                    ->scope(Storage::query(), $actor)
+                    ->findOrFail($credentials['storage_id']);
+                $credentials['branch_id'] = $actor->isAdministrator()
+                    ? $storage->branch_id
+                    : $this->branchContext->branchId($actor);
 
                 return User::create($credentials);
             });
@@ -131,10 +141,13 @@ class EmployeeController extends Controller
 
     private function storageOptions()
     {
-        return Storage::query()
-            ->whereIn('id', $this->managedStorageIds())
+        $user = $this->authorizedManager();
+
+        return $this->branchContext
+            ->scope(Storage::query(), $user)
+            ->whereNotNull('branch_id')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'branch_id']);
     }
 
     public function edit(string $id)
@@ -176,6 +189,16 @@ class EmployeeController extends Controller
                 $credentials['img_url'] = $avatar;
             }
 
+            if ($accountType === 'employee') {
+                $actor = $this->authorizedManager();
+                $storage = $this->branchContext
+                    ->scope(Storage::query(), $actor)
+                    ->findOrFail($credentials['storage_id']);
+                $credentials['branch_id'] = $actor->isAdministrator()
+                    ? $storage->branch_id
+                    : $this->branchContext->branchId($actor);
+            }
+
             $user->update($credentials);
 
             if ($accountType === 'administrator') {
@@ -203,6 +226,7 @@ class EmployeeController extends Controller
             'password'   => [$id ? 'nullable' : 'required', 'string', 'min:6'],
             'role_id'    => ['prohibited'],
             'manager_id' => ['prohibited'],
+            'branch_id'  => ['prohibited'],
         ];
 
         if ($accountType === 'administrator') {
@@ -214,7 +238,9 @@ class EmployeeController extends Controller
             $rules['storage_id'] = [
                 'required',
                 'integer',
-                Rule::exists('storages', 'id')->where(fn ($query) => $query->whereIn('id', $this->managedStorageIds())),
+                Rule::exists('storages', 'id')->where(
+                    fn ($query) => $query->whereIn('id', $this->storageOptions()->modelKeys())
+                ),
             ];
             $rules['status'] = ['required', 'in:active,inactive,locked'];
         }
@@ -235,75 +261,30 @@ class EmployeeController extends Controller
 
     private function employeeQuery(): Builder
     {
-        $managedUserIds = $this->managedUserIds();
-        $managedStorageIds = $this->managedStorageIds();
+        $user = $this->authorizedManager();
+        $staff = User::query()->whereIn('role_id', Roles::staffIds());
+
+        if (! $user->isAdministrator()) {
+            $this->branchContext->scope($staff, $user);
+
+            return $staff->with('storage');
+        }
 
         return User::query()
             ->with('storage')
-            ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
-                $query->where(function (Builder $query) {
-                    $query->whereKey(Auth::id())
-                        ->whereIn('role_id', Roles::administratorIds());
-                })->orWhere(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
-                    $query->whereIn('role_id', Roles::staffIds())
-                        ->where(function (Builder $query) use ($managedUserIds, $managedStorageIds) {
-                            if (empty($managedUserIds) && empty($managedStorageIds)) {
-                                $query->whereRaw('1 = 0');
-
-                                return;
-                            }
-
-                            if (!empty($managedUserIds)) {
-                                $query->whereIn('manager_id', $managedUserIds);
-                            }
-
-                            if (!empty($managedStorageIds)) {
-                                $query->orWhereIn('storage_id', $managedStorageIds);
-                            }
-                        });
-                });
+            ->where(function (Builder $query) use ($staff) {
+                $query->whereKey(Auth::id())
+                    ->orWhereIn('id', $staff->select('id'));
             });
     }
 
-    private function managedUserIds(): array
+    private function authorizedManager(): User
     {
         $user = Auth::user();
 
-        if (!$user) {
-            return [];
-        }
+        abort_unless($user && ($user->isAdministrator() || $user->isAdminStore()), Response::HTTP_FORBIDDEN);
 
-        $branchIds = User::query()
-            ->where('manager_id', $user->id)
-            ->whereIn('role_id', Roles::adminStoreIds())
-            ->pluck('id');
-
-        return collect([(int) $user->id])
-            ->merge($branchIds)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    private function managedStorageIds(): array
-    {
-        $user = Auth::user();
-
-        if (!$user) {
-            return [];
-        }
-
-        $storageIds = Storage::query()
-            ->whereIn('user_id', $this->managedUserIds())
-            ->pluck('id');
-
-        return collect([$user->storage_id])
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->merge($storageIds)
-            ->unique()
-            ->values()
-            ->all();
+        return $user;
     }
 
     private function isAdminAccount(User $user): bool

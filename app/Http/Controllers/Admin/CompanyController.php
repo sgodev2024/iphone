@@ -2,24 +2,22 @@
 
 namespace App\Http\Controllers\Admin;
 
-use Exception;
-use App\Models\Bank;
-use App\Models\City;
-use App\Models\Company;
-use Illuminate\Http\Request;
-use App\Services\CompanyService;
-use App\Http\Responses\ApiResponse;
-use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Company\CompanyRequest;
+use App\Models\Bank;
+use App\Models\Branch;
+use App\Models\City;
+use App\Models\Company;
+use App\Models\User;
+use App\Support\BranchContext;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class CompanyController extends Controller
 {
-    protected $companyService;
-    public function __construct(CompanyService $companyService)
+    public function __construct(private BranchContext $branchContext)
     {
-        $this->companyService = $companyService;
     }
 
     public function index(Request $request)
@@ -27,8 +25,7 @@ class CompanyController extends Controller
         if ($request->ajax()) {
             $searchText = $request->query('s');
 
-            $companies = Company::query()
-                ->where('user_id', $request->user()->ownerId())
+            $companies = $this->companyQuery($request->user())
                 ->when(!empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%");
                 })
@@ -49,7 +46,10 @@ class CompanyController extends Controller
         $cities = City::query()->pluck('name', 'id')->toArray();
         $title = 'Tạo mới nhà cung cấp';
         $company = null;
-        return view('admin.company.form', compact('banks', 'cities', 'title', 'company'));
+        $branches = Auth::user()->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        return view('admin.company.form', compact('banks', 'cities', 'title', 'company', 'branches'));
     }
 
     public function store(CompanyRequest $request)
@@ -58,6 +58,9 @@ class CompanyController extends Controller
             $credentials = $request->validated();
 
             $credentials['user_id'] = $request->user()->ownerId();
+            $credentials['branch_id'] = $request->user()->isAdministrator()
+                ? ($credentials['branch_id'] ?? null)
+                : $this->branchContext->branchId($request->user());
 
             Company::create($credentials);
 
@@ -67,23 +70,35 @@ class CompanyController extends Controller
 
     public function edit(string $id)
     {
-        $company = Company::query()->where('user_id', Auth::user()->ownerId())->findOrFail($id);
+        $company = $this->companyQuery(Auth::user())->findOrFail($id);
         $banks = Bank::query()->pluck('name', 'id')->toArray();
         $cities = City::query()->pluck('name', 'id')->toArray();
         $title = "Chỉnh sửa nhà cung cấp - {$company->name}";
-        return view('admin.company.form', compact('banks', 'cities', 'title', 'company'));
+        $branches = Auth::user()->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        return view('admin.company.form', compact('banks', 'cities', 'title', 'company', 'branches'));
     }
 
     public function update(string $id, CompanyRequest $request)
     {
-        if (!$company = Company::query()->where('user_id', $request->user()->ownerId())->findOrFail($id)) return errorResponse("Không tìm thấy nhà cung cấp.", 404);
+        $company = $this->companyQuery($request->user())->findOrFail($id);
 
         return transaction(function () use ($request, $company) {
             $credentials = $request->validated();
+
+            if (! $request->user()->isAdministrator()) {
+                $credentials['branch_id'] = $this->branchContext->branchId($request->user());
+            }
 
             $company->update($credentials);
 
             return successResponse("Cập nhật nhà cung cấp thành công.");
         });
+    }
+
+    private function companyQuery(User $user): Builder
+    {
+        return $this->branchContext->scope(Company::query(), $user);
     }
 }

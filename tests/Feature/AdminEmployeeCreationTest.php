@@ -131,12 +131,19 @@ class AdminEmployeeCreationTest extends TestCase
             ->assertJsonPath('data', route('staff.index', absolute: false));
     }
 
-    public function test_employee_storage_must_belong_to_current_admin(): void
+    public function test_admin_store_cannot_assign_employee_storage_from_another_branch(): void
     {
-        $admin = $this->createAdmin();
-        $otherAdmin = $this->createAdmin('other-admin@example.com', '0902222222');
+        $admin = User::create([
+            'name' => 'Admin Store A',
+            'email' => 'store-a@example.com',
+            'phone' => '0901111100',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 10,
+            'status' => 'active',
+        ]);
         $otherStorage = Storage::create([
-            'user_id' => $otherAdmin->id,
+            'branch_id' => 20,
             'name' => 'Kho của admin khác',
         ]);
 
@@ -434,7 +441,7 @@ class AdminEmployeeCreationTest extends TestCase
         ]);
     }
 
-    public function test_bulk_delete_rejects_staff_outside_management_scope(): void
+    public function test_administrator_can_bulk_deactivate_staff_globally(): void
     {
         $admin = $this->createAdmin();
         $otherAdmin = $this->createAdmin('other-admin@example.com', '0907777777');
@@ -456,9 +463,9 @@ class AdminEmployeeCreationTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/bulk/delete', [
             'ids' => [$outsideEmployee->id],
             'model' => 'User',
-        ])->assertForbidden();
+        ])->assertOk();
 
-        $this->assertSame('active', $outsideEmployee->fresh()->status);
+        $this->assertSame('inactive', $outsideEmployee->fresh()->status);
     }
 
     public function test_non_admin_cannot_bulk_deactivate_users(): void
@@ -631,7 +638,14 @@ class AdminEmployeeCreationTest extends TestCase
             $this->assertStringContainsString($employee->phone, $employeeHtml);
         }
 
-        foreach (['outside-staff@example.com', 'admin-staff-name@example.com', 'branch-account-staff@example.com'] as $search) {
+        $outsideHtml = $this->actingAs($admin)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/employees?s=outside-staff%40example.com')
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString('Outside Staff', $outsideHtml);
+
+        foreach (['admin-staff-name@example.com', 'branch-account-staff@example.com'] as $search) {
             $emptyHtml = $this->actingAs($admin)
                 ->withHeader('X-Requested-With', 'XMLHttpRequest')
                 ->get('/admin/employees?s=' . urlencode($search))
@@ -654,6 +668,205 @@ class AdminEmployeeCreationTest extends TestCase
             ->assertSee('Branch Storage');
     }
 
+    public function test_admin_store_creates_staff_in_own_branch_and_rejects_forged_branch(): void
+    {
+        Mail::fake();
+        $adminStore = User::create([
+            'name' => 'Store A',
+            'email' => 'store-a@example.com',
+            'phone' => '0907000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 101,
+            'status' => 'active',
+        ]);
+        $storage = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 101,
+            'name' => 'Kho A',
+        ]);
+
+        $payload = [
+            'name' => 'Staff A',
+            'email' => 'phase3-staff-a@example.com',
+            'phone' => '0907000002',
+            'password' => 'secret123',
+            'storage_id' => $storage->id,
+            'status' => 'active',
+        ];
+
+        $this->actingAs($adminStore)->postJson('/admin/employees', $payload)
+            ->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'phase3-staff-a@example.com',
+            'role_id' => 3,
+            'manager_id' => $adminStore->id,
+            'branch_id' => 101,
+            'storage_id' => $storage->id,
+        ]);
+
+        $this->actingAs($adminStore)->postJson('/admin/employees', array_merge($payload, [
+            'email' => 'forged-branch@example.com',
+            'phone' => '0907000003',
+            'branch_id' => 202,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('branch_id');
+    }
+
+    public function test_admin_store_cannot_view_update_or_bulk_deactivate_staff_from_another_branch(): void
+    {
+        $adminStore = User::create([
+            'name' => 'Store A',
+            'email' => 'scope-store-a@example.com',
+            'phone' => '0907100001',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 11,
+            'status' => 'active',
+        ]);
+        $storageA = Storage::create(['branch_id' => 11, 'name' => 'Kho A']);
+        $storageB = Storage::create(['branch_id' => 22, 'name' => 'Kho B']);
+        $staffB = User::create([
+            'name' => 'Staff B',
+            'email' => 'scope-staff-b@example.com',
+            'phone' => '0907100002',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => 22,
+            'storage_id' => $storageB->id,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($adminStore)
+            ->get("/admin/employees/{$staffB->id}/edit")
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)->putJson("/admin/employees/{$staffB->id}", [
+            'name' => 'Tampered',
+            'email' => $staffB->email,
+            'phone' => $staffB->phone,
+            'storage_id' => $storageA->id,
+            'status' => 'active',
+        ])->assertNotFound();
+
+        $this->actingAs($adminStore)->postJson('/admin/bulk/delete', [
+            'ids' => [$staffB->id],
+            'model' => 'User',
+        ])->assertForbidden();
+
+        $this->assertSame('active', $staffB->fresh()->status);
+        $this->assertSame(22, (int) $staffB->fresh()->branch_id);
+    }
+
+    public function test_admin_store_cannot_promote_staff_or_move_staff_to_another_branch_storage(): void
+    {
+        $adminStore = User::create([
+            'name' => 'Store A',
+            'email' => 'guard-store-a@example.com',
+            'phone' => '0907200001',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 31,
+            'status' => 'active',
+        ]);
+        $storageA = Storage::create(['branch_id' => 31, 'name' => 'Kho A']);
+        $storageB = Storage::create(['branch_id' => 32, 'name' => 'Kho B']);
+        $staff = User::create([
+            'name' => 'Staff A',
+            'email' => 'guard-staff-a@example.com',
+            'phone' => '0907200002',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => 31,
+            'storage_id' => $storageA->id,
+            'status' => 'active',
+        ]);
+        $payload = [
+            'name' => $staff->name,
+            'email' => $staff->email,
+            'phone' => $staff->phone,
+            'storage_id' => $storageA->id,
+            'status' => 'active',
+        ];
+
+        $this->actingAs($adminStore)->putJson("/admin/employees/{$staff->id}", array_merge($payload, [
+            'role_id' => 1,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('role_id');
+
+        $this->actingAs($adminStore)->putJson("/admin/employees/{$staff->id}", array_merge($payload, [
+            'storage_id' => $storageB->id,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('storage_id');
+
+        $this->assertSame(3, (int) $staff->fresh()->role_id);
+        $this->assertSame($storageA->id, (int) $staff->fresh()->storage_id);
+    }
+
+    public function test_admin_store_employee_list_is_branch_scoped_and_null_branch_fails_closed(): void
+    {
+        $adminStore = User::create([
+            'name' => 'Store A',
+            'email' => 'list-store-a@example.com',
+            'phone' => '0907300001',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 41,
+            'status' => 'active',
+        ]);
+        User::create([
+            'name' => 'Visible Staff A',
+            'email' => 'visible-a@example.com',
+            'phone' => '0907300002',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => 41,
+            'status' => 'active',
+        ]);
+        User::create([
+            'name' => 'Hidden Staff B',
+            'email' => 'hidden-b@example.com',
+            'phone' => '0907300003',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => 42,
+            'status' => 'active',
+        ]);
+        User::create([
+            'name' => 'Legacy Staff',
+            'email' => 'legacy-staff@example.com',
+            'phone' => '0907300004',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => null,
+            'status' => 'active',
+        ]);
+
+        $html = $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/employees')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString('Visible Staff A', $html);
+        $this->assertStringNotContainsString('Hidden Staff B', $html);
+        $this->assertStringNotContainsString('Legacy Staff', $html);
+
+        $adminStore->update(['branch_id' => null]);
+
+        $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/employees')
+            ->assertForbidden();
+
+        $this->actingAs($adminStore)->postJson('/admin/employees', [
+            'name' => 'Blocked Staff',
+            'email' => 'blocked-null-branch@example.com',
+            'phone' => '0907300005',
+            'password' => 'secret123',
+            'storage_id' => 1,
+            'status' => 'active',
+        ])->assertForbidden();
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -671,6 +884,7 @@ class AdminEmployeeCreationTest extends TestCase
             $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id')->default(3);
+            $table->unsignedBigInteger('branch_id')->nullable()->default(1);
             $table->rememberToken();
             $table->timestamps();
         });
@@ -678,6 +892,7 @@ class AdminEmployeeCreationTest extends TestCase
         Schema::create('storages', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable()->default(1);
             $table->string('name');
             $table->string('location')->nullable();
             $table->timestamps();

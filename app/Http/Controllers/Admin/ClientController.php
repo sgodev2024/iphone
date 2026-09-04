@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Services\ClientGroupService;
 use App\Services\ClientService;
+use App\Support\BranchContext;
+use Illuminate\Database\Eloquent\Builder;
 use DomainException;
 use Exception;
 use Illuminate\Http\Request;
@@ -22,7 +24,11 @@ class ClientController extends Controller
     protected $clientService;
     protected $clientGroupService;
 
-    public function __construct(ClientService $clientService, ClientGroupService $clientGroupService)
+    public function __construct(
+        ClientService $clientService,
+        ClientGroupService $clientGroupService,
+        private BranchContext $branchContext,
+    )
     {
         $this->clientService = $clientService;
         $this->clientGroupService = $clientGroupService;
@@ -37,8 +43,7 @@ class ClientController extends Controller
         try {
             $searchText = trim((string) $request->query('s', ''));
 
-            $clients = Client::query()
-                // Admin xem toàn bộ khách hàng nên không lọc theo Auth::id()
+            $clients = $this->clientQuery()
                 ->when($searchText !== '', function ($query) use ($searchText) {
                     $query->where(function ($searchQuery) use ($searchText) {
                         $searchQuery
@@ -73,7 +78,9 @@ class ClientController extends Controller
         $title = 'Khach hang';
 
         try {
-            $client = $this->clientService->findClientByPhone($request->phone);
+            $client = $this->clientQuery()
+                ->where('phone', $request->phone)
+                ->first();
             $clients = new LengthAwarePaginator(
                 $client ? [$client] : [],
                 $client ? 1 : 0,
@@ -95,7 +102,7 @@ class ClientController extends Controller
         $title = 'Sửa thông tin khách hàng';
         $clientgroups = $this->clientGroupService->getAllClientGroup();
 
-        $client = Client::query()->findOrFail($id);
+        $client = $this->clientQuery()->findOrFail($id);
 
         return view(
             'admin.client.edit',
@@ -104,7 +111,7 @@ class ClientController extends Controller
     }
     public function update($id, Request $request)
     {
-        $client = Client::query()->findOrFail($id);
+        $client = $this->clientQuery()->findOrFail($id);
         $credentials = $this->validateClient($request, $id);
 
         try {
@@ -132,13 +139,13 @@ class ClientController extends Controller
 
     public function delete($id)
     {
-        try {
-            $client = Client::query()->findOrFail($id);
+        $client = $this->clientQuery()->findOrFail($id);
 
+        try {
             // Giữ Service nếu trong đó có xử lý nghiệp vụ liên quan
             $this->clientService->deleteClient($client->id);
 
-            $clients = Client::query()
+            $clients = $this->clientQuery()
                 ->latest('created_at')
                 ->paginate(10);
 
@@ -186,9 +193,17 @@ class ClientController extends Controller
         $searchText = trim((string) $request->query('s', ''));
 
         return Excel::download(
-            new ClientsExport($searchText),
+            new ClientsExport(
+                $searchText,
+                Auth::user()->isAdministrator() ? null : $this->branchContext->branchId(Auth::user())
+            ),
             'danh_sach_khach_hang.xlsx'
         );
+    }
+
+    private function clientQuery(): Builder
+    {
+        return $this->branchContext->scope(Client::query(), Auth::user());
     }
 
     private function validateClient(Request $request, $id): array

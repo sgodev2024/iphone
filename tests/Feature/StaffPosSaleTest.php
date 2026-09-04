@@ -2835,6 +2835,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id')->default(3);
             $table->unsignedBigInteger('storage_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
@@ -2870,6 +2871,7 @@ class StaffPosSaleTest extends TestCase
         Schema::create('storages', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
             $table->timestamps();
@@ -2960,6 +2962,7 @@ class StaffPosSaleTest extends TestCase
             $table->id();
             $table->string('code')->nullable();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
@@ -2979,6 +2982,7 @@ class StaffPosSaleTest extends TestCase
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('code')->nullable();
             $table->string('name')->nullable();
             $table->string('phone')->nullable();

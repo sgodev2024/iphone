@@ -6,6 +6,9 @@ use App\Models\Import;
 use App\Models\ImportCoupon;
 use App\Models\Product;
 use App\Models\ProductImei;
+use App\Models\Company;
+use App\Models\Storage;
+use App\Support\BranchContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -48,18 +51,25 @@ class StoreImportCouponRequest extends FormRequest
 
     public function rules(): array
     {
-        $ownerId = $this->user()?->ownerId();
+        $branchContext = app(BranchContext::class);
+        $isWarehouse = $this->user()->roleKey() === 'warehouse';
+        $companyIds = $isWarehouse
+            ? Company::query()->where('user_id', $this->user()->ownerId())->select('id')
+            : $branchContext->scope(Company::query(), $this->user())->select('id');
+        $storageIds = $isWarehouse
+            ? Storage::query()->where('user_id', $this->user()->ownerId())->select('id')
+            : $branchContext->scope(Storage::query(), $this->user())->select('id');
 
         return [
             'supplier' => [
                 'required',
                 'integer',
-                Rule::exists('companies', 'id')->where(fn ($query) => $query->where('user_id', $ownerId)),
+                Rule::exists('companies', 'id')->where(fn ($query) => $query->whereIn('id', $companyIds)),
             ],
             'storage' => [
                 'required',
                 'integer',
-                Rule::exists('storages', 'id')->where(fn ($query) => $query->where('user_id', $ownerId)),
+                Rule::exists('storages', 'id')->where(fn ($query) => $query->whereIn('id', $storageIds)),
             ],
             'total' => ['nullable', 'numeric', 'min:0'],
             'totalncc' => ['nullable', 'numeric', 'min:0'],
