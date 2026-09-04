@@ -48,4 +48,44 @@ class Storage extends Model
         }
         return $query->where('branch_id', $branchId);
     }
+
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isAdministrator()) {
+            return $query;
+        }
+
+        if ($user->isAdminStore()) {
+            return $user->branch_id === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('branch_id', (int) $user->branch_id);
+        }
+
+        if ($user->isStaff()) {
+            return $user->storage_id === null
+                ? $query->whereRaw('1 = 0')
+                : $query->whereKey((int) $user->storage_id);
+        }
+
+        $ownerIds = collect([$user->id, $user->manager_id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $query->where(function (Builder $query) use ($ownerIds, $user) {
+            if ($ownerIds !== []) {
+                $query->whereIn('user_id', $ownerIds);
+            }
+
+            if ($user->storage_id) {
+                $query->orWhere('id', (int) $user->storage_id);
+            }
+        });
+    }
 }

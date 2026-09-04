@@ -4,12 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Storage;
-use App\Services\StorageService;
-use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Gate;
@@ -18,12 +15,6 @@ use App\Models\ProductImei;
 
 class StorageController extends Controller
 {
-    protected $storageService;
-    public function __construct(StorageService $storageService)
-    {
-        $this->storageService = $storageService;
-    }
-
     public function index(Request $request)
     {
         $title = 'Kho hàng';
@@ -36,7 +27,6 @@ class StorageController extends Controller
     
         $searchText = trim((string) $request->query('s'));
         $storageId = $request->integer('inventory');
-        $branchId = auth()->user()->branchScopeId();
         /*
         |--------------------------------------------------------------------------
         | Danh sách sản phẩm tồn kho
@@ -46,7 +36,6 @@ class StorageController extends Controller
             Gate::authorize('storage.products');
     
             $storage = $this->storageQuery()
-                ->ofBranch($branchId)
                 ->findOrFail($storageId);
 
                 $products = $storage->products()
@@ -94,7 +83,6 @@ class StorageController extends Controller
         */
 
         $storages = $this->storageQuery()
-            ->ofBranch($branchId)
             ->when($searchText !== '', function (Builder $query) use ($searchText) {
                 $query->where(function (Builder $query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%")
@@ -130,7 +118,18 @@ class StorageController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+
+        abort_if(
+            $user->isAdminStore() && $user->branch_id === null,
+            Response::HTTP_FORBIDDEN
+        );
+
         $credentials = $this->validateRequest($request);
+
+        if ($user->isAdminStore()) {
+            $credentials['branch_id'] = (int) $user->branch_id;
+        }
 
         return transaction(function () use ($credentials) {
             $credentials['user_id'] = Auth::id();
@@ -155,14 +154,12 @@ class StorageController extends Controller
 
     public function detail($id)
     {
-        try {
-            $storage = $this->storageService->getStorageById($id);
-            $product = $this->storageService->getProductInStorage($id);
-            return view('admin.storage.detail', compact('product', 'storage'));
-        } catch (Exception $e) {
-            Log::error('Failed to find Storage info: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to fetch Storage info'], 500);
-        }
+        $storage = $this->storageQuery()->findOrFail($id);
+        $product = $storage->productStorages()
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        return view('admin.storage.detail', compact('product', 'storage'));
     }
 
     private function validateRequest($request, $id = null)
@@ -183,18 +180,19 @@ class StorageController extends Controller
     }
 
     private function storageQuery(): Builder
-{
-    return $this->applyStorageScope(
-        Storage::query()
+    {
+        return Storage::query()
             ->withSum(
                 'productStorages as total_quantity',
                 'quantity'
             )
-    );
-}
+            ->visibleTo(Auth::user());
+    }
 
-    public function inventory(Storage $storage)
+    public function inventory(int $storage)
     {
+        $storage = $this->storageQuery()->findOrFail($storage);
+
         $products = $storage->products()
             ->with([
                 'brand',
@@ -216,6 +214,22 @@ class StorageController extends Controller
             return $query->whereRaw('1 = 0');
         }
 
+        if ($user->isAdministrator()) {
+            return $query;
+        }
+
+        if ($user->isAdminStore()) {
+            return $user->branch_id === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('branch_id', (int) $user->branch_id);
+        }
+
+        if ($user->isStaff()) {
+            return $user->storage_id === null
+                ? $query->whereRaw('1 = 0')
+                : $query->where('id', (int) $user->storage_id);
+        }
+
         $ownerIds = collect([$user->id, $user->manager_id])
             ->filter()
             ->map(fn($id) => (int) $id)
@@ -224,7 +238,7 @@ class StorageController extends Controller
             ->all();
 
         return $query->where(function ($query) use ($ownerIds, $user) {
-            if (!empty($ownerIds)) {
+            if ($ownerIds !== []) {
                 $query->whereIn('user_id', $ownerIds);
             }
 

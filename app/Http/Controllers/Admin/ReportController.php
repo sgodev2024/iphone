@@ -144,24 +144,7 @@ class ReportController extends Controller
 
     private function inventoryStorageQuery()
     {
-        $user = Auth::user();
-
-        if (! $user) {
-            return Storage::query()->whereRaw('1 = 0');
-        }
-
-        $ownerIds = $this->inventoryOwnerIds();
-
-        return Storage::query()
-            ->where(function ($query) use ($ownerIds, $user) {
-                if (! empty($ownerIds)) {
-                    $query->whereIn('user_id', $ownerIds);
-                }
-
-                if ($user->storage_id) {
-                    $query->orWhere('id', (int) $user->storage_id);
-                }
-            });
+        return Storage::query()->visibleTo(Auth::user());
     }
 
     private function resolveInitialInventoryStorage(Collection $storages): ?Storage
@@ -206,7 +189,15 @@ class ReportController extends Controller
     public function getProductsWithSmallQuanity(Request $request)
     {
         try {
-            $storage_id = $request->input('storage_id');
+            $storage_id = (int) $request->input('storage_id');
+            $storage = $this->inventoryStorageQuery()->find($storage_id);
+
+            if (! $storage) {
+                return response()->json([
+                    'message' => 'Storage not found in the current scope.',
+                ], 404);
+            }
+
             $latestImport = ImportCoupon::where('storage_id', $storage_id)
                 ->orderByDesc('created_at')
                 ->first();

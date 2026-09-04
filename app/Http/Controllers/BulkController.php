@@ -78,6 +78,17 @@ class BulkController extends Controller
             }
         }
 
+        if ($modelClass === Storage::class) {
+            $allowed = Storage::query()
+                ->visibleTo(Auth::user())
+                ->whereIn('id', $ids)
+                ->count();
+
+            if ($allowed !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
+        }
+
         if ($type === 'delete' && $modelClass === User::class) {
             return $this->deactivateUsers($ids);
         }

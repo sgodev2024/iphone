@@ -316,6 +316,194 @@ class AdminCrudAuditTest extends TestCase
             ->assertJsonPath('data.id', $storageA->id);
     }
 
+    public function test_storage_visibility_uses_branch_for_admin_store_and_is_global_for_administrator(): void
+    {
+        $administrator = $this->createUser('storage-global@example.com', '0903100101', 1);
+        $adminStore = $this->createUser('storage-branch@example.com', '0903100102', 2, 1);
+        $adminStoreWithoutBranch = $this->createUser('storage-null@example.com', '0903100103', 2);
+
+        $storageA = Storage::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 1,
+            'name' => 'Kho A',
+            'location' => 'Ha Noi',
+        ]);
+        $cauGiayStorage = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 1,
+            'name' => 'Kho Viet Duc Cau Giay',
+            'location' => 'Cau Giay',
+        ]);
+        $storageB = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 2,
+            'name' => 'Kho B',
+            'location' => 'Sai Gon',
+        ]);
+        $legacyStorage = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => null,
+            'name' => 'Kho Legacy',
+            'location' => 'Legacy',
+        ]);
+
+        $administratorHtml = $this->actingAs($administrator)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Kho')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString($storageA->name, $administratorHtml);
+        $this->assertStringContainsString($cauGiayStorage->name, $administratorHtml);
+        $this->assertStringContainsString($storageB->name, $administratorHtml);
+        $this->assertStringContainsString($legacyStorage->name, $administratorHtml);
+
+        $adminStoreHtml = $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Kho')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString($storageA->name, $adminStoreHtml);
+        $this->assertStringContainsString($cauGiayStorage->name, $adminStoreHtml);
+        $this->assertStringNotContainsString($storageB->name, $adminStoreHtml);
+        $this->assertStringNotContainsString($legacyStorage->name, $adminStoreHtml);
+
+        $searchHtml = $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Cau%20Giay')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString($cauGiayStorage->name, $searchHtml);
+        $this->assertStringNotContainsString($storageB->name, $searchHtml);
+
+        $nullBranchHtml = $this->actingAs($adminStoreWithoutBranch)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Kho')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringNotContainsString($storageA->name, $nullBranchHtml);
+        $this->assertStringNotContainsString($storageB->name, $nullBranchHtml);
+
+        $this->actingAs($adminStore)->postJson('/admin/storage', [
+            'name' => 'Kho Branch Moi',
+            'location' => 'Ha Noi',
+        ])->assertCreated();
+        $this->assertDatabaseHas('storages', [
+            'name' => 'Kho Branch Moi',
+            'user_id' => $adminStore->id,
+            'branch_id' => 1,
+        ]);
+
+        $this->actingAs($adminStoreWithoutBranch)->postJson('/admin/storage', [
+            'name' => 'Kho Khong Branch',
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('storages', ['name' => 'Kho Khong Branch']);
+    }
+
+    public function test_admin_store_cannot_access_storage_from_another_branch_across_endpoints(): void
+    {
+        $adminStore = $this->createUser('storage-cross-branch@example.com', '0903100201', 2, 1);
+        $ownStorage = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 1,
+            'name' => 'Kho Branch 1',
+        ]);
+        $foreignStorage = Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 2,
+            'name' => 'Kho Branch 2',
+        ]);
+
+        $this->actingAs($adminStore)
+            ->getJson('/admin/storage/' . $ownStorage->id)
+            ->assertOk();
+
+        $this->actingAs($adminStore)
+            ->getJson('/admin/storage/' . $foreignStorage->id)
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->putJson('/admin/storage/' . $foreignStorage->id, [
+                'name' => 'Cross Branch Update',
+            ])
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->get('/admin/storage/products/' . $foreignStorage->id)
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->get('/admin/storage/' . $foreignStorage->id . '/inventory')
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?inventory=' . $foreignStorage->id)
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->get('/admin/storage/' . $foreignStorage->id . '/products/999/imeis')
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->getJson('/admin/inventory/low-stock?storage_id=' . $foreignStorage->id)
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$foreignStorage->id],
+                'model' => 'Storage',
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('storages', [
+            'id' => $foreignStorage->id,
+            'name' => 'Kho Branch 2',
+            'branch_id' => 2,
+        ]);
+    }
+
+    public function test_admin_store_storage_search_and_pagination_remain_branch_scoped(): void
+    {
+        $adminStore = $this->createUser('storage-pagination@example.com', '0903100301', 2, 1);
+
+        for ($i = 1; $i <= 12; $i++) {
+            Storage::create([
+                'user_id' => $adminStore->id,
+                'branch_id' => 1,
+                'name' => sprintf('Scoped Kho %02d', $i),
+            ]);
+        }
+
+        Storage::create([
+            'user_id' => $adminStore->id,
+            'branch_id' => 2,
+            'name' => 'Scoped Kho Foreign',
+        ]);
+
+        $firstPageHtml = $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Scoped%20Kho')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString('page=2', $firstPageHtml);
+        $this->assertStringContainsString('s=Scoped%20Kho', $firstPageHtml);
+        $this->assertStringNotContainsString('Scoped Kho Foreign', $firstPageHtml);
+
+        $secondPageHtml = $this->actingAs($adminStore)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/storage?s=Scoped%20Kho&page=2')
+            ->assertOk()
+            ->json('html');
+
+        $this->assertStringContainsString('Scoped Kho 11', $secondPageHtml);
+        $this->assertStringNotContainsString('Scoped Kho Foreign', $secondPageHtml);
+    }
+
     public function test_supplier_create_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
