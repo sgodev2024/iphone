@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -56,8 +57,12 @@ class CustomerDebtPaymentController extends Controller
             return response()->json([]);
         }
 
-        $clientsQuery = Client::query()
-            ->where('user_id', $request->user()->ownerId());
+        $clientsQuery = Client::query();
+        if (! Schema::hasColumn('clients', 'branch_id')
+            || ! $this->branchContext->isGlobal($request->user())
+        ) {
+            $clientsQuery->where('user_id', $request->user()->ownerId());
+        }
         $this->branchContext->scope($clientsQuery, $request->user());
         $clients = $clientsQuery
             ->where(function ($query) use ($keyword): void {

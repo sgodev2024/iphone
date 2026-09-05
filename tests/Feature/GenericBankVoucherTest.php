@@ -502,6 +502,86 @@ class GenericBankVoucherTest extends TestCase
         );
     }
 
+    public function test_branch_aware_bank_is_global_for_both_administrators_and_isolated_for_admin_store(): void
+    {
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('bank_vouchers', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+
+        $adminStoreRole = Roles::create(['name' => 'admin_store']);
+        $storeA = User::create([
+            'name' => 'Admin Store A',
+            'email' => 'bank-store-a@example.test',
+            'password' => 'password',
+            'status' => 'active',
+            'role_id' => $adminStoreRole->id,
+            'branch_id' => 101,
+        ]);
+        $storeB = User::create([
+            'name' => 'Admin Store B',
+            'email' => 'bank-store-b@example.test',
+            'password' => 'password',
+            'status' => 'active',
+            'role_id' => $adminStoreRole->id,
+            'branch_id' => 202,
+        ]);
+
+        $makeVoucher = function (User $owner, ?int $branchId, string $number, string $description): BankVoucher {
+            return BankVoucher::create([
+                'owner_id' => $owner->id,
+                'branch_id' => $branchId,
+                'voucher_number' => $number,
+                'direction' => BankVoucher::DIRECTION_RECEIPT,
+                'operation' => BankVoucher::OPERATION_GENERIC_RECEIPT,
+                'transaction_date' => '2026-08-18',
+                'bank_account_id' => $this->bank->id,
+                'amount' => '100000.00',
+                'description' => $description,
+                'accounting_status' => BankVoucher::STATUS_PENDING_ACCOUNTING,
+                'created_by' => $owner->id,
+            ]);
+        };
+
+        $voucherA = $makeVoucher($storeA, 101, 'PTNH-A', 'Bank Branch A');
+        $voucherB = $makeVoucher($storeB, 202, 'PTNH-B', 'Bank Branch B');
+        $legacy = $makeVoucher($this->owner, null, 'PTNH-NULL', 'Bank Legacy NULL');
+        $service = app(BankActivityReadService::class);
+        $read = fn (User $actor) => $service->read(
+            $actor,
+            [(int) $actor->ownerId()],
+            collect([$this->bank->id]),
+            '2026-08-01',
+            '2026-08-31'
+        )['paginator']->getCollection()->pluck('description')->all();
+
+        $expectedGlobal = ['Bank Legacy NULL', 'Bank Branch B', 'Bank Branch A'];
+        $this->assertEqualsCanonicalizing($expectedGlobal, $read($this->owner));
+        $this->assertEqualsCanonicalizing($expectedGlobal, $read($this->otherOwner));
+        $this->assertSame(['Bank Branch A'], $read($storeA));
+        $this->assertSame(['Bank Branch B'], $read($storeB));
+
+        $controller = app(\App\Http\Controllers\Admin\GenericBankVoucherController::class);
+        $setActor = function (User $actor): void {
+            $this->actingAs($actor);
+            $request = \Illuminate\Http\Request::create('/bank-voucher', 'GET');
+            $request->setUserResolver(fn () => $actor);
+            $this->app->instance('request', $request);
+        };
+
+        $setActor($this->otherOwner);
+        $this->assertSame($voucherA->id, $controller->show($voucherA)->getData()['voucher']->id);
+
+        foreach ([$voucherB, $legacy] as $forbiddenVoucher) {
+            $setActor($storeA);
+            try {
+                $controller->show($forbiddenVoucher);
+                $this->fail('Admin Store A must not open Branch B or legacy NULL Bank vouchers.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                $this->assertSame(404, $exception->getStatusCode());
+            }
+        }
+    }
+
     private function createPendingVoucher(
         string $direction,
         string $createdAt,

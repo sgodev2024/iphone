@@ -114,7 +114,9 @@ class StoreImportCouponRequest extends FormRequest
                 ->with('product')
                 ->where('quantity', '>', 0)
                 ->whereHas('product', function ($query) use ($ownerId) {
-                    $query->where('user_id', $ownerId);
+                    if (! $this->user()->isAdministrator()) {
+                        $query->where('user_id', $ownerId);
+                    }
                 })
                 ->get();
 

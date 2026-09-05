@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 
 class JournalEntryController extends Controller
@@ -31,7 +32,11 @@ class JournalEntryController extends Controller
             }
 
             $transactionsQuery = DB::table('transactions as t');
-            $transactionsQuery->whereIn('t.user_id', $this->transactionOwnerIds($request));
+            if (! Schema::hasColumn('transactions', 'branch_id')
+                || ! $this->branchContext->isGlobal($request->user())
+            ) {
+                $transactionsQuery->whereIn('t.user_id', $this->transactionOwnerIds($request));
+            }
             $this->branchContext->scope($transactionsQuery, $request->user(), 't.branch_id');
             $transactions = $transactionsQuery
                 ->join('transaction_entries as te', 't.id', '=', 'te.transaction_id')
@@ -92,7 +97,11 @@ class JournalEntryController extends Controller
 
             foreach ($transactionIds as $transactionId) {
                 $query = Transaction::query()->whereKey($transactionId);
-                $query->whereIn('user_id', $this->transactionOwnerIds($request));
+                if (! Schema::hasColumn('transactions', 'branch_id')
+                    || ! $this->branchContext->isGlobal($request->user())
+                ) {
+                    $query->whereIn('user_id', $this->transactionOwnerIds($request));
+                }
                 $this->branchContext->scope($query, $request->user());
                 $transaction = $query->first();
                 if (! $transaction) {

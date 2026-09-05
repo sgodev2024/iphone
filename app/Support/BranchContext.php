@@ -52,7 +52,6 @@ final class BranchContext
         if ($requestedBranchId === null
             || ! Branch::query()
                 ->whereKey($requestedBranchId)
-                ->where('user_id', $user->id)
                 ->exists()
         ) {
             throw ValidationException::withMessages([

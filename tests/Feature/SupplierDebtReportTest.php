@@ -338,6 +338,75 @@ class SupplierDebtReportTest extends TestCase
         $this->assertStringContainsString('SĐT: 0900000001', $html);
     }
 
+    public function test_both_administrators_receive_global_supplier_debt_across_source_owners_and_branches(): void
+    {
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('companies', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::create('branches', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+        });
+        DB::table('branches')->insert([
+            ['id' => 101, 'user_id' => $this->owner->id],
+            ['id' => 202, 'user_id' => $this->otherOwner->id],
+        ]);
+
+        $this->company->update(['branch_id' => 101]);
+        $companyB = Company::create([
+            'user_id' => $this->otherOwner->id,
+            'branch_id' => 202,
+            'name' => 'Company Beta',
+            'phone' => '0900000002',
+            'status' => true,
+        ]);
+        $legacyCompany = Company::create([
+            'user_id' => $this->otherOwner->id,
+            'branch_id' => null,
+            'name' => 'Company Legacy',
+            'phone' => '0900000003',
+            'status' => true,
+        ]);
+
+        $add = function (User $owner, Company $company, ?int $branchId, string $credit): void {
+            $transactionId = DB::table('transactions')->insertGetId([
+                'user_id' => $owner->id,
+                'branch_id' => $branchId,
+                'transaction_date' => '2026-08-10',
+                'type' => 'expense',
+                'document_type' => 'import',
+                'status' => 'completed',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('transaction_entries')->insert([
+                'transaction_id' => $transactionId,
+                'account_id' => $this->payableAccountId,
+                'debit_amount' => '0.00',
+                'credit_amount' => $credit,
+                'tableable_type' => Company::class,
+                'tableable_id' => $company->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        };
+        $add($this->owner, $this->company, 101, '7000000.00');
+        $add($this->otherOwner, $companyB, 202, '15000000.00');
+        $add($this->otherOwner, $legacyCompany, null, '3000000.00');
+
+        $service = app(SupplierDebtReportService::class);
+        $first = $service->report($this->owner, '2026-08-01', '2026-08-31');
+        $second = $service->report($this->otherOwner, '2026-08-01', '2026-08-31');
+        $expected = [
+            $this->company->id => '7000000.00',
+            $companyB->id => '15000000.00',
+            $legacyCompany->id => '3000000.00',
+        ];
+
+        $this->assertSame($expected, $first->pluck('ending_credit', 'company_id')->all());
+        $this->assertSame($expected, $second->pluck('ending_credit', 'company_id')->all());
+    }
+
     private function createSchema(): void
     {
         Schema::create('users', function (Blueprint $table): void {

@@ -223,9 +223,14 @@ class AccountController extends Controller
             $actor = $request->user();
             $globalBranchScope = $this->branchContext->isGlobal($actor);
             $branchId = $globalBranchScope ? null : $this->branchContext->branchId($actor);
-            $ownerIds = $this->ownerUserIds($actor);
-            $ownerPlaceholders = implode(',', array_fill(0, count($ownerIds), '?'));
-            $branchJoin = Schema::hasColumn('transactions', 'branch_id')
+            $branchAware = Schema::hasColumn('transactions', 'branch_id');
+            $ownerIds = $globalBranchScope && $branchAware
+                ? []
+                : $this->ownerUserIds($actor);
+            $ownerJoin = $ownerIds === []
+                ? ''
+                : 'AND t.user_id IN ('.implode(',', array_fill(0, count($ownerIds), '?')).')';
+            $branchJoin = $branchAware
                 ? 'AND (? = 1 OR t.branch_id = ?)'
                 : '';
 
@@ -283,7 +288,7 @@ class AccountController extends Controller
                     LEFT JOIN transactions t
                         ON t.id = te.transaction_id
                         AND t.type != 'other'
-                        AND t.user_id IN ({$ownerPlaceholders})
+                        {$ownerJoin}
                         {$branchJoin}
                 WHERE (at.code LIKE ? OR at.name LIKE ?)
                 GROUP BY at.id, at.code, at.name, at.level, at.path

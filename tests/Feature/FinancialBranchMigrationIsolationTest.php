@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\TransactionService;
 use App\Support\BranchContext;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -111,6 +112,7 @@ class FinancialBranchMigrationIsolationTest extends TestCase
     private function assertBranchVisibility(): void
     {
         $administrator = User::query()->findOrFail(1);
+        $secondAdministrator = User::query()->findOrFail(4);
         $adminStoreA = User::query()->findOrFail(2);
         $adminStoreWithoutBranch = User::query()->findOrFail(3);
         $context = app(BranchContext::class);
@@ -133,7 +135,52 @@ class FinancialBranchMigrationIsolationTest extends TestCase
             $this->assertTrue($visibleToAdministrator->contains($branchAId));
             $this->assertTrue($visibleToAdministrator->contains($branchBId));
             $this->assertTrue($visibleToAdministrator->contains($legacyId));
+
+            $visibleToSecondAdministrator = $context->scope(DB::table($table), $secondAdministrator)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+            $this->assertSame(
+                $visibleToAdministrator->all(),
+                $visibleToSecondAdministrator->all(),
+                "{$table}: both Administrator accounts must see the same global records"
+            );
         }
+
+        $transactionAId = DB::table('transactions')->insertGetId([
+            'user_id' => 2,
+            'branch_id' => 1,
+        ]);
+        $transactionBId = DB::table('transactions')->insertGetId([
+            'user_id' => 2,
+            'branch_id' => 2,
+        ]);
+        $legacyTransactionId = DB::table('transactions')->insertGetId([
+            'user_id' => 2,
+            'branch_id' => null,
+        ]);
+        $transactions = app(TransactionService::class);
+
+        foreach ([$administrator, $secondAdministrator] as $globalActor) {
+            $this->assertSame($transactionAId, $transactions->getTransactionById($globalActor, $transactionAId)->id);
+            $this->assertSame($transactionBId, $transactions->getTransactionById($globalActor, $transactionBId)->id);
+            $this->assertSame($legacyTransactionId, $transactions->getTransactionById($globalActor, $legacyTransactionId)->id);
+        }
+
+        $this->assertSame($transactionAId, $transactions->getTransactionById($adminStoreA, $transactionAId)->id);
+        foreach ([$transactionBId, $legacyTransactionId] as $forbiddenId) {
+            try {
+                $transactions->getTransactionById($adminStoreA, $forbiddenId);
+                $this->fail('Admin Store A must not read Branch B or legacy NULL transactions.');
+            } catch (\Exception) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $this->assertSame(
+            1,
+            $context->resolveWriteBranch($secondAdministrator, 1),
+            'A global Administrator must be able to select any existing Branch, regardless of branches.user_id.'
+        );
 
         try {
             $context->scope(DB::table('transactions'), $adminStoreWithoutBranch);
@@ -253,6 +300,7 @@ class FinancialBranchMigrationIsolationTest extends TestCase
             ['id' => 1, 'manager_id' => null, 'name' => 'Administrator', 'email' => 'root@example.test', 'password' => 'x', 'role_id' => 1, 'branch_id' => null],
             ['id' => 2, 'manager_id' => 1, 'name' => 'Store A', 'email' => 'a@example.test', 'password' => 'x', 'role_id' => 2, 'branch_id' => 1],
             ['id' => 3, 'manager_id' => 1, 'name' => 'No branch', 'email' => 'null@example.test', 'password' => 'x', 'role_id' => 2, 'branch_id' => null],
+            ['id' => 4, 'manager_id' => null, 'name' => 'Administrator 2', 'email' => 'root2@example.test', 'password' => 'x', 'role_id' => 1, 'branch_id' => null],
         ]);
         DB::table('branches')->insert([
             ['id' => 1, 'user_id' => 1],

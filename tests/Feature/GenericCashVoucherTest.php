@@ -518,6 +518,86 @@ class GenericCashVoucherTest extends TestCase
             ->assertSee('IMP-10-PAY-DETAIL');
     }
 
+    public function test_branch_aware_cash_is_global_for_both_administrators_and_isolated_for_admin_store(): void
+    {
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('cash_vouchers', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+
+        $adminStoreRole = Roles::create(['name' => 'admin_store']);
+        $storeA = User::create([
+            'name' => 'Admin Store A',
+            'email' => 'cash-store-a@example.test',
+            'password' => 'password',
+            'status' => 'active',
+            'role_id' => $adminStoreRole->id,
+            'branch_id' => 101,
+        ]);
+        $storeB = User::create([
+            'name' => 'Admin Store B',
+            'email' => 'cash-store-b@example.test',
+            'password' => 'password',
+            'status' => 'active',
+            'role_id' => $adminStoreRole->id,
+            'branch_id' => 202,
+        ]);
+
+        $makeVoucher = function (User $owner, ?int $branchId, string $number, string $description): CashVoucher {
+            return CashVoucher::create([
+                'owner_id' => $owner->id,
+                'branch_id' => $branchId,
+                'voucher_number' => $number,
+                'direction' => CashVoucher::DIRECTION_RECEIPT,
+                'operation' => CashVoucher::OPERATION_GENERIC_RECEIPT,
+                'transaction_date' => '2026-08-17',
+                'cash_account_id' => $this->cash->id,
+                'amount' => '100000.00',
+                'description' => $description,
+                'accounting_status' => CashVoucher::STATUS_PENDING_ACCOUNTING,
+                'created_by' => $owner->id,
+            ]);
+        };
+
+        $voucherA = $makeVoucher($storeA, 101, 'PTTM-A', 'Cash Branch A');
+        $voucherB = $makeVoucher($storeB, 202, 'PTTM-B', 'Cash Branch B');
+        $legacy = $makeVoucher($this->owner, null, 'PTTM-NULL', 'Cash Legacy NULL');
+        $service = app(CashActivityReadService::class);
+        $read = fn (User $actor) => $service->read(
+            $actor,
+            [(int) $actor->ownerId()],
+            collect([$this->cash->id]),
+            '2026-08-01',
+            '2026-08-31'
+        )['paginator']->getCollection()->pluck('description')->all();
+
+        $expectedGlobal = ['Cash Legacy NULL', 'Cash Branch B', 'Cash Branch A'];
+        $this->assertEqualsCanonicalizing($expectedGlobal, $read($this->owner));
+        $this->assertEqualsCanonicalizing($expectedGlobal, $read($this->otherOwner));
+        $this->assertSame(['Cash Branch A'], $read($storeA));
+        $this->assertSame(['Cash Branch B'], $read($storeB));
+
+        $controller = app(\App\Http\Controllers\Admin\GenericCashVoucherController::class);
+        $setActor = function (User $actor): void {
+            $this->actingAs($actor);
+            $request = \Illuminate\Http\Request::create('/cash-voucher', 'GET');
+            $request->setUserResolver(fn () => $actor);
+            $this->app->instance('request', $request);
+        };
+
+        $setActor($this->otherOwner);
+        $this->assertSame($voucherA->id, $controller->show($voucherA)->getData()['voucher']->id);
+
+        foreach ([$voucherB, $legacy] as $forbiddenVoucher) {
+            $setActor($storeA);
+            try {
+                $controller->show($forbiddenVoucher);
+                $this->fail('Admin Store A must not open Branch B or legacy NULL Cash vouchers.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                $this->assertSame(404, $exception->getStatusCode());
+            }
+        }
+    }
+
     private function createPendingVoucher(
         string $voucherNumber,
         string $date,

@@ -385,7 +385,20 @@ class ImportProductController extends Controller
     {
         $user = Auth::user();
 
-        return $user ? [(int) $user->ownerId()] : [];
+        if (! $user) {
+            return [];
+        }
+
+        if ($user->isAdministrator()) {
+            return Product::query()
+                ->whereNotNull('user_id')
+                ->distinct()
+                ->pluck('user_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return [(int) $user->ownerId()];
     }
 
     private function companyOptions(User $user, array $columns = ['*'])

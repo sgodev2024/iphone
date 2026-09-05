@@ -96,6 +96,19 @@ class ProductImeiManagementTest extends TestCase
         $this->actingAs($this->admin)
             ->get("/admin/products/{$product->id}/imeis")
             ->assertOk();
+        Schema::create('categories', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+        Schema::create('brands', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+        $this->actingAs($this->admin)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertOk();
     }
 
     public function test_quantity_tracked_product_imei_page_reports_not_applicable(): void
@@ -475,6 +488,13 @@ class ProductImeiManagementTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('branch_id')->nullable();
             $table->boolean('notification')->default(false);
+            $table->timestamps();
+        });
+
+        Schema::create('order_details', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('order_id')->nullable();
+            $table->unsignedBigInteger('product_id');
             $table->timestamps();
         });
 

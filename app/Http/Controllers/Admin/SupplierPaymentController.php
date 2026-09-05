@@ -6,12 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreSupplierPaymentRequest;
 use App\Models\Company;
 use App\Services\SupplierPaymentService;
+use App\Support\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class SupplierPaymentController extends Controller
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function companies(Request $request): JsonResponse
     {
         abort_unless($request->user()?->hasPermission('expense.create'), 403);
@@ -22,9 +28,16 @@ class SupplierPaymentController extends Controller
             return response()->json([]);
         }
 
+        $companies = Company::query();
+        if (! Schema::hasColumn('companies', 'branch_id')
+            || ! $this->branchContext->isGlobal($request->user())
+        ) {
+            $companies->where('user_id', $request->user()->ownerId());
+        }
+        $this->branchContext->scope($companies, $request->user());
+
         return response()->json(
-            Company::query()
-                ->where('user_id', $request->user()->ownerId())
+            $companies
                 ->where(function ($query) use ($keyword): void {
                     $query->where('name', 'like', "%{$keyword}%")
                         ->orWhere('phone', 'like', "%{$keyword}%");

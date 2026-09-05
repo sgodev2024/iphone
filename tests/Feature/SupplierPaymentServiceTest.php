@@ -415,6 +415,74 @@ class SupplierPaymentServiceTest extends TestCase
         $this->assertSame(0, $this->paymentCount($second));
     }
 
+    public function test_second_administrator_can_pay_any_branch_using_import_as_owner_and_branch_source(): void
+    {
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+        DB::table('roles')->insert(['id' => 1, 'name' => 'administrator']);
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('companies', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::create('storages', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->timestamps();
+        });
+        Schema::table('import_coupon', fn (Blueprint $table) => $table->unsignedBigInteger('storage_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+
+        $storageId = DB::table('storages')->insertGetId([
+            'user_id' => $this->owner->id,
+            'branch_id' => 101,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->company->update(['branch_id' => 101]);
+        $companyB = Company::create([
+            'user_id' => $this->otherOwner->id,
+            'branch_id' => 202,
+            'name' => 'Company Branch B',
+            'status' => true,
+        ]);
+        $companyRequest = \Illuminate\Http\Request::create(
+            '/supplier-companies',
+            'GET',
+            ['keyword' => 'Company']
+        );
+        $companyRequest->setUserResolver(fn () => $this->otherOwner);
+        $companyIds = collect(app(
+            \App\Http\Controllers\Admin\SupplierPaymentController::class
+        )->companies($companyRequest)->getData(true))->pluck('id')->all();
+        $this->assertEqualsCanonicalizing([$this->company->id, $companyB->id], $companyIds);
+
+        $import = $this->createCanonicalImport(100000);
+        $import->update(['storage_id' => $storageId]);
+        Transaction::query()
+            ->where('reference_number', 'IMP-'.$import->id)
+            ->update(['branch_id' => 101]);
+
+        $this->assertSame(100000, $this->service->summary($this->otherOwner, $import->id)['remaining']);
+        $this->assertSame($import->id, $this->service->outstandingImports(
+            $this->otherOwner,
+            $this->company->id
+        )[0]['id']);
+
+        $result = $this->service->pay($this->otherOwner, $this->payload(
+            $import,
+            25000,
+            'cash',
+            'fa111111-1111-4111-8111-111111111111'
+        ));
+
+        $this->assertSame($this->owner->id, $result['transaction']->user_id);
+        $this->assertSame(101, $result['transaction']->branch_id);
+        $this->assertSame($this->otherOwner->id, $result['transaction']->created_by);
+        $this->assertSame(75000, $result['summary']['remaining']);
+    }
+
     private function createSchema(): void
     {
         Schema::create('users', function (Blueprint $table): void {

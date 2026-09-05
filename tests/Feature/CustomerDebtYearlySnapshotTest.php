@@ -350,6 +350,69 @@ class CustomerDebtYearlySnapshotTest extends TestCase
         $this->assertDatabaseHas('transactions', ['id' => $transaction->id, 'user_id' => $ownerB]);
     }
 
+    public function test_both_administrators_receive_global_customer_debt_across_source_owners_and_branches(): void
+    {
+        if (! Schema::hasTable('roles')) {
+            Schema::create('roles', function (Blueprint $table): void {
+                $table->id();
+                $table->string('name');
+                $table->timestamps();
+            });
+        }
+        DB::table('roles')->updateOrInsert(['id' => 1], ['name' => 'administrator']);
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('clients', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('customer_debt_yearly_snapshots', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('customer_debt_snapshot_states', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::create('branches', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+        });
+
+        $administratorOneId = $this->owner('global-a');
+        $administratorTwoId = $this->owner('global-b');
+        DB::table('users')->whereIn('id', [$administratorOneId, $administratorTwoId])->update(['role_id' => 1]);
+        DB::table('branches')->insert([
+            ['id' => 101, 'user_id' => $administratorOneId],
+            ['id' => 202, 'user_id' => $administratorTwoId],
+        ]);
+        $clientA = $this->client($administratorOneId, 'Customer A');
+        $clientB = $this->client($administratorTwoId, 'Customer B');
+        $legacyClient = $this->client($administratorTwoId, 'Customer Legacy');
+        DB::table('clients')->where('id', $clientA)->update(['branch_id' => 101]);
+        DB::table('clients')->where('id', $clientB)->update(['branch_id' => 202]);
+
+        foreach ([
+            [$administratorOneId, $clientA, 101, '5000000.00'],
+            [$administratorTwoId, $clientB, 202, '12000000.00'],
+            [$administratorTwoId, $legacyClient, null, '3000000.00'],
+        ] as [$ownerId, $clientId, $branchId, $debit]) {
+            $this->rawEntry($ownerId, $clientId, '2026-08-10', $debit, '0.00');
+            DB::table('transactions')->orderByDesc('id')->limit(1)->update(['branch_id' => $branchId]);
+        }
+
+        $service = app(CustomerDebtSnapshotService::class);
+        $first = $service->reportFor(
+            User::query()->findOrFail($administratorOneId),
+            '2026-08-01',
+            '2026-08-31'
+        );
+        $second = $service->reportFor(
+            User::query()->findOrFail($administratorTwoId),
+            '2026-08-01',
+            '2026-08-31'
+        );
+        $expected = [
+            $clientA => '5000000.00',
+            $clientB => '12000000.00',
+            $legacyClient => '3000000.00',
+        ];
+
+        $this->assertSame($expected, $first->pluck('ending_debit', 'client_id')->sortKeys()->all());
+        $this->assertSame($expected, $second->pluck('ending_debit', 'client_id')->sortKeys()->all());
+    }
+
     private function owner(string $key): int
     {
         return DB::table('users')->insertGetId([

@@ -1002,6 +1002,58 @@ class CustomerDebtCollectionServiceTest extends TestCase
         $this->assertLessThanOrEqual(6, $queryCount);
     }
 
+    public function test_second_administrator_collects_using_client_owner_and_historical_branch_source(): void
+    {
+        Schema::table('users', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('clients', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('orders', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+        Schema::table('customer_debt_collections', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
+
+        $this->client->update(['branch_id' => 101, 'name' => 'Customer Branch A']);
+        $clientB = Client::create([
+            'user_id' => $this->otherOwner->id,
+            'branch_id' => 202,
+            'name' => 'Customer Branch B',
+        ]);
+        $clientRequest = Request::create('/customer-debt-clients', 'GET', ['keyword' => 'Customer']);
+        $clientRequest->setUserResolver(fn () => $this->otherOwner);
+        $clientIds = collect(app(
+            \App\Http\Controllers\Admin\CustomerDebtPaymentController::class
+        )->clients($clientRequest)->getData(true))->pluck('id')->all();
+        $this->assertEqualsCanonicalizing([$this->client->id, $clientB->id], $clientIds);
+
+        $order = $this->createCanonicalOrder(500000, '2026-08-01');
+        $order->update(['branch_id' => 101]);
+        Transaction::query()
+            ->where('document_type', 'order')
+            ->where('reference_number', (string) $order->id)
+            ->update(['branch_id' => 101]);
+
+        $service = app(CustomerDebtCollectionService::class);
+        $this->assertSame('500000.00', $service->preview(
+            $this->otherOwner,
+            $this->client->id
+        )['collectible_total']);
+
+        $result = $service->collect($this->otherOwner, $this->payload(
+            200000,
+            'cash',
+            $this->uuid(90)
+        ));
+
+        $this->assertSame($this->owner->id, $result['collection']->owner_id);
+        $this->assertSame(101, $result['collection']->branch_id);
+        $this->assertSame($this->otherOwner->id, $result['collection']->created_by);
+        $this->assertSame(
+            101,
+            Transaction::query()
+                ->where('collection_id', $result['collection']->id)
+                ->value('branch_id')
+        );
+        $this->assertSame(300000, (int) $order->fresh()->debt_amount);
+    }
+
     private function createCanonicalOrder(
         int $amount,
         string $saleDate,

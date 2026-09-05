@@ -127,7 +127,11 @@ class ProductController extends Controller
 
     public function edit(string $id)
     {
-        $product = Product::query()->where('user_id', Auth()->id())->with(['category', 'brand'])->findOrFail($id);
+        $productQuery = Product::query()->with(['category', 'brand']);
+        if (! $this->branchContext->isGlobal(Auth::user())) {
+            $productQuery->where('user_id', Auth::id());
+        }
+        $product = $productQuery->findOrFail($id);
         $title = "Cập nhật sản phẩm - {$product->name}";
         $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
@@ -149,7 +153,11 @@ class ProductController extends Controller
     public function update(ProductRequest $request, $id)
     {
         return transaction(function () use ($request, $id) {
-            $product = Product::query()->where('user_id', Auth()->id())->findOrFail($id);
+            $productQuery = Product::query();
+            if (! $this->branchContext->isGlobal($request->user())) {
+                $productQuery->where('user_id', Auth::id());
+            }
+            $product = $productQuery->findOrFail($id);
 
             $oldThumbnail = $product->thumbnail;
 

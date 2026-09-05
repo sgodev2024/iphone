@@ -62,9 +62,10 @@ class TransactionService
     public function getPaginatedTransactionsForAdmin(User $actor, $status, $startDate, $endDate)
     {
         try {
-            $queryBuilder = $this->transaction->newQuery()
-                ->with('user')
-                ->whereIn('user_id', $this->ownerUserIds($actor));
+            $queryBuilder = $this->transaction->newQuery()->with('user');
+            if (! $this->branchContext->isGlobal($actor)) {
+                $queryBuilder->whereIn('user_id', $this->ownerUserIds($actor));
+            }
             $this->branchContext->scope($queryBuilder, $actor);
 
             if ($status) {
@@ -135,7 +136,10 @@ class TransactionService
                 $id = $actor;
                 return $this->transaction->findOrFail($id);
             }
-            $query = $this->transaction->newQuery()->whereIn('user_id', $this->ownerUserIds($actor));
+            $query = $this->transaction->newQuery();
+            if (! $this->branchContext->isGlobal($actor)) {
+                $query->whereIn('user_id', $this->ownerUserIds($actor));
+            }
             $this->branchContext->scope($query, $actor);
 
             return $query->findOrFail($id);
@@ -188,8 +192,10 @@ class TransactionService
         try {
             $query = $this->transaction->newQuery()
                 ->orderByDesc('created_at')
-                ->where('notification', 2)
-                ->whereIn('user_id', $this->ownerUserIds($actor));
+                ->where('notification', 2);
+            if (! $this->branchContext->isGlobal($actor)) {
+                $query->whereIn('user_id', $this->ownerUserIds($actor));
+            }
             $this->branchContext->scope($query, $actor);
 
             return $query;

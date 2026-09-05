@@ -47,22 +47,20 @@ class CustomerDebtSnapshotService
             );
         }
 
-        $branchIds = DB::table('clients')
-            ->where('user_id', $ownerId)
-            ->whereNotNull('branch_id')
+        $businessScopes = DB::table('clients')
+            ->select(['user_id as owner_id', 'branch_id'])
             ->distinct()
+            ->orderBy('owner_id')
             ->orderBy('branch_id')
-            ->pluck('branch_id')
-            ->map(fn ($id) => (int) $id)
-            ->push(null);
+            ->get();
 
-        return $branchIds
-            ->flatMap(fn (?int $branchId) => $this->report(
-                $ownerId,
+        return $businessScopes
+            ->flatMap(fn (object $scope) => $this->report(
+                (int) $scope->owner_id,
                 $fromDate,
                 $toDate,
                 $nameFilter,
-                $branchId,
+                $scope->branch_id === null ? null : (int) $scope->branch_id,
                 true
             ))
             ->sortBy(fn ($row) => [$row->client_name, $row->client_id])

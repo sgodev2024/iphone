@@ -10,6 +10,7 @@ use App\Support\BranchContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class BankActivityReadService
 {
@@ -38,8 +39,12 @@ class BankActivityReadService
             ->map(fn (object $entry): BankActivityItem => $this->postedItem($entry));
 
         $pendingQuery = BankVoucher::query()
-            ->with(['bankAccount:id,code,name', 'creator:id,name'])
-            ->where('owner_id', (int) $actor->ownerId());
+            ->with(['bankAccount:id,code,name', 'creator:id,name']);
+        if (! Schema::hasColumn('bank_vouchers', 'branch_id')
+            || ! $this->branchContext->isGlobal($actor)
+        ) {
+            $pendingQuery->where('owner_id', (int) $actor->ownerId());
+        }
         $this->branchContext->scope($pendingQuery, $actor);
         $pending = $pendingQuery
             ->whereDate('transaction_date', '>=', $from)

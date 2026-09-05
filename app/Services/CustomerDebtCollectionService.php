@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\DecimalAmount;
 use App\Support\BranchContext;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -34,7 +35,6 @@ class CustomerDebtCollectionService
 
     public function collect(User $actor, array $data): array
     {
-        $ownerId = (int) $actor->ownerId();
         $branchAware = $this->branchAware;
         $payload = $this->normalizedPayload($data);
         $idempotencyKey = strtolower(trim((string) ($data['idempotency_key'] ?? '')));
@@ -48,19 +48,16 @@ class CustomerDebtCollectionService
         try {
             return DB::transaction(function () use (
                 $actor,
-                $ownerId,
                 $payload,
                 $idempotencyKey,
                 $branchAware
             ): array {
                 // Lock the business aggregate first. Every collection for this Client
                 // is serialized before any remaining balance is read.
-                $client = Client::withTrashed()
-                    ->whereKey($payload['client_id'])
-                    ->where('user_id', $ownerId)
-                    ->when($branchAware, fn ($query) => $query->whereNotNull('branch_id'))
+                $client = $this->sourceClientQuery($actor, $payload['client_id'])
                     ->lockForUpdate()
                     ->firstOrFail();
+                $ownerId = (int) $client->user_id;
                 $branchId = $branchAware ? (int) $client->branch_id : null;
                 if ($branchAware) {
                     $this->branchContext->authorize($actor, $branchId);
@@ -195,10 +192,16 @@ class CustomerDebtCollectionService
                 return $this->result($collection, $ledgerAfter, false);
             }, 3);
         } catch (UniqueConstraintViolationException $exception) {
+            $client = $this->sourceClientQuery($actor, $payload['client_id'])->firstOrFail();
+            $ownerId = (int) $client->user_id;
+            $branchId = $branchAware ? (int) $client->branch_id : null;
+            if ($branchAware) {
+                $this->branchContext->authorize($actor, $branchId);
+            }
             $existingQuery = CustomerDebtCollection::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchAware, fn ($query) => $query->where('branch_id', $branchId))
                 ->where('idempotency_key', $idempotencyKey);
-            $this->branchContext->scope($existingQuery, $actor);
             $existing = $existingQuery->first();
 
             if (! $existing) {
@@ -214,13 +217,9 @@ class CustomerDebtCollectionService
 
     public function preview(User $actor, int $clientId, string|int|null $amount = null, ?string $date = null): array
     {
-        $ownerId = (int) $actor->ownerId();
         $branchAware = $this->branchAware;
-        $client = Client::withTrashed()
-            ->whereKey($clientId)
-            ->where('user_id', $ownerId)
-            ->when($branchAware, fn ($query) => $query->whereNotNull('branch_id'))
-            ->firstOrFail();
+        $client = $this->sourceClientQuery($actor, $clientId)->firstOrFail();
+        $ownerId = (int) $client->user_id;
         $branchId = $branchAware ? (int) $client->branch_id : null;
         if ($branchAware) {
             $this->branchContext->authorize($actor, $branchId);
@@ -467,6 +466,20 @@ class CustomerDebtCollectionService
             'collectible_total' => $this->sumItems($outstanding, 'remaining'),
             'client_tk131_net' => $clientNet,
         ];
+    }
+
+    private function sourceClientQuery(User $actor, int $clientId): Builder
+    {
+        $query = Client::withTrashed()->whereKey($clientId);
+
+        if (! $this->branchAware || ! $this->branchContext->isGlobal($actor)) {
+            $query->where('user_id', (int) $actor->ownerId());
+        }
+
+        return $query->when(
+            $this->branchAware,
+            fn (Builder $query) => $query->whereNotNull('branch_id')
+        );
     }
 
     private function canonicalAccounts(): array

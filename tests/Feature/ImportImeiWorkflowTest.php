@@ -278,32 +278,10 @@ class ImportImeiWorkflowTest extends TestCase
             ->assertDontSee('MAX_IMPORT_QUANTITY', false);
     }
 
-    public function test_missing_or_invalid_product_query_opens_normal_form_without_preselection(): void
+    public function test_missing_or_unknown_product_query_opens_normal_form_without_preselection(): void
     {
-        $otherAdmin = User::create([
-            'name' => 'Other Admin',
-            'email' => 'other@example.com',
-            'phone' => '0911111111',
-            'password' => 'password',
-            'role_id' => 1,
-            'status' => 'active',
-        ]);
-        $otherProduct = Product::create([
-            'user_id' => $otherAdmin->id,
-            'code' => 'OTHER',
-            'name' => 'Other Product',
-            'price' => 0,
-            'price_buy' => 0,
-            'quantity' => 0,
-            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
-            'status' => true,
-        ]);
-
         $this->actingAs($this->admin)
             ->get('/admin/importproduct/add?product_id=999999')
-            ->assertOk();
-        $this->actingAs($this->admin)
-            ->get("/admin/importproduct/add?product_id={$otherProduct->id}")
             ->assertOk();
         $this->actingAs($this->admin)
             ->get('/admin/importproduct/add')
@@ -775,6 +753,50 @@ class ImportImeiWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_second_administrator_confirms_import_from_authorized_company_and_storage_sources(): void
+    {
+        $secondAdministrator = User::create([
+            'name' => 'Second global administrator',
+            'email' => 'second-import-admin@example.com',
+            'phone' => '0900000098',
+            'password' => 'password',
+            'role_id' => 1,
+            'status' => 'active',
+        ]);
+        $foreignCompany = Company::create([
+            'user_id' => $secondAdministrator->id,
+            'branch_id' => 2,
+            'name' => 'Branch B supplier',
+        ]);
+        $item = $this->createImportItem(quantity: 1);
+
+        $this->actingAs($secondAdministrator)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', array_replace(
+                $this->validPayload($item, ['GLOBAL-BRANCH-MISMATCH']),
+                ['supplier' => $foreignCompany->id]
+            ))
+            ->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHasErrors('supplier');
+        $this->assertDatabaseCount('import_coupon', 0);
+        $this->assertDatabaseHas('import', ['id' => $item->id]);
+
+        $this->actingAs($secondAdministrator)
+            ->post('/admin/importproduct/importCoupon', $this->validPayload($item, ['GLOBAL-BRANCH-A']))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $coupon = ImportCoupon::query()->sole();
+        $this->assertSame($this->admin->id, (int) $coupon->user_id);
+        $this->assertSame($this->storage->id, (int) $coupon->storage_id);
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->admin->id,
+            'branch_id' => 1,
+            'document_type' => 'import',
+            'created_by' => $secondAdministrator->id,
+        ]);
+    }
+
     public function test_cross_branch_supplier_or_storage_is_rejected_without_partial_import_writes(): void
     {
         $adminStore = User::create([
@@ -826,6 +848,16 @@ class ImportImeiWorkflowTest extends TestCase
 
     public function test_import_reads_and_bulk_delete_are_branch_scoped_and_administrator_remains_global(): void
     {
+        $secondAdministrator = User::create([
+            'manager_id' => null,
+            'branch_id' => null,
+            'name' => 'Second global administrator',
+            'email' => 'second-global@example.com',
+            'phone' => '0900000099',
+            'password' => 'password',
+            'role_id' => 1,
+            'status' => 'active',
+        ]);
         $adminStore = User::create([
             'manager_id' => $this->admin->id,
             'branch_id' => 1,
@@ -869,6 +901,25 @@ class ImportImeiWorkflowTest extends TestCase
             [$legacyCoupon->id, $foreignCoupon->id, $ownCoupon->id],
             $service->getImportCoupon(user: $this->admin)->getCollection()->modelKeys()
         );
+        $this->assertEqualsCanonicalizing(
+            [$legacyCoupon->id, $foreignCoupon->id, $ownCoupon->id],
+            $service->getImportCoupon(user: $secondAdministrator)->getCollection()->modelKeys()
+        );
+
+        $foreignProduct = Product::create([
+            'user_id' => $secondAdministrator->id,
+            'name' => 'Product owned by second Administrator',
+            'price' => 100000,
+            'status' => 1,
+        ]);
+        $this->actingAs($secondAdministrator);
+        $addRequest = \Illuminate\Http\Request::create('/admin/importproduct/add', 'GET');
+        $addRequest->setUserResolver(fn () => $secondAdministrator);
+        $visibleProductIds = app(
+            \App\Http\Controllers\Admin\ImportProductController::class
+        )->add($addRequest)->getData()['products']->modelKeys();
+        $this->assertContains($this->product->id, $visibleProductIds);
+        $this->assertContains($foreignProduct->id, $visibleProductIds);
 
         try {
             $service->getImportCouponByid($foreignCoupon->id, user: $adminStore);
@@ -1116,6 +1167,7 @@ class ImportImeiWorkflowTest extends TestCase
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->dateTime('transaction_date')->nullable();
             $table->string('description')->nullable();
             $table->string('reference_number')->nullable();

@@ -91,7 +91,7 @@ class BankTransactionController extends Controller
 
         $transactionId = $request->input('transactionId', null);
         $branches = $request->user()->isAdministrator() && Schema::hasTable('branches')
-            ? Branch::query()->where('user_id', $request->user()->id)->orderBy('name')->get(['id', 'name'])
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
 
         // Lấy danh sách tài khoản ngân hàng (con của 112)
@@ -117,9 +117,12 @@ class BankTransactionController extends Controller
         }
 
         if (!empty($transactionId)) {
-            $transactionQuery = Transaction::query()
-                ->whereIn('user_id', $this->transactionOwnerIds())
-                ->with('entries');
+            $transactionQuery = Transaction::query()->with('entries');
+            if (! Schema::hasColumn('transactions', 'branch_id')
+                || ! $branchContext->isGlobal($request->user())
+            ) {
+                $transactionQuery->whereIn('user_id', $this->transactionOwnerIds());
+            }
             $branchContext->scope($transactionQuery, $request->user());
             $transaction = $transactionQuery->findOrFail($transactionId);
 
@@ -564,13 +567,16 @@ class BankTransactionController extends Controller
             'ids.*' => 'exists:transactions,id',
         ]);
 
-        return DB::transaction(function () use ($request) {
+        return DB::transaction(function () use ($request, $branchContext) {
             $transactionIds = $request->input('ids');
 
             foreach ($transactionIds as $transactionId) {
-                $transactionQuery = Transaction::query()
-                    ->whereIn('user_id', $this->transactionOwnerIds())
-                    ->whereKey($transactionId);
+                $transactionQuery = Transaction::query()->whereKey($transactionId);
+                if (! Schema::hasColumn('transactions', 'branch_id')
+                    || ! $branchContext->isGlobal($request->user())
+                ) {
+                    $transactionQuery->whereIn('user_id', $this->transactionOwnerIds());
+                }
                 $branchContext->scope($transactionQuery, $request->user());
                 $transaction = $transactionQuery->firstOrFail();
                 if ($transaction) {

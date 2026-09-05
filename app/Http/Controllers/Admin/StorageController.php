@@ -93,7 +93,8 @@ class StorageController extends Controller
                     }
                 });
             })
-            ->latest()
+            ->orderByDesc('created_at')
+            ->orderBy('id')
             ->paginate(10)
             ->appends($request->query());
     

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\DecimalAmount;
 use App\Support\BranchContext;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,6 @@ class SupplierPaymentService
 
     public function pay(User $actor, array $data): array
     {
-        $ownerId = (int) $actor->ownerId();
         $payload = $this->normalizedPayload($data);
         $payloadHash = hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES));
         $idempotencyKey = strtolower(trim((string) $data['idempotency_key']));
@@ -33,17 +33,17 @@ class SupplierPaymentService
         try {
             return DB::transaction(function () use (
                 $actor,
-                $ownerId,
                 $payload,
                 $payloadHash,
                 $idempotencyKey
             ): array {
                 $importQuery = ImportCoupon::query()
                     ->with('storage')
-                    ->whereKey($payload['import_id'])
-                    ->where('user_id', $ownerId);
+                    ->whereKey($payload['import_id']);
+                $this->scopeOwner($importQuery, $actor);
                 $this->branchContext->scopeThroughStorage($importQuery, $actor);
                 $importCoupon = $importQuery->lockForUpdate()->firstOrFail();
+                $ownerId = (int) $importCoupon->user_id;
                 $branchId = $this->sourceBranchId($importCoupon);
 
                 $existing = Transaction::query()
@@ -134,26 +134,32 @@ class SupplierPaymentService
                 return $this->result($transaction, $importCoupon->fresh(), $ledgerAfter, false);
             }, 3);
         } catch (UniqueConstraintViolationException $exception) {
+            $importQuery = ImportCoupon::query()
+                ->with('storage')
+                ->whereKey($payload['import_id']);
+            $this->scopeOwner($importQuery, $actor);
+            $this->branchContext->scopeThroughStorage($importQuery, $actor);
+            $importCoupon = $importQuery->firstOrFail();
+            $ownerId = (int) $importCoupon->user_id;
+            $branchId = $this->sourceBranchId($importCoupon);
+
             $existingQuery = Transaction::query()
                 ->where('user_id', $ownerId)
-                ->where('idempotency_key', $idempotencyKey);
-            $this->branchContext->scope($existingQuery, $actor);
+                ->where('idempotency_key', $idempotencyKey)
+                ->when(
+                    $this->branchAware(),
+                    fn ($query) => $query->where('branch_id', $branchId)
+                );
             $existing = $existingQuery->first();
 
             if (! $existing) {
                 throw $exception;
             }
 
-            $importQuery = ImportCoupon::query()
-                ->with('storage')
-                ->whereKey($payload['import_id'])
-                ->where('user_id', $ownerId);
-            $this->branchContext->scopeThroughStorage($importQuery, $actor);
-            $importCoupon = $importQuery->firstOrFail();
             $ledger = $this->validatedLedger(
                 $importCoupon,
                 $ownerId,
-                $this->sourceBranchId($importCoupon)
+                $branchId
             );
 
             return $this->replayResult(
@@ -168,13 +174,13 @@ class SupplierPaymentService
 
     public function summary(User $actor, int $importCouponId): array
     {
-        $ownerId = (int) $actor->ownerId();
         $importQuery = ImportCoupon::query()
             ->with('storage')
-            ->whereKey($importCouponId)
-            ->where('user_id', $ownerId);
+            ->whereKey($importCouponId);
+        $this->scopeOwner($importQuery, $actor);
         $this->branchContext->scopeThroughStorage($importQuery, $actor);
         $importCoupon = $importQuery->firstOrFail();
+        $ownerId = (int) $importCoupon->user_id;
 
         return $this->summaryResult($this->validatedLedger(
             $importCoupon,
@@ -185,13 +191,12 @@ class SupplierPaymentService
 
     public function outstandingImports(User $actor, int $companyId): array
     {
-        $ownerId = (int) $actor->ownerId();
-
         $companyQuery = Company::query()
-            ->whereKey($companyId)
-            ->where('user_id', $ownerId);
+            ->whereKey($companyId);
+        $this->scopeOwner($companyQuery, $actor);
         $this->branchContext->scope($companyQuery, $actor);
         $company = $companyQuery->firstOrFail();
+        $ownerId = (int) $company->user_id;
         $branchId = $this->branchAware() ? (int) $company->branch_id : null;
 
         $importsQuery = ImportCoupon::query()
@@ -379,6 +384,13 @@ class SupplierPaymentService
     private function branchAware(): bool
     {
         return Schema::hasColumn('transactions', 'branch_id');
+    }
+
+    private function scopeOwner(Builder $query, User $actor): void
+    {
+        if (! $this->branchAware() || ! $this->branchContext->isGlobal($actor)) {
+            $query->where('user_id', (int) $actor->ownerId());
+        }
     }
 
     private function sourceBranchId(ImportCoupon $importCoupon): ?int

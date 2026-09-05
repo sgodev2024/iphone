@@ -65,7 +65,11 @@ class GenericCashVoucherController extends Controller
 
     private function ownedVoucher(CashVoucher $voucher): CashVoucher
     {
-        abort_unless((int) $voucher->owner_id === (int) request()->user()->ownerId(), 404);
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('cash_vouchers', 'branch_id')
+            || ! $this->branchContext->isGlobal(request()->user())
+        ) {
+            abort_unless((int) $voucher->owner_id === (int) request()->user()->ownerId(), 404);
+        }
         $this->branchContext->authorize(
             request()->user(),
             $voucher->branch_id === null ? null : (int) $voucher->branch_id

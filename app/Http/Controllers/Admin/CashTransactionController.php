@@ -62,14 +62,17 @@ class CashTransactionController extends Controller
             ->first(['id', 'code', 'name']);
 
         $branches = $request->user()->isAdministrator() && Schema::hasTable('branches')
-            ? Branch::query()->where('user_id', $request->user()->id)->orderBy('name')->get(['id', 'name'])
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
 
         if (!empty($transactionId)) {
             // Lấy transaction + entries
-            $transactionQuery = Transaction::query()
-                ->whereIn('user_id', $this->transactionOwnerIds())
-                ->with('entries');
+            $transactionQuery = Transaction::query()->with('entries');
+            if (! Schema::hasColumn('transactions', 'branch_id')
+                || ! $branchContext->isGlobal($request->user())
+            ) {
+                $transactionQuery->whereIn('user_id', $this->transactionOwnerIds());
+            }
             $branchContext->scope($transactionQuery, $request->user());
             $transaction = $transactionQuery->findOrFail($transactionId);
 
@@ -475,13 +478,16 @@ class CashTransactionController extends Controller
             'ids.*' => 'exists:transactions,id',
         ]);
 
-        return DB::transaction(function () use ($request) {
+        return DB::transaction(function () use ($request, $branchContext) {
             $transactionIds = $request->input('ids');
 
             foreach ($transactionIds as $transactionId) {
-                $transactionQuery = Transaction::query()
-                    ->whereIn('user_id', $this->transactionOwnerIds())
-                    ->whereKey($transactionId);
+                $transactionQuery = Transaction::query()->whereKey($transactionId);
+                if (! Schema::hasColumn('transactions', 'branch_id')
+                    || ! $branchContext->isGlobal($request->user())
+                ) {
+                    $transactionQuery->whereIn('user_id', $this->transactionOwnerIds());
+                }
                 $branchContext->scope($transactionQuery, $request->user());
                 $transaction = $transactionQuery->firstOrFail();
                 if ($transaction) {
@@ -506,11 +512,12 @@ class CashTransactionController extends Controller
         });
     }
 
-    public function search(Request $request)
+    public function search(Request $request, BranchContext $branchContext)
     {
         $type = $request->input('type');
         $keyword = trim((string) $request->input('keyword'));
-        $ownerId = Auth::user()?->ownerId();
+        $actor = $request->user();
+        $ownerId = $actor?->ownerId();
 
         if (!$type || !$ownerId || strlen($keyword) < ($type === 'company' ? 2 : 3)) {
             return response()->json([]);
@@ -518,20 +525,25 @@ class CashTransactionController extends Controller
 
         $query = match ($type) {
             'client' => Client::query()
-                ->where('user_id', $ownerId)
                 ->where(function ($query) use ($keyword): void {
                     $query->where('name', 'like', "%$keyword%")
                         ->orWhere('phone', 'like', "%$keyword%")
                         ->orWhere('code', 'like', "%$keyword%");
                 }),
             'supplier' => Supplier::query()
-                ->whereHas('company', fn ($query) => $query->where('user_id', $ownerId))
+                ->whereHas('company', function ($query) use ($actor, $ownerId, $branchContext): void {
+                    if (! Schema::hasColumn('companies', 'branch_id')
+                        || ! $branchContext->isGlobal($actor)
+                    ) {
+                        $query->where('user_id', $ownerId);
+                    }
+                    $branchContext->scope($query, $actor);
+                })
                 ->where(function ($query) use ($keyword): void {
                     $query->where('name', 'like', "%$keyword%")
                         ->orWhere('phone', 'like', "%$keyword%");
                 }),
             'company' => Company::query()
-                ->where('user_id', $ownerId)
                 ->where(function ($query) use ($keyword): void {
                     $query->where('name', 'like', "%$keyword%")
                         ->orWhere('phone', 'like', "%$keyword%");
@@ -541,6 +553,22 @@ class CashTransactionController extends Controller
 
         if (!$query) {
             return response()->json([]);
+        }
+
+        if ($type === 'client') {
+            if (! Schema::hasColumn('clients', 'branch_id')
+                || ! $branchContext->isGlobal($actor)
+            ) {
+                $query->where('user_id', $ownerId);
+            }
+            $branchContext->scope($query, $actor);
+        } elseif ($type === 'company') {
+            if (! Schema::hasColumn('companies', 'branch_id')
+                || ! $branchContext->isGlobal($actor)
+            ) {
+                $query->where('user_id', $ownerId);
+            }
+            $branchContext->scope($query, $actor);
         }
 
         $results = $query->limit(10)->get()->map(
@@ -629,7 +657,6 @@ class CashTransactionController extends Controller
             ->pluck('id');
 
         $transactionQuery = Transaction::query()
-            ->whereIn('user_id', $this->transactionOwnerIds())
             ->where('type', '!=', 'other')
             ->whereNull('collection_id')
             ->whereHas('entries', fn ($query) => $query->whereIn('account_id', $cashAccountIds))
@@ -638,6 +665,11 @@ class CashTransactionController extends Controller
                 'entries.account:id,code,name',
                 'entries.tableable',
             ]);
+        if (! Schema::hasColumn('transactions', 'branch_id')
+            || ! $branchContext->isGlobal($request->user())
+        ) {
+            $transactionQuery->whereIn('user_id', $this->transactionOwnerIds());
+        }
         $branchContext->scope($transactionQuery, $request->user());
         $transaction = $transactionQuery->findOrFail($transactionId);
 

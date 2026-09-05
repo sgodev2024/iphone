@@ -7,6 +7,7 @@ use App\Models\CustomerDebtCollection;
 use App\Support\DecimalAmount;
 use App\Support\BranchContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -27,12 +28,11 @@ class CustomerDebtCollectionController extends Controller
             'collection_number' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $ownerId = (int) $request->user()->ownerId();
         $customer = trim((string) $request->query('customer'));
         $collectionNumber = trim((string) $request->query('collection_number'));
 
-        $collectionsQuery = CustomerDebtCollection::query()
-            ->where('owner_id', $ownerId);
+        $collectionsQuery = CustomerDebtCollection::query();
+        $this->scopeOwner($collectionsQuery, $request);
         $this->branchContext->scope($collectionsQuery, $request->user());
         $collections = $collectionsQuery
             ->with([
@@ -67,8 +67,8 @@ class CustomerDebtCollectionController extends Controller
 
     public function show(Request $request, int $collection)
     {
-        $collectionQuery = CustomerDebtCollection::query()
-            ->where('owner_id', (int) $request->user()->ownerId());
+        $collectionQuery = CustomerDebtCollection::query();
+        $this->scopeOwner($collectionQuery, $request);
         $this->branchContext->scope($collectionQuery, $request->user());
         $collection = $collectionQuery
             ->with([
@@ -96,8 +96,8 @@ class CustomerDebtCollectionController extends Controller
 
     public function attachment(Request $request, int $collection)
     {
-        $collectionQuery = CustomerDebtCollection::query()
-            ->where('owner_id', (int) $request->user()->ownerId());
+        $collectionQuery = CustomerDebtCollection::query();
+        $this->scopeOwner($collectionQuery, $request);
         $this->branchContext->scope($collectionQuery, $request->user());
         $collection = $collectionQuery->findOrFail($collection);
 
@@ -107,5 +107,14 @@ class CustomerDebtCollectionController extends Controller
         abort_unless($disk->exists($collection->attachment), Response::HTTP_NOT_FOUND);
 
         return $disk->response($collection->attachment);
+    }
+
+    private function scopeOwner($query, Request $request): void
+    {
+        if (! Schema::hasColumn('customer_debt_collections', 'branch_id')
+            || ! $this->branchContext->isGlobal($request->user())
+        ) {
+            $query->where('owner_id', (int) $request->user()->ownerId());
+        }
     }
 }

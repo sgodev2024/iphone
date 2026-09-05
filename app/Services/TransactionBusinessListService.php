@@ -36,11 +36,17 @@ class TransactionBusinessListService
             ];
         }
 
-        $query = DB::table('transactions as t')
-            ->whereIn('t.user_id', $ownerIds);
+        $query = DB::table('transactions as t');
 
         if ($actor instanceof User) {
+            if (! $this->branchContext->isGlobal($actor)
+                || ! Schema::hasColumn('transactions', 'branch_id')
+            ) {
+                $query->whereIn('t.user_id', $ownerIds);
+            }
             $this->branchContext->scope($query, $actor, 't.branch_id');
+        } else {
+            $query->whereIn('t.user_id', $ownerIds);
         }
 
         return $query

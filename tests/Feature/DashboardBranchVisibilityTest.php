@@ -42,6 +42,16 @@ class DashboardBranchVisibilityTest extends TestCase
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+        $secondAdministratorId = DB::table('users')->insertGetId([
+            'name' => 'Owner B - Global Administrator',
+            'email' => 'administrator-2@example.test',
+            'phone' => '0900000004',
+            'password' => 'password',
+            'role_id' => 1,
+            'status' => 'active',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
         $adminStoreAId = DB::table('users')->insertGetId([
             'name' => 'Admin Store A',
             'email' => 'store-a@example.test',
@@ -198,9 +208,11 @@ class DashboardBranchVisibilityTest extends TestCase
         ]);
 
         $administrator = User::query()->findOrFail($administratorId);
+        $secondAdministrator = User::query()->findOrFail($secondAdministratorId);
         $adminStoreA = User::query()->findOrFail($adminStoreAId);
         $storeData = $this->dashboardDataFor($adminStoreA);
         $globalData = $this->dashboardDataFor($administrator);
+        $secondGlobalData = $this->dashboardDataFor($secondAdministrator);
 
         $this->assertSame(9000000.0, $storeData['stats']['today_revenue']);
         $this->assertSame(1, $storeData['orderStats']['today_orders']);
@@ -228,6 +240,25 @@ class DashboardBranchVisibilityTest extends TestCase
         $this->assertSame(5, (int) $globalSold['Sản phẩm Branch B']);
         $this->assertCount(3, $globalData['latestOrders']);
         $this->assertSame(1, $globalData['returnStats']['returned_orders']);
+        $this->assertSame(
+            [
+                $globalData['stats']['today_revenue'],
+                $globalData['orderStats']['today_orders'],
+                $globalData['totalRevenueStats']['total_revenue'],
+                $globalData['inventoryStats']['total_stock'],
+                $globalData['newCustomers']['total_new'],
+                collect($globalData['topSellingProducts'])->pluck('total_sold', 'name')->all(),
+            ],
+            [
+                $secondGlobalData['stats']['today_revenue'],
+                $secondGlobalData['orderStats']['today_orders'],
+                $secondGlobalData['totalRevenueStats']['total_revenue'],
+                $secondGlobalData['inventoryStats']['total_stock'],
+                $secondGlobalData['newCustomers']['total_new'],
+                collect($secondGlobalData['topSellingProducts'])->pluck('total_sold', 'name')->all(),
+            ],
+            'Both Administrator accounts must receive the same global Dashboard dataset.'
+        );
 
         $this->assertGreaterThanOrEqual(
             $storeData['stats']['today_revenue'],

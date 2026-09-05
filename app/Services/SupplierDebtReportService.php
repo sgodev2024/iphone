@@ -29,7 +29,9 @@ class SupplierDebtReportService
             && Schema::hasTable('supplier_debt_snapshot_states');
         $this->branchSchemaAvailable = Schema::hasTable('branches')
             && Schema::hasColumn('transactions', 'branch_id')
-            && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id');
+            && Schema::hasColumn('companies', 'branch_id')
+            && (! $this->snapshotTablesAvailable
+                || Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id'));
     }
 
     public function report(User $actor, string $fromDate, string $toDate, string $nameFilter = ''): Collection
@@ -52,17 +54,26 @@ class SupplierDebtReportService
                 : $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true);
         }
 
-        $branchIds = DB::table('branches')
-            ->where('user_id', $ownerId)
-            ->orderBy('id')
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->push(null);
+        $businessScopes = DB::table('companies')
+            ->select(['user_id as owner_id', 'branch_id'])
+            ->distinct()
+            ->orderBy('owner_id')
+            ->orderBy('branch_id')
+            ->get();
 
-        return $branchIds->flatMap(fn (?int $branchId) => $this->snapshotTablesAvailable
-            ? $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
-            : $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
-        )->sortBy('company_id')->values();
+        return $businessScopes->flatMap(function (object $scope) use (
+            $fromDate,
+            $toDate,
+            $nameFilter,
+            $account331
+        ): Collection {
+            $sourceOwnerId = (int) $scope->owner_id;
+            $branchId = $scope->branch_id === null ? null : (int) $scope->branch_id;
+
+            return $this->snapshotTablesAvailable
+                ? $this->snapshotReport($sourceOwnerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
+                : $this->legacyReport($sourceOwnerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true);
+        })->sortBy('company_id')->values();
     }
 
     private function snapshotReport(

@@ -78,22 +78,22 @@ class ImportCouponController extends Controller
         $user = $request->user();
         $supplierId = (int) $request->validated('supplier');
         $storageId = (int) $request->validated('storage');
-        $ownerId = (int) $user->ownerId();
+        $actorOwnerId = (int) $user->ownerId();
 
         $companyQuery = Company::query();
         $storageQuery = Storage::query();
 
         if ($user->roleKey() === 'warehouse') {
-            $companyQuery->where('user_id', $ownerId);
-            $storageQuery->where('user_id', $ownerId);
+            $companyQuery->where('user_id', $actorOwnerId);
+            $storageQuery->where('user_id', $actorOwnerId);
         } else {
             $this->branchContext->scope($companyQuery, $user);
             $this->branchContext->scopeStorages($storageQuery, $user);
         }
 
-        $companyExists = $companyQuery->whereKey($supplierId)->exists();
+        $company = $companyQuery->whereKey($supplierId)->first();
 
-        if (! $companyExists) {
+        if (! $company) {
             throw ValidationException::withMessages([
                 'supplier' => 'Nhà cung cấp không hợp lệ hoặc không thuộc phạm vi dữ liệu của bạn.',
             ]);
@@ -105,17 +105,39 @@ class ImportCouponController extends Controller
             ]);
         }
 
-        if (! $storageQuery->whereKey($storageId)->exists()) {
+        $storage = $storageQuery->whereKey($storageId)->first();
+
+        if (! $storage) {
             throw ValidationException::withMessages([
                 'storage' => 'Kho nhập không hợp lệ hoặc không thuộc phạm vi dữ liệu của bạn.',
+            ]);
+        }
+
+        if (Schema::hasColumn('companies', 'branch_id')
+            && Schema::hasColumn('storages', 'branch_id')
+            && ($company->branch_id === null
+                || $storage->branch_id === null
+                || (int) $company->branch_id !== (int) $storage->branch_id)
+        ) {
+            throw ValidationException::withMessages([
+                'supplier' => 'Nhà cung cấp và kho nhập phải thuộc cùng một Branch.',
+            ]);
+        }
+
+        $ownerId = (int) $company->user_id;
+        if ($ownerId <= 0) {
+            throw ValidationException::withMessages([
+                'supplier' => 'Nhà cung cấp chưa có owner nguồn hợp lệ.',
             ]);
         }
 
         $imports = Import::query()
             ->with('product')
             ->where('quantity', '>', 0)
-            ->whereHas('product', function ($query) use ($ownerId) {
-                $query->where('user_id', $ownerId);
+            ->whereHas('product', function ($query) use ($ownerId, $user) {
+                if (! $user->isAdministrator()) {
+                    $query->where('user_id', $ownerId);
+                }
             })
             ->lockForUpdate()
             ->get();
@@ -303,7 +325,7 @@ class ImportCouponController extends Controller
         foreach ($imports as $import) {
             $product = Product::query()
                 ->whereKey($import->product_id)
-                ->where('user_id', $ownerId)
+                ->when(! $user->isAdministrator(), fn ($query) => $query->where('user_id', $ownerId))
                 ->lockForUpdate()
                 ->firstOrFail();
 
