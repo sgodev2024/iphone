@@ -13,7 +13,7 @@
 </head>
 
 <body>
-    <div id="wrapper">
+    <div id="wrapper" class="wrapper">
         @include('admin.layout.sidebar')
 
         <div class="main-panel">

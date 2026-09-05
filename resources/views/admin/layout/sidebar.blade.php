@@ -1,3 +1,16 @@
+@php
+    $sidebarUser = Auth::user();
+    $sidebarUserName = trim((string) ($sidebarUser?->name ?? '')) ?: 'Tài khoản';
+    $sidebarRoleLabel = match (true) {
+        $sidebarUser?->isAdministrator() => 'Administrator',
+        $sidebarUser?->isAdminStore() => 'Admin Store',
+        $sidebarUser?->isStaff() => 'Nhân viên',
+        default => 'Chưa xác định',
+    };
+    $sidebarBranchLabel = $sidebarUser?->isAdministrator()
+        ? 'Toàn hệ thống'
+        : ($sidebarUser?->branch?->name ?: 'Chưa gán cửa hàng');
+@endphp
 
 <div class="sidebar no-print" data-background-color="dark">
     <div class="sidebar-logo">
@@ -31,8 +44,8 @@
     </div>
 
     <div class="sidebar-wrapper scrollbar scrollbar-inner">
-        <div class="sidebar-content">
-            <ul class="nav nav-secondary" id="adminSidebarMenu">
+        <div class="sidebar-content admin-sidebar-content">
+            <ul class="nav nav-secondary sidebar-menu" id="adminSidebarMenu">
 
                 {{-- Dashboard --}}
                 @can('dashboard.view')
@@ -529,6 +542,35 @@
                 @endcanany
 
             </ul>
+
+            @if ($sidebarUser)
+                <div class="sidebar-user-role" aria-label="Thông tin tài khoản đang đăng nhập">
+                    <div class="sidebar-user-role__icon" aria-hidden="true">
+                        <i class="fas fa-user"></i>
+                    </div>
+
+                    <div class="sidebar-user-role__details">
+                        <div
+                            class="sidebar-user-role__name"
+                            title="{{ $sidebarUserName }}"
+                        >
+                            {{ $sidebarUserName }}
+                        </div>
+
+                        <span class="sidebar-user-role__badge">
+                            {{ $sidebarRoleLabel }}
+                        </span>
+
+                        <div
+                            class="sidebar-user-role__branch"
+                            title="{{ $sidebarBranchLabel }}"
+                        >
+                            <i class="fas fa-store" aria-hidden="true"></i>
+                            <span>{{ $sidebarBranchLabel }}</span>
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 </div>
