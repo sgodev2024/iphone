@@ -232,6 +232,7 @@ class ReportController extends Controller
                         $soldQuantity = OrderDetail::whereHas('order', function ($query) use ($latestImport) {
                             $query->where('created_at', '>', $latestImport->created_at);
                         })->where('product_id', $currentProductId)
+                            ->where('storage_id', $storage_id)
                             ->sum('quantity');
 
                         $quantityBeforeImport = $currentQuantity + $soldQuantity - $importedQuantity;

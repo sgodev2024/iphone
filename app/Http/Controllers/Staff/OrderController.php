@@ -8,6 +8,7 @@ use App\Models\Config;
 use App\Models\Order;
 use App\Services\SaleService;
 use App\Services\SaleStorageResolver;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private readonly BranchContext $branchContext
+    ) {}
+
     public function index(Request $request)
     {
         $config = Config::with(['bank', 'user'])->first();
@@ -34,13 +39,21 @@ class OrderController extends Controller
                 }
             }
 
-            $orders = Order::query()
-                ->where('user_id', Auth::id())
+            $ordersQuery = Order::query();
+            $this->branchContext->scope($ordersQuery, $request->user());
+
+            if ($request->user()->isStaff()) {
+                $ordersQuery->where('user_id', Auth::id());
+            }
+
+            $orders = $ordersQuery
                 ->when(! empty($searchText), function ($query) use ($searchText) {
-                    $query->where('code', 'like', "%$searchText%")
-                        ->orWhereHas('client', function ($q) use ($searchText) {
-                            $q->where('name', 'like', "%$searchText%")
-                                ->orWhere('phone', 'like', "%$searchText%");
+                    $query->where(function ($searchQuery) use ($searchText): void {
+                        $searchQuery->where('code', 'like', "%$searchText%")
+                            ->orWhereHas('client', function ($q) use ($searchText) {
+                                $q->where('name', 'like', "%$searchText%")
+                                    ->orWhere('phone', 'like', "%$searchText%");
+                            });
                         });
                 })
                 ->when($start && $end, function ($query) use ($start, $end) {
@@ -62,7 +75,14 @@ class OrderController extends Controller
     {
         if ($request->ajax()) {
             $page = 6;
-            $orders = Order::paginate($page);
+            $query = Order::query();
+            $this->branchContext->scope($query, $request->user());
+
+            if ($request->user()->isStaff()) {
+                $query->where('user_id', Auth::id());
+            }
+
+            $orders = $query->paginate($page);
             $formattedOrders = $orders->map(function ($order) {
                 return [
                     'id' => $order->id,

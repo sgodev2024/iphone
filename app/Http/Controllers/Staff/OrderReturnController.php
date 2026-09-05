@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\StoreOrderReturnRequest;
 use App\Models\Order;
 use App\Services\OrderReturnService;
+use App\Support\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,11 +14,13 @@ use App\Models\OrderReturnDetail;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use App\Models\OrderReturn;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderReturnController extends Controller
 {
     public function __construct(
-        protected OrderReturnService $orderReturnService
+        protected OrderReturnService $orderReturnService,
+        protected BranchContext $branchContext
     ) {}
 
     public function create(
@@ -35,9 +38,7 @@ class OrderReturnController extends Controller
          | chỉ mở được đơn thuộc chi nhánh mình được phép thao tác.
          |
          */
-        $branchId = $user->branchScopeId();
-
-        $order = Order::query()
+        $orderQuery = Order::query()
             ->with([
                 'client',
                 'creator',
@@ -45,11 +46,10 @@ class OrderReturnController extends Controller
                 'orderDetails.product',
                 'orderDetails.productImei',
             ])
-            ->whereKey($order->id)
-            ->when(
-                $branchId !== null,
-                fn($query) => $query->where('branch_id', $branchId)
-            )
+            ->whereKey($order->id);
+        $this->branchContext->scope($orderQuery, $user);
+
+        $order = $orderQuery
             ->firstOrFail();
 
 
@@ -72,7 +72,7 @@ class OrderReturnController extends Controller
 |
 */
 
-$sourceReturn = OrderReturn::query()
+$sourceReturnQuery = OrderReturn::query()
 ->with([
     'originalOrder.client',
     'originalOrder.creator',
@@ -87,7 +87,10 @@ $sourceReturn = OrderReturn::query()
 ->where(
     'status',
     'completed'
-)
+);
+$this->branchContext->scope($sourceReturnQuery, $user);
+
+$sourceReturn = $sourceReturnQuery
 ->first();
 
 
@@ -550,6 +553,8 @@ $sourceOrderInfo = [
 
                 'errors' => $e->errors(),
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
         } catch (\Throwable $e) {
             report($e);
 

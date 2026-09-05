@@ -36,6 +36,7 @@ class BarcodeController extends Controller
 
         $imei = ProductImei::query()
             ->with(['product', 'importDetail.import'])
+            ->where('storage_id', $storageId)
             ->where(function ($query) use ($barcode) {
                 $query
                     ->where('barcode', $barcode)

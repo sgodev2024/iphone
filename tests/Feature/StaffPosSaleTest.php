@@ -226,7 +226,7 @@ class StaffPosSaleTest extends TestCase
         ));
 
         $originalDetail = $originalOrder->orderDetails()->sole();
-        app(\App\Services\OrderReturnService::class)->createReturn($staff, [
+        $orderReturn = app(\App\Services\OrderReturnService::class)->createReturn($staff, [
             'original_order_id' => $originalOrder->id,
             'return_items' => [[
                 'order_detail_id' => $originalDetail->id,
@@ -234,6 +234,7 @@ class StaffPosSaleTest extends TestCase
             ]],
         ]);
 
+        $this->assertSame(1, (int) $orderReturn->branch_id);
         $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
         $this->assertSame($storage->id, (int) $imei->fresh()->storage_id);
         $this->assertSame(1, (int) ProductStorage::query()
@@ -351,6 +352,101 @@ class StaffPosSaleTest extends TestCase
         $this->assertSame($transactionsBefore, Transaction::query()->count());
     }
 
+    public function test_return_rejects_cross_branch_order_and_restock_storage_but_administrator_is_global(): void
+    {
+        $this->seedAccounts();
+        $storageA = $this->createStorage(['branch_id' => 1, 'name' => 'Kho A']);
+        $storageB = $this->createStorage(['branch_id' => 2, 'name' => 'Kho B']);
+        $managerA = $this->createManager();
+        $staffA = $this->createStaff($storageA->id, $managerA->id);
+        $productA = $this->createProduct(['name' => 'Branch A product']);
+        ProductStorage::create([
+            'product_id' => $productA->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 1,
+        ]);
+        $this->actingAs($staffA);
+        $orderA = $this->createServiceSale($staffA, $productA, $storageA->id);
+        $detailA = $orderA->orderDetails()->sole();
+        $detailA->update(['storage_id' => $storageB->id]);
+
+        $returnService = app(\App\Services\OrderReturnService::class);
+        $this->assertValidationFailure(fn () => $returnService->createReturn($staffA, [
+            'original_order_id' => $orderA->id,
+            'return_items' => [[
+                'order_detail_id' => $detailA->id,
+                'quantity' => 1,
+            ]],
+        ]));
+        $this->assertDatabaseCount('order_returns', 0);
+        $this->assertSame(0, (int) ProductStorage::query()
+            ->where('product_id', $productA->id)
+            ->where('storage_id', $storageA->id)
+            ->value('quantity'));
+
+        $managerB = User::create([
+            'name' => 'Branch B manager',
+            'email' => 'manager-b@example.com',
+            'phone' => '0800000002',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 2,
+            'status' => 'active',
+        ]);
+        $staffB = $this->createStaff($storageB->id, $managerB->id);
+        $productB = $this->createProduct(['name' => 'Branch B product']);
+        ProductStorage::create([
+            'product_id' => $productB->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 1,
+        ]);
+        $orderB = $this->createServiceSale($staffB, $productB, $storageB->id);
+        $detailB = $orderB->orderDetails()->sole();
+
+        $this->actingAs($managerB)
+            ->get(route('staff.orders.returns.create', $orderA))
+            ->assertNotFound();
+        $this->actingAs($managerB)
+            ->postJson(route('staff.orders.returns.store', $orderA), [
+                'return_items' => [[
+                    'order_detail_id' => $detailA->id,
+                    'quantity' => 1,
+                ]],
+            ])
+            ->assertUnprocessable();
+
+        $this->assertValidationFailure(fn () => $returnService->createReturn($staffA, [
+            'original_order_id' => $orderB->id,
+            'return_items' => [[
+                'order_detail_id' => $detailB->id,
+                'quantity' => 1,
+            ]],
+        ]));
+
+        $administrator = User::create([
+            'name' => 'Global administrator',
+            'email' => 'global@example.com',
+            'phone' => '0800000003',
+            'password' => 'password',
+            'role_id' => 1,
+            'branch_id' => null,
+            'status' => 'active',
+        ]);
+        $globalReturn = $returnService->createReturn($administrator, [
+            'original_order_id' => $orderB->id,
+            'return_items' => [[
+                'order_detail_id' => $detailB->id,
+                'quantity' => 1,
+            ]],
+        ]);
+
+        $this->assertSame(2, (int) $globalReturn->branch_id);
+        $this->assertSame(1, (int) ProductStorage::query()
+            ->where('product_id', $productB->id)
+            ->where('storage_id', $storageB->id)
+            ->value('quantity'));
+    }
+
     public function test_staff_can_sell_from_assigned_storage(): void
     {
         $this->seedAccounts();
@@ -359,14 +455,36 @@ class StaffPosSaleTest extends TestCase
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $otherStorage->id, 'quantity' => 2]);
 
-        $response = $this->actingAs($staff)->postJson('/ban-hang/order', $this->orderPayload([
+        $foreignStoragePayload = $this->orderPayload([
             ['id' => $product->id, 'qty' => 3],
-        ], 300000));
+        ], 300000);
+        $foreignStoragePayload['storage_id'] = $otherStorage->id;
+        $foreignStoragePayload['branch_id'] = 999;
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $foreignStoragePayload)
+            ->assertUnprocessable();
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 10,
+        ]);
+
+        $payload = $this->orderPayload([
+            ['id' => $product->id, 'qty' => 3],
+        ], 300000);
+        $payload['branch_id'] = 999;
+
+        $response = $this->actingAs($staff)->postJson('/ban-hang/order', $payload);
 
         $response->assertCreated()
             ->assertJson(['message' => 'Tạo đơn hàng thành công!']);
 
         $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseHas('orders', [
+            'branch_id' => 1,
+        ]);
         $this->assertDatabaseCount('order_details', 1);
         $this->assertDatabaseHas('product_storage', [
             'product_id' => $product->id,
@@ -394,7 +512,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Cash Over Tender',
         ]);
@@ -474,7 +592,7 @@ class StaffPosSaleTest extends TestCase
     {
         $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create(['user_id' => $manager->id, 'name' => 'Bank Overpayment']);
+        $client = $this->createClient(['user_id' => $manager->id, 'name' => 'Bank Overpayment']);
         $product = $this->createProduct(['quantity' => 1, 'price' => 1000000]);
         ProductStorage::create([
             'product_id' => $product->id,
@@ -862,7 +980,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Nguyen Van A',
             'phone' => '0912345678',
@@ -928,11 +1046,11 @@ class StaffPosSaleTest extends TestCase
         $this->seedAccounts();
         $owner = $this->createManager(1);
         $branch = $this->createManager(2, $owner->id);
-        $storageA = Storage::create([
+        $storageA = $this->createStorage([
             'user_id' => $branch->id,
             'name' => 'Kho A',
         ]);
-        $storageB = Storage::create([
+        $storageB = $this->createStorage([
             'user_id' => $branch->id,
             'name' => 'Kho B',
         ]);
@@ -1018,11 +1136,11 @@ class StaffPosSaleTest extends TestCase
     {
         $this->seedAccounts();
         $manager = $this->createManager();
-        $storageA = Storage::create([
+        $storageA = $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho A',
         ]);
-        $storageB = Storage::create([
+        $storageB = $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho B',
         ]);
@@ -1107,8 +1225,7 @@ class StaffPosSaleTest extends TestCase
             ->postJson('/ban-hang/barcode/resolve', [
                 'barcode' => $imeiInB->barcode,
             ])
-            ->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Thiết bị không thuộc kho hiện tại.']);
+            ->assertNotFound();
 
         $this->actingAs($manager)
             ->postJson('/ban-hang/order', $this->orderPayload([
@@ -1137,16 +1254,17 @@ class StaffPosSaleTest extends TestCase
     {
         $manager = $this->createManager();
         $otherManager = $this->createManager();
-        $managedStorage = Storage::create([
+        $managedStorage = $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho A',
         ]);
-        Storage::create([
+        $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho hợp lệ thứ hai',
         ]);
-        $outsideStorage = Storage::create([
+        $outsideStorage = $this->createStorage([
             'user_id' => $otherManager->id,
+            'branch_id' => 2,
             'name' => 'Kho ngoài phạm vi',
         ]);
         $manager->update(['storage_id' => $outsideStorage->id]);
@@ -1187,12 +1305,13 @@ class StaffPosSaleTest extends TestCase
     {
         $manager = $this->createManager();
         $otherManager = $this->createManager();
-        Storage::create([
+        $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho A',
         ]);
-        $outsideStorage = Storage::create([
+        $outsideStorage = $this->createStorage([
             'user_id' => $otherManager->id,
+            'branch_id' => 2,
             'name' => 'Kho A',
         ]);
 
@@ -1226,11 +1345,11 @@ class StaffPosSaleTest extends TestCase
     public function test_duplicate_kho_a_names_are_not_selected_ambiguously(): void
     {
         $manager = $this->createManager();
-        Storage::create([
+        $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho A',
         ]);
-        Storage::create([
+        $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho A',
         ]);
@@ -1252,7 +1371,7 @@ class StaffPosSaleTest extends TestCase
     public function test_manager_with_storages_but_no_kho_a_gets_default_storage_message(): void
     {
         $manager = $this->createManager();
-        Storage::create([
+        $this->createStorage([
             'user_id' => $manager->id,
             'name' => 'Kho B',
         ]);
@@ -1313,7 +1432,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Nguyen Van A',
             'phone' => '0912345678',
@@ -1400,7 +1519,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Nguyen Van A',
             'phone' => '0912345678',
@@ -2018,10 +2137,7 @@ class StaffPosSaleTest extends TestCase
             ->postJson('/ban-hang/barcode/resolve', [
                 'barcode' => $imei->barcode,
             ])
-            ->assertUnprocessable()
-            ->assertJsonFragment([
-                'message' => 'Thiết bị không thuộc kho hiện tại.',
-            ]);
+            ->assertNotFound();
     }
 
     public function test_barcode_resolve_rejects_duplicate_imei_already_in_cart(): void
@@ -2262,7 +2378,7 @@ class StaffPosSaleTest extends TestCase
     {
         $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Tên tại thời điểm bán',
             'phone' => '0911222333',
@@ -2373,7 +2489,7 @@ class StaffPosSaleTest extends TestCase
     public function test_customer_with_outstanding_debt_cannot_be_deactivated(): void
     {
         [, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Khách còn nợ',
             'phone' => '0999888777',
@@ -2409,7 +2525,7 @@ class StaffPosSaleTest extends TestCase
     public function test_snapshot_backfill_is_idempotent_and_never_overwrites_existing_values(): void
     {
         [, , , $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Tên để backfill',
             'phone' => '0901234567',
@@ -2450,7 +2566,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create([
+        $client = $this->createClient([
             'user_id' => $manager->id,
             'name' => 'Partial Test',
             'phone' => '0904000000',
@@ -2574,7 +2690,7 @@ class StaffPosSaleTest extends TestCase
             'status' => true,
         ]);
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create(['user_id' => $manager->id, 'name' => 'Bank Partial']);
+        $client = $this->createClient(['user_id' => $manager->id, 'name' => 'Bank Partial']);
         $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
 
@@ -2638,7 +2754,7 @@ class StaffPosSaleTest extends TestCase
     {
         $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create(['user_id' => $manager->id, 'name' => 'Tenant A']);
+        $client = $this->createClient(['user_id' => $manager->id, 'name' => 'Tenant A']);
         $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
         $payload = $this->orderPayload(
@@ -2690,7 +2806,7 @@ class StaffPosSaleTest extends TestCase
     {
         $accounts = $this->seedAccounts();
         [$storage, , $staff, $manager] = $this->createStaffContext();
-        $client = Client::create(['user_id' => $manager->id, 'name' => 'Dated Payments']);
+        $client = $this->createClient(['user_id' => $manager->id, 'name' => 'Dated Payments']);
         $product = $this->createProduct(['quantity' => 1, 'price_buy' => 10000000]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
         $payload = $this->orderPayload(
@@ -3005,6 +3121,7 @@ class StaffPosSaleTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('client_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('code')->nullable();
             $table->string('name')->nullable();
             $table->string('phone')->nullable();
@@ -3180,8 +3297,8 @@ class StaffPosSaleTest extends TestCase
 
     private function createStaffContext(): array
     {
-        $storage = Storage::create(['name' => 'Kho A', 'location' => 'A']);
-        $otherStorage = Storage::create(['name' => 'Kho B', 'location' => 'B']);
+        $storage = $this->createStorage(['name' => 'Kho A', 'location' => 'A']);
+        $otherStorage = $this->createStorage(['name' => 'Kho B', 'location' => 'B']);
         $manager = User::create([
             'name' => 'Manager',
             'email' => 'manager@example.com',
@@ -3189,6 +3306,7 @@ class StaffPosSaleTest extends TestCase
             'password' => 'password',
             'role_id' => 2,
             'storage_id' => $otherStorage->id,
+            'branch_id' => 1,
             'status' => 'active',
         ]);
         $staff = $this->createStaff($storage->id, $manager->id);
@@ -3206,6 +3324,9 @@ class StaffPosSaleTest extends TestCase
             'role_id' => 3,
             'manager_id' => $managerId,
             'storage_id' => $storageId,
+            'branch_id' => $storageId === null
+                ? 1
+                : (int) Storage::query()->whereKey($storageId)->value('branch_id'),
             'status' => 'active',
         ]);
     }
@@ -3220,8 +3341,23 @@ class StaffPosSaleTest extends TestCase
             'role_id' => $roleId,
             'manager_id' => $managerId,
             'storage_id' => null,
+            'branch_id' => 1,
             'status' => 'active',
         ]);
+    }
+
+    private function createStorage(array $attributes = []): Storage
+    {
+        return Storage::create(array_merge([
+            'branch_id' => 1,
+        ], $attributes));
+    }
+
+    private function createClient(array $attributes = []): Client
+    {
+        return Client::create(array_merge([
+            'branch_id' => 1,
+        ], $attributes));
     }
 
     private function createProduct(array $overrides = []): Product

@@ -9,12 +9,15 @@ use App\Models\Order;
 use App\Models\Transaction;
 use App\Services\OrderPaymentHistoryService;
 use App\Services\OrderService;
+use App\Support\BranchContext;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class OrderController extends Controller
 {
@@ -25,7 +28,8 @@ class OrderController extends Controller
     public function __construct(
         OrderService $orderService,
         Order $order,
-        OrderPaymentHistoryService $orderPaymentHistoryService
+        OrderPaymentHistoryService $orderPaymentHistoryService,
+        protected BranchContext $branchContext,
     )
     {
         $this->orderService = $orderService;
@@ -34,11 +38,10 @@ class OrderController extends Controller
     }
     public function index(Request $request)
     {
-        $ownerId = (int) $request->user()->ownerId();
+        $user = $request->user();
 
         if (!$request->ajax()) {
-            $clients = Client::withTrashed()
-                ->where('user_id', $ownerId)
+            $clients = $this->clientQuery($user)
                 ->orderBy('name')
                 ->orderBy('id')
                 ->get(['id', 'name']);
@@ -65,9 +68,8 @@ class OrderController extends Controller
         $clientId = ctype_digit($clientIdParam) ? (int) $clientIdParam : null;
         $clientFilterValid = $clientId !== null
             && $clientId > 0
-            && Client::withTrashed()
+            && $this->clientQuery($user)
                 ->whereKey($clientId)
-                ->where('user_id', $ownerId)
                 ->exists();
 
         $startDate = null;
@@ -198,8 +200,9 @@ class OrderController extends Controller
 
                 $query->whereRaw('1 = 0');
             })
-            ->where('orders.user_id', $ownerId)
-            ->where('orders.branch_id', $request->user()->branch_id);
+            ;
+
+        $this->branchContext->scope($baseOrdersQuery, $user, 'orders.branch_id');
 
         $summary = (clone $baseOrdersQuery)
             ->toBase()
@@ -242,9 +245,10 @@ class OrderController extends Controller
 
     public function show(string $id)
     {
-        $order = Order::query()
-            ->when(request()->user(), fn ($query, $user) => $query
-                ->where('user_id', (int) $user->ownerId()))
+        $query = Order::query();
+        $this->branchContext->scope($query, Auth::user());
+
+        $order = $query
             ->with([
                 'user',
                 'client',
@@ -258,5 +262,18 @@ class OrderController extends Controller
         $paymentHistory = $this->orderPaymentHistoryService->forOrder($order);
 
         return view('admin.order.detail', compact('title', 'order', 'paymentHistory'));
+    }
+
+    private function clientQuery($user): Builder
+    {
+        $query = Client::withTrashed();
+
+        if (Schema::hasColumn('clients', 'branch_id')) {
+            return $this->branchContext->scope($query, $user);
+        }
+
+        return $user->isAdministrator()
+            ? $query
+            : $query->whereRaw('1 = 0');
     }
 }

@@ -64,7 +64,8 @@ class ImportProductController extends Controller
             $ownerId,
             $companyId,
             $paymentStatus,
-            $outstandingOnly
+            $outstandingOnly,
+            $request->user()
         );
         $companies = $this->companyOptions($request->user(), ['id', 'name']);
         $paymentStatusOptions = ImportCoupon::paymentStatusFilterOptions();
@@ -130,7 +131,8 @@ class ImportProductController extends Controller
         $title = 'Thông tin hóa đơn';
         $importdetail = $this->importProductService->getImportCouponByid(
             $id,
-            (int) $request->user()->ownerId()
+            (int) $request->user()->ownerId(),
+            $request->user()
         );
         $paymentSummary = null;
         $paymentUnavailable = null;
@@ -169,7 +171,7 @@ class ImportProductController extends Controller
         $category = $this->categoryService->getCategoryAllStaff();
         $user = Auth::user();
         $supplier = $this->companyOptions($user);
-        $storage = $this->storageService->getAllStorage();
+        $storage = $this->storageService->getAllStorage($user);
         $bankAccounts = collect();
 
         if (Schema::hasTable('accounts')

@@ -6,6 +6,8 @@ use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductStorage;
+use App\Models\User;
+use App\Support\BranchContext;
 use DomainException;
 use Exception;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +19,11 @@ class ImportProductService
 
     protected $importDetail;
 
-    public function __construct(ImportCoupon $importCoupon, ImportDetail $importDetail)
+    public function __construct(
+        ImportCoupon $importCoupon,
+        ImportDetail $importDetail,
+        protected BranchContext $branchContext
+    )
     {
         $this->importCoupon = $importCoupon;
         $this->importDetail = $importDetail;
@@ -29,20 +35,26 @@ class ImportProductService
         ?int $ownerId = null,
         ?int $companyId = null,
         ?string $paymentStatus = null,
-        bool $outstandingOnly = false
+        bool $outstandingOnly = false,
+        ?User $user = null
     )
     {
         $query = ImportCoupon::query()
             ->with(['user', 'companyRelation']);
 
-        if ($ownerId !== null) {
+        if ($user) {
+            $this->scopeCoupons($query, $user);
+        } elseif ($ownerId !== null) {
             $query->where('user_id', $ownerId);
         }
 
         if ($companyId !== null) {
-            $query->whereHas('companyRelation', function ($companyQuery) use ($companyId, $ownerId): void {
+            $query->whereHas('companyRelation', function ($companyQuery) use ($companyId, $ownerId, $user): void {
                 $companyQuery->whereKey($companyId)
-                    ->when($ownerId !== null, fn ($companyQuery) => $companyQuery->where('user_id', $ownerId));
+                    ->when(
+                        ! $user && $ownerId !== null,
+                        fn ($companyQuery) => $companyQuery->where('user_id', $ownerId)
+                    );
             });
         }
 
@@ -66,7 +78,7 @@ class ImportProductService
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 
-    public function getImportCouponByid($id, ?int $ownerId = null)
+    public function getImportCouponByid($id, ?int $ownerId = null, ?User $user = null)
     {
         $query = $this->importCoupon
             ->newQuery()
@@ -78,7 +90,9 @@ class ImportProductService
                 'details.imeis',
             ]);
 
-        if ($ownerId !== null) {
+        if ($user) {
+            $this->scopeCoupons($query, $user);
+        } elseif ($ownerId !== null) {
             $query->where('user_id', $ownerId);
         }
 
@@ -129,7 +143,7 @@ class ImportProductService
                 ->whereIn('id', $ids)
                 ->lockForUpdate();
 
-            $query->where('user_id', (int) $user->ownerId());
+            $this->scopeCoupons($query, $user);
 
             $coupons = $query->get();
 
@@ -238,5 +252,16 @@ class ImportProductService
             'UPDATE products SET quantity = (SELECT COALESCE(SUM(quantity), 0) FROM product_storage WHERE product_id = ?), updated_at = ? WHERE id = ?',
             [$productId, now()->toDateTimeString(), $productId]
         );
+    }
+
+    private function scopeCoupons($query, User $user): void
+    {
+        if ($user->roleKey() === 'warehouse') {
+            $query->where('user_id', (int) $user->ownerId());
+
+            return;
+        }
+
+        $this->branchContext->scopeThroughStorage($query, $user);
     }
 }

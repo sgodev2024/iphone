@@ -43,7 +43,7 @@
                 {{-- <td>{{ $product->code }}</td> mã sp
                 <td>{{ $product->category?->name }}</td> --}}
                 <td>{{ number_format($product->price_buy, 0, ',', '.') }}</td>
-                <td>{{ $product->storage_stock_quantity }}</td>
+                <td>{{ $stockQuantity }}</td>
                 <td>
                     {!! $product->status === 'published'
                         ? '<span class="badge bg-success">Kích hoạt</span>'

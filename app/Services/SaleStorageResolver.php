@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Storage;
-use App\Models\Roles;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -18,10 +17,24 @@ class SaleStorageResolver
     public function resolveSaleStorageId(User $user, mixed $requestedStorageId = null): int
     {
         if ($user->isStaff()) {
-            if (! $user->storage_id || ! Storage::query()->whereKey($user->storage_id)->exists()) {
+            if (! $user->storage_id
+                || ! Storage::query()->visibleTo($user)->whereKey($user->storage_id)->exists()
+            ) {
                 throw ValidationException::withMessages([
                     'storage_id' => 'Nhân viên chưa được gán kho bán hàng.',
                 ]);
+            }
+
+            if ($requestedStorageId !== null && $requestedStorageId !== '') {
+                $storageId = filter_var($requestedStorageId, FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1],
+                ]);
+
+                if ($storageId === false || (int) $storageId !== (int) $user->storage_id) {
+                    throw ValidationException::withMessages([
+                        'storage_id' => 'Nhân viên không được bán hàng từ kho khác kho được phân công.',
+                    ]);
+                }
             }
 
             return (int) $user->storage_id;
@@ -74,7 +87,7 @@ class SaleStorageResolver
     {
         if ($user->isStaff()) {
             $storage = $user->storage_id
-                ? Storage::query()->find($user->storage_id)
+                ? Storage::query()->visibleTo($user)->find($user->storage_id)
                 : null;
 
             return [
@@ -135,19 +148,7 @@ class SaleStorageResolver
 
     private function managedStorageQuery(User $user): Builder
     {
-        $ownerIds = collect([(int) $user->id])
-            ->merge(
-                User::query()
-                    ->where('manager_id', $user->id)
-                    ->whereIn('role_id', Roles::adminStoreIds())
-                    ->pluck('id')
-            )
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-
-        return Storage::query()->whereIn('user_id', $ownerIds);
+        return Storage::query()->visibleTo($user);
     }
 
     private function resolveDefaultManagedStorage(Collection $storages): Storage

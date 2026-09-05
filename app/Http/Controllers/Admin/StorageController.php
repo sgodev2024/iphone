@@ -225,9 +225,11 @@ class StorageController extends Controller
         }
 
         if ($user->isStaff()) {
-            return $user->storage_id === null
+            return $user->branch_id === null || $user->storage_id === null
                 ? $query->whereRaw('1 = 0')
-                : $query->where('id', (int) $user->storage_id);
+                : $query
+                    ->where('branch_id', (int) $user->branch_id)
+                    ->where('id', (int) $user->storage_id);
         }
 
         $ownerIds = collect([$user->id, $user->manager_id])

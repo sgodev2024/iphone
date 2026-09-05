@@ -6,10 +6,12 @@ use App\Models\Client;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 
 class OrderService
@@ -17,7 +19,12 @@ class OrderService
     protected $order;
     protected $client;
     protected $user;
-    public function __construct(Order $order, Client $client, User $user)
+    public function __construct(
+        Order $order,
+        Client $client,
+        User $user,
+        private readonly BranchContext $branchContext
+    )
     {
         $this->user = $user;
         $this->client = $client;
@@ -149,10 +156,34 @@ class OrderService
         ];
     }
 
-    public function getOrderNotification()
+    public function getOrderNotification(?User $user = null)
     {
         try {
-            return Order::orderByDesc('created_at')->where('notification', 1)->get(); // Truy vấn trực tiếp model Order
+            if (! $user) {
+                return collect();
+            }
+
+            // Notifications are optional layout data. A non-global account without
+            // a branch must see an empty set instead of making unrelated pages fail.
+            if (! $this->branchContext->isGlobal($user) && $user->branch_id === null) {
+                return collect();
+            }
+
+            if (! Schema::hasColumn('orders', 'branch_id')
+                && ! $this->branchContext->isGlobal($user)
+            ) {
+                return collect();
+            }
+
+            $query = Order::query()
+                ->with('client')
+                ->where('notification', 1);
+
+            if (Schema::hasColumn('orders', 'branch_id')) {
+                $this->branchContext->scope($query, $user);
+            }
+
+            return $query->orderByDesc('created_at')->get();
         } catch (Exception $e) {
             Log::error('Failed to find order with notification: ' . $e->getMessage());
             throw new Exception('Failed to find order with notification');

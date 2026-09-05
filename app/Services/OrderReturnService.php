@@ -9,7 +9,9 @@ use App\Models\OrderReturnDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Models\User;
+use App\Support\BranchContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +20,8 @@ class OrderReturnService
 {
     public function __construct(
         private readonly SaleService $saleService,
-        private readonly SaleStorageResolver $saleStorageResolver
+        private readonly SaleStorageResolver $saleStorageResolver,
+        private readonly BranchContext $branchContext
     ) {
     }
 
@@ -34,20 +37,11 @@ class OrderReturnService
              | 1. LOCK ĐƠN GỐC
              |--------------------------------------------------------------------------
              */
-            $branchId = $user->branchScopeId();
-
             $originalOrderQuery = Order::query()
                 ->whereKey(
                     (int) $data['original_order_id']
                 );
-
-            if ($branchId !== null) {
-                $originalOrderQuery
-                    ->where(
-                        'branch_id',
-                        $branchId
-                    );
-            }
+            $this->branchContext->scope($originalOrderQuery, $user);
 
             $originalOrder = $originalOrderQuery
                 ->lockForUpdate()
@@ -309,6 +303,21 @@ class OrderReturnService
                     ]);
                 }
 
+                $returnStorageQuery = Storage::query()
+                    ->whereKey($returnStorageId)
+                    ->where('branch_id', $originalOrder->branch_id);
+                $this->branchContext->scopeStorages($returnStorageQuery, $user);
+                $returnStorage = $returnStorageQuery
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $returnStorage) {
+                    throw ValidationException::withMessages([
+                        'return_items'
+                            => "Kho hoàn hàng của sản phẩm {$product->name} không thuộc chi nhánh của đơn gốc.",
+                    ]);
+                }
+
 
                 /*
                  |--------------------------------------------------------------------------
@@ -507,6 +516,8 @@ class OrderReturnService
                         ->whereKey(
                             $row['product_imei_id']
                         )
+                        ->where('product_id', $row['product_id'])
+                        ->where('storage_id', $row['storage_id'])
                         ->lockForUpdate()
                         ->first();
 
@@ -593,6 +604,17 @@ class OrderReturnService
                             $user,
                             null
                         );
+
+                $exchangeStorageQuery = Storage::query()
+                    ->whereKey($exchangeStorageId)
+                    ->where('branch_id', $originalOrder->branch_id);
+                $this->branchContext->scopeStorages($exchangeStorageQuery, $user);
+
+                if (! $exchangeStorageQuery->exists()) {
+                    throw ValidationException::withMessages([
+                        'new_items' => 'Kho xuất hàng đổi không thuộc chi nhánh của đơn gốc.',
+                    ]);
+                }
 
 
                 /*

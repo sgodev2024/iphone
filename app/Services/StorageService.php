@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ProductStorage;
 use App\Models\Storage;
+use App\Models\User;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -39,11 +40,15 @@ class StorageService
         }
     }
 
-    public function getAllStorage()
+    public function getAllStorage(?User $user = null)
     {
         try {
             Log::info('Fetching all Storages');
-            return $this->storage->get();
+            $query = $this->storage->newQuery();
+
+            return $user
+                ? $query->visibleTo($user)->get()
+                : $query->get();
         } catch (Exception $e) {
             Log::error("Failed to show all storages: " . $e->getMessage());
             throw new Exception('Failed to show all storages');

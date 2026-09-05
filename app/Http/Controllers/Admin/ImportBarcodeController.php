@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductImei;
 use App\Services\BarcodePrintService;
 use App\Services\InternalBarcodeService;
+use App\Support\BranchContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -23,6 +24,7 @@ class ImportBarcodeController extends Controller
     public function __construct(
         private readonly BarcodePrintService $barcodePrintService,
         private readonly InternalBarcodeService $internalBarcodeService,
+        private readonly BranchContext $branchContext,
     ) {}
 
     public function index(int $id): View
@@ -93,7 +95,11 @@ class ImportBarcodeController extends Controller
         $query = ImportCoupon::query();
 
         if ($user = Auth::user()) {
-            $query->where('user_id', (int) $user->ownerId());
+            if ($user->roleKey() === 'warehouse') {
+                $query->where('user_id', (int) $user->ownerId());
+            } else {
+                $this->branchContext->scopeThroughStorage($query, $user);
+            }
         }
 
         return $query->findOrFail($id);

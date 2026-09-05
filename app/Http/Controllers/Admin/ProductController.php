@@ -10,6 +10,8 @@ use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Services\SaleStorageResolver;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -19,42 +21,50 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        private readonly BranchContext $branchContext,
+        private readonly SaleStorageResolver $saleStorageResolver
+    ) {}
+
     public function index(Request $request)
     {
         $title = 'Sản phẩm';
         if ($request->ajax()) {
             $searchText = $request->input('s');
-            $userId = auth()->user()->ownerId();
-            $branchId = auth()->user()->branchScopeId();
+            $user = $request->user();
+            $stockQuery = ProductStorage::query()
+                ->selectRaw('COALESCE(SUM(quantity), 0)')
+                ->whereColumn('product_storage.product_id', 'products.id');
+            $this->branchContext->scopeThroughStorage($stockQuery, $user);
+
+            $latestImportQuery = ImportDetail::query()
+                ->select('import_detail.import_id')
+                ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
+                ->whereColumn('import_detail.product_id', 'products.id')
+                ->orderByDesc('import_coupon.created_at')
+                ->orderByDesc('import_coupon.id')
+                ->limit(1);
+            $this->branchContext->scopeThroughStorage($latestImportQuery, $user, 'import.storage');
+
             $products = Product::query()
                 ->select('products.*')
-                ->selectSub(
-                    ProductStorage::query()
-                        ->ofBranch($branchId)
-                        ->selectRaw('COALESCE(SUM(quantity), 0)')
-                        ->whereColumn('product_storage.product_id', 'products.id'),
-                    'storage_stock_quantity'
-                )
-                ->selectSub(
-                    ImportDetail::query()
-                        ->select('import_detail.import_id')
-                        ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
-                        ->whereColumn('import_detail.product_id', 'products.id')
-                        ->where('import_coupon.user_id', $userId)
-                        ->orderByDesc('import_coupon.created_at')
-                        ->orderByDesc('import_coupon.id')
-                        ->limit(1),
-                    'latest_import_coupon_id'
-                )
-                ->where('user_id', $userId)
+                ->selectSub($stockQuery, 'storage_stock_quantity')
+                ->selectSub($latestImportQuery, 'latest_import_coupon_id')
                 ->withCount([
-                    'imeis as imei_stock_count' => function ($query) {
+                    'imeis as imei_stock_count' => function ($query) use ($user) {
                         $query->where('status', ProductImei::STATUS_IN_STOCK);
+                        $this->branchContext->scopeThroughStorage($query, $user);
                     },
                 ])
                 ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%$searchText%");
-                })
+                });
+            $this->branchContext->scopeThroughStorage(
+                $products,
+                $user,
+                'productStorages.storage'
+            );
+            $products = $products
                 ->latest()
                 ->paginate(10)
                 ->appends($request->query());
@@ -184,7 +194,10 @@ class ProductController extends Controller
         ));
 
         $user = Auth::user();
-        $storageId = $user->storage_id ?? null;
+        $storageId = $this->saleStorageResolver->resolveSaleStorageId(
+            $user,
+            $request->input('storage_id')
+        );
 
         $products = Product::query()
             ->select([
@@ -224,29 +237,23 @@ class ProductController extends Controller
          * - Nhân viên có kho: lấy sản phẩm thuộc kho đó.
          * - Admin/manager: lấy sản phẩm do tài khoản đó quản lý.
          */
-            ->where(function ($query) use ($user, $storageId) {
-                if ($storageId) {
-                    $query->whereExists(function ($subQuery) use ($storageId) {
-                        $subQuery
-                            ->selectRaw('1')
-                            ->from('product_storage')
-                            ->whereColumn(
-                                'product_storage.product_id',
-                                'products.id'
-                            )
-                            ->where(
-                                'product_storage.storage_id',
-                                $storageId
-                            )
-                            ->where(
-                                'product_storage.quantity',
-                                '>',
-                                0
-                            );
-                    });
-                } else {
-                    $query->where('products.user_id', $user->id);
-                }
+            ->whereExists(function ($subQuery) use ($storageId) {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('product_storage')
+                    ->whereColumn(
+                        'product_storage.product_id',
+                        'products.id'
+                    )
+                    ->where(
+                        'product_storage.storage_id',
+                        $storageId
+                    )
+                    ->where(
+                        'product_storage.quantity',
+                        '>',
+                        0
+                    );
             })
 
             /*
@@ -333,7 +340,17 @@ class ProductController extends Controller
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $products = Product::all();
+        $user = Auth::user();
+        $stockQuery = ProductStorage::query()
+            ->selectRaw('COALESCE(SUM(quantity), 0)')
+            ->whereColumn('product_storage.product_id', 'products.id');
+        $this->branchContext->scopeThroughStorage($stockQuery, $user);
+
+        $productsQuery = Product::query()
+            ->select('products.*')
+            ->selectSub($stockQuery, 'visible_stock_quantity');
+        $this->branchContext->scopeThroughStorage($productsQuery, $user, 'productStorages.storage');
+        $products = $productsQuery->with(['category', 'brand'])->get();
         // Đặt tiêu đề cột
         $sheet->setCellValue('A1', 'Mã sản phẩm');
         $sheet->setCellValue('B1', 'tên sản phẩm');
@@ -351,11 +368,11 @@ class ProductController extends Controller
         foreach ($products as $product) {
             $sheet->setCellValue('A' . $row, $product->code);
             $sheet->setCellValue('B' . $row, $product->name);
-            $sheet->setCellValue('C' . $row, $product->quantity);
+            $sheet->setCellValue('C' . $row, $product->visible_stock_quantity);
             $sheet->setCellValue('D' . $row, $product->price);
             $sheet->setCellValue('E' . $row, $product->price_buy);
-            $sheet->setCellValue('F' . $row, $product->category->name);
-            $sheet->setCellValue('G' . $row, $product->brands->name);
+            $sheet->setCellValue('F' . $row, $product->category?->name);
+            $sheet->setCellValue('G' . $row, $product->brand?->name);
             $sheet->setCellValue('H' . $row, $product->product_unit);
             $row++;
         }

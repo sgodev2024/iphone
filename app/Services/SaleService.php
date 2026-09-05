@@ -9,6 +9,7 @@ use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -21,6 +22,18 @@ class SaleService
     public function createPosOrder(User $user, array $data, int $storageId, bool $createAccountingEntries = true): Order
     {
         return DB::transaction(function () use ($user, $data, $storageId,  $createAccountingEntries) {
+            $storage = Storage::query()
+                ->visibleTo($user)
+                ->whereKey($storageId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $storage) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho bán hàng không tồn tại hoặc không thuộc phạm vi của tài khoản.',
+                ]);
+            }
+
             $ownerId = $this->resolveOrderOwnerId($user);
             $paymentMethod = (string) ($data['payment_method']
                 ?? data_get($data, 'customer.payment', Order::PAYMENT_METHOD_CASH));
@@ -40,10 +53,11 @@ class SaleService
                 ? (int) $data['bank_account_id']
                 : null;
             $client = null;
-            $branchId = auth()->user()->branchScopeId();
+            $branchId = $storage->branch_id === null ? null : (int) $storage->branch_id;
             if (! empty($data['customer']['id'])) {
                 $client = Client::query()
                     ->where('user_id', $ownerId)
+                    ->where('branch_id', $branchId)
                     ->find($data['customer']['id']);
 
                 if (! $client) {
@@ -508,17 +522,7 @@ class SaleService
 
     private function resolveImeiStorageId(ProductImei $imei): ?int
     {
-        // $storageId = $imei->importDetail?->import?->storage_id;
-
-        // return $storageId ? (int) $storageId : null;
-
-        if ($imei->storage_id) {
-            return (int) $imei->storage_id;
-        }
-
-        $storageId = $imei->importDetail?->import?->storage_id;
-
-        return $storageId ? (int) $storageId : null;
+        return $imei->storage_id ? (int) $imei->storage_id : null;
     }
 
     private function calculateDiscount(float $subtotal, ?string $discountType, float $discountInput): float

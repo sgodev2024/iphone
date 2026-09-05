@@ -46,10 +46,12 @@ class ImportImeiWorkflowTest extends TestCase
         ]);
         $this->company = Company::create([
             'user_id' => $this->admin->id,
+            'branch_id' => 1,
             'name' => 'Nhà cung cấp Apple',
         ]);
         $this->storage = Storage::create([
             'user_id' => $this->admin->id,
+            'branch_id' => 1,
             'name' => 'Kho chính',
         ]);
         $this->product = Product::create([
@@ -741,6 +743,173 @@ class ImportImeiWorkflowTest extends TestCase
         $this->assertDatabaseHas('import', ['id' => $regularItem->id]);
     }
 
+    public function test_admin_store_can_confirm_an_import_only_with_same_branch_supplier_and_storage(): void
+    {
+        $adminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A admin',
+            'email' => 'branch-a@example.com',
+            'phone' => '0900000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+        $item = $this->createImportItem(quantity: 1);
+
+        $this->actingAs($adminStore)
+            ->post('/admin/importproduct/importCoupon', $this->validPayload($item, ['PHASE4-IMEI-A']))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $coupon = ImportCoupon::query()->sole();
+        $this->assertSame($this->storage->id, (int) $coupon->storage_id);
+        $this->assertDatabaseHas('product_imeis', [
+            'imei' => 'PHASE4-IMEI-A',
+            'storage_id' => $this->storage->id,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $this->product->id,
+            'storage_id' => $this->storage->id,
+            'quantity' => 1,
+        ]);
+    }
+
+    public function test_cross_branch_supplier_or_storage_is_rejected_without_partial_import_writes(): void
+    {
+        $adminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A admin',
+            'email' => 'branch-a@example.com',
+            'phone' => '0900000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+        $foreignCompany = Company::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 2,
+            'name' => 'Branch B supplier',
+        ]);
+        $foreignStorage = Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 2,
+            'name' => 'Branch B storage',
+        ]);
+        $item = $this->createImportItem(quantity: 1);
+
+        $this->actingAs($adminStore)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', array_replace(
+                $this->validPayload($item, ['PHASE4-FOREIGN-SUPPLIER']),
+                ['supplier' => $foreignCompany->id]
+            ))
+            ->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHasErrors('supplier');
+
+        $this->actingAs($adminStore)
+            ->from('/admin/importproduct/add')
+            ->post('/admin/importproduct/importCoupon', array_replace(
+                $this->validPayload($item, ['PHASE4-FOREIGN-STORAGE']),
+                ['storage' => $foreignStorage->id]
+            ))
+            ->assertRedirect('/admin/importproduct/add')
+            ->assertSessionHasErrors('storage');
+
+        $this->assertDatabaseCount('import_coupon', 0);
+        $this->assertDatabaseCount('import_detail', 0);
+        $this->assertDatabaseCount('product_imeis', 0);
+        $this->assertDatabaseCount('product_storage', 0);
+        $this->assertDatabaseHas('import', ['id' => $item->id]);
+    }
+
+    public function test_import_reads_and_bulk_delete_are_branch_scoped_and_administrator_remains_global(): void
+    {
+        $adminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A admin',
+            'email' => 'branch-a@example.com',
+            'phone' => '0900000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+        $foreignStorage = Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 2,
+            'name' => 'Branch B storage',
+        ]);
+        $ownCoupon = ImportCoupon::create([
+            'user_id' => $this->admin->id,
+            'companies_id' => $this->company->id,
+            'storage_id' => $this->storage->id,
+            'total' => 0,
+        ]);
+        $foreignCoupon = ImportCoupon::create([
+            'user_id' => $this->admin->id,
+            'companies_id' => $this->company->id,
+            'storage_id' => $foreignStorage->id,
+            'total' => 0,
+        ]);
+        $legacyCoupon = ImportCoupon::create([
+            'user_id' => $this->admin->id,
+            'companies_id' => $this->company->id,
+            'storage_id' => null,
+            'total' => 0,
+        ]);
+        $service = app(\App\Services\ImportProductService::class);
+
+        $this->assertSame(
+            [$ownCoupon->id],
+            $service->getImportCoupon(user: $adminStore)->getCollection()->modelKeys()
+        );
+        $this->assertEqualsCanonicalizing(
+            [$legacyCoupon->id, $foreignCoupon->id, $ownCoupon->id],
+            $service->getImportCoupon(user: $this->admin)->getCollection()->modelKeys()
+        );
+
+        try {
+            $service->getImportCouponByid($foreignCoupon->id, user: $adminStore);
+            $this->fail('A cross-branch import coupon must not be directly readable.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->addToAssertionCount(1);
+        }
+
+        try {
+            $service->deleteImportCoupons([$ownCoupon->id, $foreignCoupon->id], $adminStore);
+            $this->fail('A mixed-branch bulk delete must fail atomically.');
+        } catch (\DomainException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertDatabaseHas('import_coupon', ['id' => $ownCoupon->id]);
+        $this->assertDatabaseHas('import_coupon', ['id' => $foreignCoupon->id]);
+        $this->assertDatabaseHas('import_coupon', ['id' => $legacyCoupon->id]);
+        $this->assertSame($foreignCoupon->id, $service->getImportCouponByid(
+            $foreignCoupon->id,
+            user: $this->admin
+        )->id);
+    }
+
+    public function test_admin_store_without_branch_fails_closed_for_imports(): void
+    {
+        $adminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => null,
+            'name' => 'Unassigned admin',
+            'email' => 'unassigned@example.com',
+            'phone' => '0900000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(\App\Services\ImportProductService::class)->getImportCoupon(user: $adminStore);
+    }
+
     private function createImportItem(int $quantity, ?Product $product = null): ImportItem
     {
         return ImportItem::create([
@@ -788,6 +957,8 @@ class ImportImeiWorkflowTest extends TestCase
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('manager_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('name')->nullable();
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
@@ -813,6 +984,7 @@ class ImportImeiWorkflowTest extends TestCase
 
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->boolean('notification')->default(false);
             $table->timestamps();
         });
@@ -826,6 +998,7 @@ class ImportImeiWorkflowTest extends TestCase
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
@@ -837,6 +1010,7 @@ class ImportImeiWorkflowTest extends TestCase
         Schema::create('storages', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
             $table->timestamps();
@@ -905,6 +1079,7 @@ class ImportImeiWorkflowTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);

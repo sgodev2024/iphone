@@ -153,11 +153,9 @@ class ProductController extends Controller
             ->selectSub(
                 ProductImei::query()
                     ->selectRaw('COUNT(*)')
-                    ->join('import_detail', 'import_detail.id', '=', 'product_imeis.import_detail_id')
-                    ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
                     ->whereColumn('product_imeis.product_id', 'products.id')
                     ->where('product_imeis.status', ProductImei::STATUS_IN_STOCK)
-                    ->where('import_coupon.storage_id', $storageId)
+                    ->where('product_imeis.storage_id', $storageId)
                     ->whereNull('product_imeis.deleted_at'),
                 'imei_stock'
             )
@@ -192,11 +190,9 @@ class ProductController extends Controller
                                 $subQuery
                                     ->selectRaw('1')
                                     ->from('product_imeis')
-                                    ->join('import_detail', 'import_detail.id', '=', 'product_imeis.import_detail_id')
-                                    ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
                                     ->whereColumn('product_imeis.product_id', 'products.id')
                                     ->where('product_imeis.status', ProductImei::STATUS_IN_STOCK)
-                                    ->where('import_coupon.storage_id', $storageId)
+                                    ->where('product_imeis.storage_id', $storageId)
                                     ->whereNull('product_imeis.deleted_at');
                             });
                     });
@@ -249,6 +245,7 @@ class ProductController extends Controller
             $imeiDevices = ProductImei::query()
                 ->with(['product', 'importDetail.import'])
                 ->where('product_imeis.status', ProductImei::STATUS_IN_STOCK)
+                ->where('product_imeis.storage_id', $storageId)
                 ->whereHas('product', function ($query) {
                     $query
                         ->where('products.inventory_tracking', Product::INVENTORY_TRACKING_IMEI)
@@ -258,9 +255,6 @@ class ProductController extends Controller
                                 ->orWhere('products.status', '1')
                                 ->orWhere('products.status', 'published');
                         });
-                })
-                ->whereHas('importDetail.import', function ($query) use ($storageId) {
-                    $query->where('import_coupon.storage_id', $storageId);
                 })
                 ->whereDoesntHave('orderDetails')
                 ->whereExists(function ($query) use ($storageId) {

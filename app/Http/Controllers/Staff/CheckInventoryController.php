@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Categories;
 use App\Models\CheckDetail;
 use App\Models\warehome;
+use App\Models\Product;
+use App\Services\SaleStorageResolver;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class CheckInventoryController extends Controller
 {
@@ -22,7 +25,12 @@ class CheckInventoryController extends Controller
     protected $checkInventoryService;
     protected $productService;
     protected $categoryService;
-    public function __construct(CheckInventoryService $checkInventoryService, ProductService $productService, CategoryService $categoryService)
+    public function __construct(
+        CheckInventoryService $checkInventoryService,
+        ProductService $productService,
+        CategoryService $categoryService,
+        private readonly SaleStorageResolver $saleStorageResolver
+    )
     {
         $this->checkInventoryService = $checkInventoryService;
         $this->productService = $productService;
@@ -35,8 +43,10 @@ class CheckInventoryController extends Controller
             $title = 'Kiểm kho';
             $config = Config::with(['bank', 'user'])->first();
             $user = Auth::user();
-            $inventory = $this->checkInventoryService->getAllCheckInventory();
+            $inventory = $this->checkInventoryService->getAllCheckInventory($user);
             return view('Themes.pages.Inventory.index', compact('inventory', 'config', 'title'));
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             Log::error('Failed to fetch inventory: ' . $e->getMessage());
             return ApiResponse::error('Failed to fetch inventory', 500);
@@ -48,8 +58,12 @@ class CheckInventoryController extends Controller
         $title = 'Kiểm kho';
         $config = Config::with(['bank', 'user'])->first();
         $user = Auth::user();
+        $storageId = $this->saleStorageResolver->resolveSaleStorageId($user);
         $category = Categories::all();
-        $product = $this->productService->getProductAll_Staff();
+        $product = Product::query()
+            ->whereHas('productStorages', fn ($query) => $query->where('storage_id', $storageId))
+            ->orderBy('name')
+            ->get();
         return view('Themes.pages.Inventory.add', compact('config', 'user', 'product', 'category', 'title'));
     }
     public function submitadd(Request $request)
@@ -57,14 +71,18 @@ class CheckInventoryController extends Controller
         try {
 
             $user = Auth::user();
+            $this->saleStorageResolver->resolveSaleStorageId($user);
             $data = [
                 'user_id' => $user->id,
                 'note' => $request->note,
                 'makho' => $request->makho
             ];
-            $warehomes = warehome::whereNotNull('reality')->get();
+            $warehomes = warehome::query()
+                ->where('user_id', $user->id)
+                ->whereNotNull('reality')
+                ->get();
 
-            $inventory =  $this->checkInventoryService->addCheckInventory($data);
+            $inventory = $this->checkInventoryService->addCheckInventory($data, $warehomes);
             foreach ($warehomes as  $value) {
 
                 CheckDetail::create([
@@ -75,8 +93,10 @@ class CheckInventoryController extends Controller
 
                 ]);
             }
-            warehome::truncate();
+            warehome::query()->where('user_id', $user->id)->delete();
             return redirect()->route('staff.Inventory.get');
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             Log::error('Failed to fetch add inventory: ' . $e->getMessage());
             return ApiResponse::error('Failed to fetch add inventory', 500);

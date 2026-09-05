@@ -66,9 +66,11 @@ class Storage extends Model
         }
 
         if ($user->isStaff()) {
-            return $user->storage_id === null
+            return $user->branch_id === null || $user->storage_id === null
                 ? $query->whereRaw('1 = 0')
-                : $query->whereKey((int) $user->storage_id);
+                : $query
+                    ->where('branch_id', (int) $user->branch_id)
+                    ->whereKey((int) $user->storage_id);
         }
 
         $ownerIds = collect([$user->id, $user->manager_id])

@@ -119,8 +119,8 @@
                                             <tr>
                                                 <td>{{ $detail->product->code }}</td>
                                                 <td>{{ $detail->product->name }}</td>
-                                                <td>{{ $detail->product->quantity }}</td>
-                                                <td>{{ $detail->difference + $detail->product->quantity }}</td>
+                                                <td>{{ $detail->scoped_stock_quantity }}</td>
+                                                <td>{{ $detail->difference + $detail->scoped_stock_quantity }}</td>
                                                 <td>{{ $detail->difference }}</td>
                                                 <td>{{ number_format($detail->gia_chenh_lech) }}</td>
                                             </tr>

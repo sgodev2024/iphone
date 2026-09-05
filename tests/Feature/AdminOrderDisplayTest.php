@@ -51,6 +51,7 @@ class AdminOrderDisplayTest extends TestCase
         Schema::create('clients', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable()->default(10);
             $table->string('name')->nullable();
             $table->string('code')->nullable();
             $table->string('phone')->nullable();
@@ -167,6 +168,7 @@ class AdminOrderDisplayTest extends TestCase
             'role_id' => 2,
             'branch_id' => 10,
         ]);
+        $this->admin->load('role');
 
         $this->receivableAccountId = DB::table('accounts')->insertGetId([
             'code' => '131',
@@ -825,6 +827,7 @@ class AdminOrderDisplayTest extends TestCase
             400,
             600
         );
+        $this->actingAs($this->admin);
         $detailView = app(OrderController::class)->show((string) $detailOrder->id);
 
         $this->assertSame('admin.order.detail', $detailView->name());
@@ -1393,6 +1396,115 @@ class AdminOrderDisplayTest extends TestCase
 
         $this->assertCount(1, $paymentQueries);
         $this->assertCount(1, $history);
+    }
+
+    public function test_admin_store_order_list_and_direct_detail_are_branch_scoped(): void
+    {
+        $ownOrder = $this->createOrder(
+            'PHASE4-ORDER-BRANCH-10',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            branchId: 10
+        );
+        $foreignOrder = $this->createOrder(
+            'PHASE4-ORDER-BRANCH-20',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            branchId: 20
+        );
+
+        $html = $this->getOrderListHtml();
+
+        $this->assertStringContainsString($ownOrder->code, $html);
+        $this->assertStringNotContainsString($foreignOrder->code, $html);
+
+        $this->withoutMiddleware()
+            ->actingAs($this->admin)
+            ->get("/admin/order/{$foreignOrder->id}")
+            ->assertNotFound();
+    }
+
+    public function test_administrator_can_list_and_open_orders_from_every_branch_including_legacy_null(): void
+    {
+        $administrator = User::create([
+            'name' => 'Global administrator',
+            'email' => 'global-order@example.test',
+            'password' => 'password',
+            'role_id' => 1,
+            'branch_id' => null,
+        ]);
+        $branchTen = $this->createOrder(
+            'PHASE4-GLOBAL-ORDER-10',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            branchId: 10
+        );
+        $branchTwenty = $this->createOrder(
+            'PHASE4-GLOBAL-ORDER-20',
+            Order::PAYMENT_STATUS_PAID,
+            true,
+            1000,
+            0,
+            branchId: 20
+        );
+        $legacy = Order::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => null,
+            'code' => 'PHASE4-GLOBAL-ORDER-NULL',
+            'total_money' => 1000,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'status' => true,
+        ]);
+
+        $response = $this->withoutMiddleware()
+            ->actingAs($administrator)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->getJson('/admin/order')
+            ->assertOk();
+        $html = (string) $response->json('html');
+
+        $this->assertStringContainsString($branchTen->code, $html);
+        $this->assertStringContainsString($branchTwenty->code, $html);
+        $this->assertStringContainsString($legacy->code, $html);
+
+        $this->actingAs($administrator)
+            ->get("/admin/order/{$branchTwenty->id}")
+            ->assertOk();
+    }
+
+    public function test_admin_store_without_branch_fails_closed_and_cannot_see_legacy_null_order(): void
+    {
+        $withoutBranch = User::create([
+            'name' => 'Admin Store without branch',
+            'email' => 'null-branch-order@example.test',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => null,
+        ]);
+        $legacy = Order::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => null,
+            'code' => 'PHASE4-LEGACY-NULL-ORDER',
+            'total_money' => 1000,
+            'payment_status' => Order::PAYMENT_STATUS_PAID,
+            'status' => true,
+        ]);
+
+        $this->withoutMiddleware()
+            ->actingAs($withoutBranch)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->getJson('/admin/order')
+            ->assertForbidden();
+
+        $this->actingAs($withoutBranch)
+            ->get("/admin/order/{$legacy->id}")
+            ->assertForbidden();
     }
 
     private function getOrderDetailResponse(Order $order)

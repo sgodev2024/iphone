@@ -85,12 +85,12 @@ class ImportBarcodePrintTest extends TestCase
         $this->actingAs($this->warehouse)
             ->get(route('admin.importproduct.barcodes.index', $coupon->id))
             ->assertOk()
-            ->assertViewHas('items', function ($items) use ($detail): bool {
+            ->assertViewHas('items', function ($items) use ($detail, $product): bool {
                 return $items->count() === 1
                     && $items->first()['type'] === 'product'
                     && $items->first()['type_label'] === 'Tem sản phẩm'
                     && $items->first()['id'] === $detail->id
-                    && $items->first()['barcode'] === 'CABLE-001'
+                    && $items->first()['barcode'] === sprintf('28%011d', $product->id)
                     && $items->first()['default_label_quantity'] === 5;
             });
 
@@ -99,14 +99,14 @@ class ImportBarcodePrintTest extends TestCase
                 'print_all' => 1,
             ])
             ->assertOk()
-            ->assertViewHas('labels', function ($labels): bool {
+            ->assertViewHas('labels', function ($labels) use ($product): bool {
                 return $labels->count() === 5
                     && $labels->every(fn(array $label): bool => $label['type'] === 'product')
-                    && $labels->pluck('barcode')->unique()->sole() === 'CABLE-001';
+                    && $labels->pluck('barcode')->unique()->sole() === sprintf('28%011d', $product->id);
             });
 
         $this->assertDatabaseCount('product_imeis', 0);
-        $this->assertSame('CABLE-001', $product->fresh()->barcode);
+        $this->assertSame(sprintf('28%011d', $product->id), $product->fresh()->barcode);
     }
 
     public function test_mixed_import_lists_and_prints_imei_and_product_labels(): void
@@ -280,13 +280,13 @@ class ImportBarcodePrintTest extends TestCase
             ->get(route('admin.importproduct.barcodes.index', $coupon->id))
             ->assertOk()
             ->assertViewHas('items', function ($items) use ($product): bool {
-                return $items->first()['barcode'] === sprintf('SP-%08d', $product->id);
+                return $items->first()['barcode'] === sprintf('28%011d', $product->id);
             });
 
         $product->refresh();
 
         $this->assertSame('DUPLICATE', $product->code);
-        $this->assertSame(sprintf('SP-%08d', $product->id), $product->barcode);
+        $this->assertSame(sprintf('28%011d', $product->id), $product->barcode);
     }
 
     private function createSchema(): void
@@ -305,6 +305,13 @@ class ImportBarcodePrintTest extends TestCase
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id')->default(4);
             $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('user_info', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
             $table->timestamps();
         });
 

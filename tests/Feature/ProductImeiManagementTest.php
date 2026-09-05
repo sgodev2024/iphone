@@ -88,14 +88,14 @@ class ProductImeiManagementTest extends TestCase
         $this->assertDatabaseHas('product_imeis', ['id' => $imei->id]);
     }
 
-    public function test_another_users_product_cannot_be_viewed(): void
+    public function test_administrator_can_view_another_users_product(): void
     {
         $otherAdmin = $this->createAdmin('other@example.com');
         $product = $this->createProduct($otherAdmin);
 
         $this->actingAs($this->admin)
             ->get("/admin/products/{$product->id}/imeis")
-            ->assertNotFound();
+            ->assertOk();
     }
 
     public function test_quantity_tracked_product_imei_page_reports_not_applicable(): void
@@ -302,6 +302,142 @@ class ProductImeiManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_store_imei_views_and_direct_delete_are_branch_scoped(): void
+    {
+        $this->withoutMiddleware(\App\Http\Middleware\PermissionMiddleware::class);
+        $adminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A admin',
+            'email' => 'branch-a@example.com',
+            'phone' => '0900000001',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+        $storageA = \App\Models\Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A storage',
+        ]);
+        $storageB = \App\Models\Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 2,
+            'name' => 'Branch B storage',
+        ]);
+        $product = $this->createProduct($this->admin, ['name' => 'Scoped iPhone']);
+        \App\Models\ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 1,
+        ]);
+        \App\Models\ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 1,
+        ]);
+        $ownImei = ProductImei::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageA->id,
+            'imei' => 'PHASE4-IMEI-BRANCH-A',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+        $foreignImei = ProductImei::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'imei' => 'PHASE4-IMEI-BRANCH-B',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'storage_id' => null,
+            'imei' => 'PHASE4-IMEI-LEGACY',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+
+        $this->actingAs($adminStore)
+            ->get(route('admin.imeis.index'))
+            ->assertOk()
+            ->assertSee($ownImei->imei)
+            ->assertDontSee($foreignImei->imei)
+            ->assertDontSee('PHASE4-IMEI-LEGACY')
+            ->assertViewHas('statistics', fn (array $statistics): bool => $statistics['total'] === 1);
+
+        $this->actingAs($adminStore)
+            ->get(route('admin.products.imeis.index', $product))
+            ->assertOk()
+            ->assertSee($ownImei->imei)
+            ->assertDontSee($foreignImei->imei)
+            ->assertDontSee('PHASE4-IMEI-LEGACY');
+
+        $this->actingAs($adminStore)
+            ->delete(route('admin.imeis.destroy', $foreignImei), [
+                'delete_reason' => 'Cross-branch IDOR attempt',
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('product_imeis', [
+            'id' => $foreignImei->id,
+            'deleted_at' => null,
+        ]);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 1,
+        ]);
+    }
+
+    public function test_administrator_can_view_all_branch_and_legacy_imeis_while_null_branch_fails_closed(): void
+    {
+        $this->withoutMiddleware(\App\Http\Middleware\PermissionMiddleware::class);
+        $storageA = \App\Models\Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 1,
+            'name' => 'Branch A storage',
+        ]);
+        $storageB = \App\Models\Storage::create([
+            'user_id' => $this->admin->id,
+            'branch_id' => 2,
+            'name' => 'Branch B storage',
+        ]);
+        $product = $this->createProduct($this->admin);
+
+        foreach ([
+            [$storageA->id, 'PHASE4-GLOBAL-A'],
+            [$storageB->id, 'PHASE4-GLOBAL-B'],
+            [null, 'PHASE4-GLOBAL-LEGACY'],
+        ] as [$storageId, $imei]) {
+            ProductImei::create([
+                'product_id' => $product->id,
+                'storage_id' => $storageId,
+                'imei' => $imei,
+                'status' => ProductImei::STATUS_IN_STOCK,
+            ]);
+        }
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.imeis.index'))
+            ->assertOk()
+            ->assertSee('PHASE4-GLOBAL-A')
+            ->assertSee('PHASE4-GLOBAL-B')
+            ->assertSee('PHASE4-GLOBAL-LEGACY');
+
+        $unassignedAdminStore = User::create([
+            'manager_id' => $this->admin->id,
+            'branch_id' => null,
+            'name' => 'Unassigned admin',
+            'email' => 'unassigned@example.com',
+            'phone' => '0900000002',
+            'password' => 'password',
+            'role_id' => 2,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($unassignedAdminStore)
+            ->get(route('admin.imeis.index'))
+            ->assertForbidden();
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -309,6 +445,9 @@ class ProductImeiManagementTest extends TestCase
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('manager_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('name')->nullable();
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
@@ -316,6 +455,13 @@ class ProductImeiManagementTest extends TestCase
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id')->default(1);
             $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('user_info', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
             $table->timestamps();
         });
 
@@ -327,6 +473,7 @@ class ProductImeiManagementTest extends TestCase
 
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->boolean('notification')->default(false);
             $table->timestamps();
         });
@@ -352,9 +499,18 @@ class ProductImeiManagementTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('storages', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+        });
+
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->timestamps();
         });
@@ -386,6 +542,7 @@ class ProductImeiManagementTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);

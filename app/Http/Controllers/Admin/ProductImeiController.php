@@ -7,6 +7,8 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\User;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -14,11 +16,16 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ProductImeiController extends Controller
 {
+    public function __construct(
+        private readonly BranchContext $branchContext
+    ) {}
+
     public function globalIndex(Request $request): View
     {
         $filters = [
@@ -43,6 +50,8 @@ class ProductImeiController extends Controller
                     Product::INVENTORY_TRACKING_IMEI
                 );
             });
+
+        $this->branchContext->scopeThroughStorage($imeiBaseQuery, $request->user());
 
         $statistics = (clone $imeiBaseQuery)
             ->selectRaw(
@@ -87,7 +96,7 @@ class ProductImeiController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $companies = Company::query()
+        $companiesQuery = Company::query()
             ->whereHas(
                 'importCoupons.details.imeis.product',
                 function (Builder $productQuery) {
@@ -96,7 +105,10 @@ class ProductImeiController extends Controller
                         Product::INVENTORY_TRACKING_IMEI
                     );
                 }
-            )
+            );
+        $this->branchContext->scope($companiesQuery, $request->user());
+
+        $companies = $companiesQuery
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -120,7 +132,7 @@ class ProductImeiController extends Controller
 
     public function index(Request $request, Product $product): View
     {
-        $this->ensureProductBelongsToCurrentUser($product);
+        $this->ensureProductVisible($product, $request->user());
 
         $search = trim((string) $request->query('search', ''));
         $notImeiTracked = ! $product->isImeiTracked();
@@ -148,11 +160,15 @@ class ProductImeiController extends Controller
             );
         }
 
-        $product->loadCount([
-            'imeis as imei_stock_count' => fn($query) => $query->inStock(),
-        ]);
+        $imeiQuery = $product->imeis()->getQuery();
+        $this->branchContext->scopeThroughStorage($imeiQuery, $request->user());
 
-        $imeis = $product->imeis()
+        $product->setAttribute(
+            'imei_stock_count',
+            (clone $imeiQuery)->inStock()->count()
+        );
+
+        $imeis = $imeiQuery
             ->with([
                 'importDetail.import.companyRelation',
             ])
@@ -197,9 +213,11 @@ class ProductImeiController extends Controller
             'delete_reason.max' => 'Lý do xóa không được vượt quá 500 ký tự.',
         ]);
 
-        DB::transaction(function () use ($productImei, $validated) {
-            $imei = ProductImei::query()
-                ->with('importDetail.import')
+        DB::transaction(function () use ($request, $productImei, $validated) {
+            $imeiQuery = ProductImei::query()->with('importDetail.import');
+            $this->branchContext->scopeThroughStorage($imeiQuery, $request->user());
+
+            $imei = $imeiQuery
                 ->lockForUpdate()
                 ->findOrFail($productImei->id);
 
@@ -209,8 +227,13 @@ class ProductImeiController extends Controller
                 ]);
             }
 
-            // Tự lấy kho từ phiếu nhập, không lấy từ form
-            $storageId = $imei->importDetail?->import?->storage_id;
+            $storageId = Schema::hasColumn('product_imeis', 'storage_id')
+                ? $imei->storage_id
+                : null;
+
+            if (! $storageId && $request->user()->isAdministrator()) {
+                $storageId = $imei->importDetail?->import?->storage_id;
+            }
 
             if (! $storageId) {
                 throw ValidationException::withMessages([
@@ -259,13 +282,22 @@ class ProductImeiController extends Controller
         );
     }
 
-    private function ensureProductBelongsToCurrentUser(
-        Product $product
-    ): void {
-        abort_unless(
-            (int) $product->user_id === (int) Auth::id(),
-            404
+    private function ensureProductVisible(Product $product, User $user): void
+    {
+        if ($this->branchContext->isGlobal($user)) {
+            return;
+        }
+
+        $query = Product::query()->whereKey($product->id);
+        $this->branchContext->scopeThroughStorage(
+            $query,
+            $user,
+            $product->isImeiTracked()
+                ? 'imeis.storage'
+                : 'productStorages.storage'
         );
+
+        abort_unless($query->exists(), 404);
     }
 
     private function applyGlobalFilters(

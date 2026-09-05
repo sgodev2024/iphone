@@ -88,7 +88,7 @@ class ImportCouponController extends Controller
             $storageQuery->where('user_id', $ownerId);
         } else {
             $this->branchContext->scope($companyQuery, $user);
-            $this->branchContext->scope($storageQuery, $user);
+            $this->branchContext->scopeStorages($storageQuery, $user);
         }
 
         $companyExists = $companyQuery->whereKey($supplierId)->exists();
@@ -330,11 +330,17 @@ class ImportCouponController extends Controller
         | Bước 1: Tạo IMEI để lấy ID tự tăng
         |--------------------------------------------------------------------------
         */
-                    $productImei = $importDetail->imeis()->create([
+                    $imeiData = [
                         'product_id' => $product->id,
                         'imei' => $imei,
                         'status' => ProductImei::STATUS_IN_STOCK,
-                    ]);
+                    ];
+
+                    if (Schema::hasColumn('product_imeis', 'storage_id')) {
+                        $imeiData['storage_id'] = $storageId;
+                    }
+
+                    $productImei = $importDetail->imeis()->create($imeiData);
 
                     /*
         |--------------------------------------------------------------------------

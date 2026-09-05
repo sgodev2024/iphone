@@ -3,6 +3,7 @@ namespace App\Http\View\Composers;
 
 use Illuminate\View\View;
 use App\Services\OrderService;
+use Illuminate\Support\Facades\Auth;
 
 class NotificationComposer
 {
@@ -16,7 +17,7 @@ class NotificationComposer
 
     public function compose(View $view)
     {
-        $notifications = $this->orderService->getOrderNotification();
+        $notifications = $this->orderService->getOrderNotification(Auth::user());
         $view->with('notifications', $notifications);
     }
 }

@@ -136,6 +136,7 @@ class ProductStorageService
                         $soldQuantity = $this->orderDetail->whereHas('order', function ($query) use ($latestImport) {
                             $query->where('created_at', '>', $latestImport->created_at);
                         })->where('product_id', $currentProductId)
+                            ->where('storage_id', $storage_id)
                             ->sum('quantity');
 
                         //Tính số lượng trước khi nhập hàng
