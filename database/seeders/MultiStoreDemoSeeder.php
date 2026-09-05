@@ -517,7 +517,8 @@ class MultiStoreDemoSeeder extends Seeder
                 for ($i = 0; $i < $count && $sequence < $availableImeis + $soldImeis; $i++) {
                     $sequence++;
                     $status = $sequence <= $availableImeis ? ProductImei::STATUS_IN_STOCK : ProductImei::STATUS_SOLD;
-                    $imei = '893'.str_pad((string) (self::SEED * 100 + $this->branches[$branch] * 100 + $sequence), 12, '0', STR_PAD_LEFT);
+                    $branchOrdinal = ['caugiay' => 1, 'mydinh' => 2, 'hadong' => 3][$branch];
+                    $imei = '893'.str_pad((string) (self::SEED * 100 + $branchOrdinal * 100 + $sequence), 12, '0', STR_PAD_LEFT);
                     $imeiId = DB::table('product_imeis')->insertGetId([
                         'product_id' => $product['id'],
                         'storage_id' => $this->storages[$branch][0],
@@ -688,7 +689,11 @@ class MultiStoreDemoSeeder extends Seeder
                 ];
                 $order = $saleService->createPosOrder($actor, $data, $this->storages[$branch][0]);
                 $orderDate = Carbon::parse($date);
-                DB::table('orders')->where('id', $order->id)->update(['created_at' => $orderDate, 'updated_at' => $orderDate]);
+                DB::table('orders')->where('id', $order->id)->update([
+                    'code' => 'ODR-DEMO-'.strtoupper($branch).'-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+                    'created_at' => $orderDate,
+                    'updated_at' => $orderDate,
+                ]);
                 DB::table('transactions')->where('document_type', 'order')->where('reference_number', (string) $order->id)->update([
                     'transaction_date' => $orderDate->toDateString(),
                     'created_at' => $orderDate,
@@ -751,6 +756,7 @@ class MultiStoreDemoSeeder extends Seeder
                 // return/restock workflow above.
                 $returnDate = Carbon::parse(self::TODAY)->subDays($index + 1)->setTime(14 + $index, 15, 0);
                 DB::table('order_returns')->where('id', $return->id)->update([
+                    'code' => 'RTN-DEMO-'.strtoupper($branch).'-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
                     'created_at' => $returnDate,
                     'updated_at' => $returnDate,
                 ]);

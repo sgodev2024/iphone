@@ -1,6 +1,13 @@
 @php
+    $adminUser = auth()->user();
     $adminLogo = showImage(optional($config)->logo, 'images/sgovn.png');
-    $adminAvatar = showImage(optional(auth()->user()->user_info)->img_url);
+    $adminAvatar = showImage(optional($adminUser->user_info)->img_url);
+    $adminRoleLabel = match (true) {
+        $adminUser?->isAdministrator() => 'Administrator',
+        $adminUser?->isAdminStore() => 'Admin Store',
+        $adminUser?->isStaff() => 'Nhân viên',
+        default => 'Chưa xác định',
+    };
 @endphp
 
 <div class="main-header no-print">
@@ -133,12 +140,12 @@
                     <a class="dropdown-toggle profile-pic" data-bs-toggle="dropdown" href="#"
                         aria-expanded="false">
                         <div class="avatar-sm">
-                            <img src="{{ $adminAvatar }}" alt="{{ auth()->user()->name }}"
+                            <img src="{{ $adminAvatar }}" alt="{{ $adminUser->name }}"
                                 class="avatar-img rounded-circle">
                         </div>
-                        <span class="profile-username">
-                            <span class="op-7">Hi,</span>
-                            <span class="fw-bold">{{ auth()->user()->name }}</span>
+                        <span class="profile-username admin-header-account">
+                            <span class="admin-header-account__name">{{ $adminUser->name }}</span>
+                            <span class="admin-header-account__role">{{ $adminRoleLabel }}</span>
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-user animated fadeIn">
@@ -152,8 +159,8 @@
                                                 class="avatar-img rounded-circle">
                                         </div>
                                         <div class="u-text">
-                                            <h4>{{ auth()->user()->name }}</h4>
-                                            <p class="text-muted">{{ auth()->user()->email }}</p>
+                                            <h4>{{ $adminUser->name }}</h4>
+                                            <p class="text-muted">{{ $adminUser->email }}</p>
                                             <div style="display: flex">
                                                 <a href="{{ route('admin.profile') }}"
                                                     class="btn btn-xs btn-secondary btn-sm p-1">Trang cá nhân</a>

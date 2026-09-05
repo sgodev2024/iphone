@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="{{ asset('assets/css/plugins.min.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/css/kaiadmin.min.css') }}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.22.4/sweetalert2.min.css">
-<link rel="stylesheet" href="{{ asset('css/index.css') }}">
+<link rel="stylesheet" href="{{ asset('css/index.css') }}?v={{ filemtime(public_path('css/index.css')) }}">
 
 <link rel="stylesheet" href="{{ asset('assets/css/main.css') }}">
 
