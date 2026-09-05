@@ -14,6 +14,7 @@ class SupplierDebt extends Model
     protected $fillable = [
         'supplier_id',
         'companies_id',
+        'branch_id',
         'amount',
         'description',
         'code'

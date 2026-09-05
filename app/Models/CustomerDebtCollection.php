@@ -15,6 +15,7 @@ class CustomerDebtCollection extends Model
 
     protected $fillable = [
         'owner_id',
+        'branch_id',
         'client_id',
         'collection_number',
         'collection_date',
@@ -30,6 +31,7 @@ class CustomerDebtCollection extends Model
     ];
 
     protected $casts = [
+        'branch_id' => 'integer',
         'collection_date' => 'date',
         'total_amount' => 'decimal:2',
     ];
@@ -52,6 +54,11 @@ class CustomerDebtCollection extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function client(): BelongsTo

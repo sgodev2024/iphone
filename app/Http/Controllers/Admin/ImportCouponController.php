@@ -447,6 +447,32 @@ class ImportCouponController extends Controller
         string $transactionDate
     ): void
     {
+        $branchAware = Schema::hasColumn('transactions', 'branch_id');
+        $branchId = null;
+
+        if ($branchAware) {
+            $branchId = DB::table('storages')
+                ->where('id', $importCoupon->storage_id)
+                ->value('branch_id');
+
+            if ($branchId === null) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho chưa có Branch nên không thể hạch toán phiếu nhập.',
+                ]);
+            }
+
+            $companyMatchesBranch = Company::query()
+                ->whereKey($importCoupon->companies_id)
+                ->where('branch_id', (int) $branchId)
+                ->exists();
+
+            if (! $companyMatchesBranch) {
+                throw ValidationException::withMessages([
+                    'companies_id' => 'Nhà cung cấp và kho nhập phải thuộc cùng một Branch.',
+                ]);
+            }
+        }
+
         $total = (int) $importCoupon->total;
         $paidAmount = (int) ($importCoupon->paid_amount ?? $importCoupon->payment_ncc ?? 0);
         $paymentMethod = (string) ($importCoupon->payment_method ?? ImportCoupon::PAYMENT_METHOD_CASH);
@@ -456,6 +482,7 @@ class ImportCouponController extends Controller
         $purchaseReference = 'IMP-' . $importCoupon->getKey();
 
         if (Transaction::query()
+            ->when($branchAware, fn ($query) => $query->where('branch_id', (int) $branchId))
             ->where('type', 'expense')
             ->where('document_type', 'import')
             ->where('reference_number', $purchaseReference)
@@ -467,6 +494,7 @@ class ImportCouponController extends Controller
 
         $purchase = $this->createCompletedTransaction([
             'user_id' => $ownerId,
+            'branch_id' => $branchId,
             'transaction_date' => $transactionDate,
             'description' => 'Nhập hàng NCC',
             'type' => 'expense',
@@ -506,6 +534,7 @@ class ImportCouponController extends Controller
 
             $payment = $this->createCompletedTransaction([
                 'user_id' => $ownerId,
+                'branch_id' => $branchId,
                 'transaction_date' => $transactionDate,
                 'description' => 'Thanh toán NCC',
                 'type' => 'expense',
@@ -568,6 +597,12 @@ class ImportCouponController extends Controller
 
     private function createCompletedTransaction(array $attributes): Transaction
     {
+        if (! Schema::hasColumn('transactions', 'branch_id')) {
+            unset($attributes['branch_id']);
+        } elseif (($attributes['branch_id'] ?? null) === null) {
+            throw new \UnexpectedValueException('Import accounting source has no Branch snapshot.');
+        }
+
         if (Schema::hasColumn('transactions', 'status')) {
             $attributes['status'] = Transaction::STATUS_COMPLETED;
         }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class JournalEntryController extends Controller
 {
+    public function __construct(private readonly BranchContext $branchContext) {}
 
     public function index(Request $request)
     {
@@ -28,8 +30,10 @@ class JournalEntryController extends Controller
                 $startDate = $endDate->copy()->subMonth()->startOfDay();
             }
 
-            $transactions = DB::table('transactions as t')
-                ->where('t.user_id', Auth::id())
+            $transactionsQuery = DB::table('transactions as t');
+            $transactionsQuery->whereIn('t.user_id', $this->transactionOwnerIds($request));
+            $this->branchContext->scope($transactionsQuery, $request->user(), 't.branch_id');
+            $transactions = $transactionsQuery
                 ->join('transaction_entries as te', 't.id', '=', 'te.transaction_id')
                 ->join('accounts as acc', 'te.account_id', '=', 'acc.id')
                 ->leftJoin('clients as c', function ($join) {
@@ -85,26 +89,38 @@ class JournalEntryController extends Controller
 
         return DB::transaction(function () use ($request) {
             $transactionIds = $request->input('ids');
-            $ownerId = $request->user()->ownerId();
 
             foreach ($transactionIds as $transactionId) {
-                $transaction = Transaction::query()
-                    ->whereKey($transactionId)
-                    ->where('user_id', $ownerId)
-                    ->first();
-                if ($transaction) {
-                    // Xóa file nếu có
-                    if ($transaction->attachment) {
-                        deleteImage($transaction->attachment);
-                    }
-                    // Xóa transaction
-                    $transaction->delete();
+                $query = Transaction::query()->whereKey($transactionId);
+                $query->whereIn('user_id', $this->transactionOwnerIds($request));
+                $this->branchContext->scope($query, $request->user());
+                $transaction = $query->first();
+                if (! $transaction) {
+                    continue;
                 }
+                // Xóa file nếu có
+                if ($transaction->attachment) {
+                    deleteImage($transaction->attachment);
+                }
+                // Xóa transaction
+                $transaction->delete();
             }
 
             return response()->json([
                 'message' => 'Xóa phiếu thành công.'
             ]);
         });
+    }
+
+    private function transactionOwnerIds(Request $request): array
+    {
+        $user = $request->user();
+
+        return collect([$user->ownerId(), $user->id])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 }

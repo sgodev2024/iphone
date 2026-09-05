@@ -7,14 +7,17 @@ use App\Models\CashVoucher;
 use App\Models\Company;
 use App\Models\User;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class CashActivityReadService
 {
-    public function __construct(private TransactionBusinessListService $transactionList)
-    {
+    public function __construct(
+        private TransactionBusinessListService $transactionList,
+        private BranchContext $branchContext
+    ) {
     }
 
     /**
@@ -32,7 +35,7 @@ class CashActivityReadService
         int $perPage = 25
     ): array {
         $ledgerEntries = $this->transactionList
-            ->entries($transactionOwnerIds, $cashAccountIds, $from, $to);
+            ->entries($actor, $transactionOwnerIds, $cashAccountIds, $from, $to);
         $companyIds = $ledgerEntries
             ->where('related_party_type', Company::class)
             ->pluck('related_party_id')
@@ -44,9 +47,11 @@ class CashActivityReadService
         $posted = $ledgerEntries
             ->map(fn (object $entry): CashActivityItem => $this->postedItem($entry, $companyNames));
 
-        $pending = CashVoucher::query()
+        $pendingQuery = CashVoucher::query()
             ->with(['cashAccount:id,code,name', 'creator:id,name'])
-            ->where('owner_id', (int) $actor->ownerId())
+            ->where('owner_id', (int) $actor->ownerId());
+        $this->branchContext->scope($pendingQuery, $actor);
+        $pending = $pendingQuery
             ->whereDate('transaction_date', '>=', $from)
             ->whereDate('transaction_date', '<=', $to)
             ->get()

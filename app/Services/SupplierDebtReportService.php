@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Accounting\SupplierDebtSnapshotService;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,11 +18,18 @@ use RuntimeException;
 class SupplierDebtReportService
 {
     private bool $snapshotTablesAvailable;
+    private bool $branchSchemaAvailable;
 
-    public function __construct(private SupplierDebtSnapshotService $snapshotService)
+    public function __construct(
+        private SupplierDebtSnapshotService $snapshotService,
+        private BranchContext $branchContext
+    )
     {
         $this->snapshotTablesAvailable = Schema::hasTable('supplier_debt_yearly_snapshots')
             && Schema::hasTable('supplier_debt_snapshot_states');
+        $this->branchSchemaAvailable = Schema::hasTable('branches')
+            && Schema::hasColumn('transactions', 'branch_id')
+            && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id');
     }
 
     public function report(User $actor, string $fromDate, string $toDate, string $nameFilter = ''): Collection
@@ -30,11 +38,31 @@ class SupplierDebtReportService
         $account331 = $this->resolvePayableAccount();
         $nameFilter = trim($nameFilter);
 
-        if (! $this->snapshotTablesAvailable) {
-            return $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331);
+        if (! $this->branchSchemaAvailable) {
+            return $this->snapshotTablesAvailable
+                ? $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331)
+                : $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331);
         }
 
-        return $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331);
+        if (! $this->branchContext->isGlobal($actor)) {
+            $branchId = $this->branchContext->branchId($actor);
+
+            return $this->snapshotTablesAvailable
+                ? $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
+                : $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true);
+        }
+
+        $branchIds = DB::table('branches')
+            ->where('user_id', $ownerId)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->push(null);
+
+        return $branchIds->flatMap(fn (?int $branchId) => $this->snapshotTablesAvailable
+            ? $this->snapshotReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
+            : $this->legacyReport($ownerId, $fromDate, $toDate, $nameFilter, $account331, $branchId, true)
+        )->sortBy('company_id')->values();
     }
 
     private function snapshotReport(
@@ -42,11 +70,20 @@ class SupplierDebtReportService
         string $fromDate,
         string $toDate,
         string $nameFilter,
-        Account $account331
+        Account $account331,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         $fiscalYear = (int) substr($fromDate, 0, 4);
         $yearStart = $fiscalYear.'-01-01';
-        $openings = $this->snapshotService->reportOpenings($ownerId, $fiscalYear, 1000, $nameFilter === '' ? null : $nameFilter);
+        $openings = $this->snapshotService->reportOpenings(
+            $ownerId,
+            $fiscalYear,
+            1000,
+            $nameFilter === '' ? null : $nameFilter,
+            $branchId,
+            $branchScoped
+        );
         $companyBalances = [];
 
         foreach ($openings as $opening) {
@@ -67,6 +104,7 @@ class SupplierDebtReportService
 
         $companies = DB::table('companies')
             ->where('user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->when($nameFilter !== '', fn ($query) => $query->where('name', 'like', '%'.$nameFilter.'%'))
             ->whereIn('id', array_keys($companyBalances))
             ->get(['id', 'name', 'phone'])
@@ -89,6 +127,7 @@ class SupplierDebtReportService
             ->whereIn('te.tableable_id', array_keys($companyBalances))
             ->where('t.user_id', $ownerId)
             ->where('t.status', Transaction::STATUS_COMPLETED)
+            ->when($branchScoped, fn ($query) => $query->where('t.branch_id', $branchId))
             ->where('t.transaction_date', '>=', $yearStart)
             ->where('t.transaction_date', '<=', $toDate)
             ->orderBy('te.tableable_id')
@@ -133,7 +172,9 @@ class SupplierDebtReportService
         string $fromDate,
         string $toDate,
         string $nameFilter,
-        Account $account331
+        Account $account331,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
 
         $ledgerRows = DB::table('companies as c')
@@ -142,12 +183,16 @@ class SupplierDebtReportService
                     ->where('te.tableable_type', Company::class)
                     ->where('te.account_id', $account331->id);
             })
-            ->leftJoin('transactions as t', function (JoinClause $join) use ($ownerId): void {
+            ->leftJoin('transactions as t', function (JoinClause $join) use ($ownerId, $branchId, $branchScoped): void {
                 $join->on('t.id', '=', 'te.transaction_id')
                     ->where('t.user_id', $ownerId)
                     ->where('t.status', Transaction::STATUS_COMPLETED);
+                if ($branchScoped) {
+                    $join->where('t.branch_id', $branchId);
+                }
             })
             ->where('c.user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('c.branch_id', $branchId))
             ->when($nameFilter !== '', function ($query) use ($nameFilter): void {
                 $query->where('c.name', 'like', '%'.$nameFilter.'%');
             })

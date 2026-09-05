@@ -579,6 +579,12 @@ class SaleService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if (Schema::hasColumn('transactions', 'branch_id') && $order->branch_id === null) {
+                throw new \UnexpectedValueException(
+                    'Order #'.$order->id.' has no Branch snapshot and cannot be posted.'
+                );
+            }
+
             $totalAmount = (float) $order->total_money;
             $paidAmount = (float) $order->paid_amount;
             $debtAmount = (float) $order->debt_amount;
@@ -642,7 +648,7 @@ class SaleService
             '5111',
             'tài khoản doanh thu bán hàng'
         )->id;
-        $transaction = Transaction::create([
+        $transaction = Transaction::create($this->withTransactionBranch([
             'user_id' => $ownerId,
             'transaction_date' => now()->toDateString(),
             'description' => "Bán hàng theo đơn #{$order->id}",
@@ -651,7 +657,7 @@ class SaleService
             'reference_number' => (string) $order->id,
             'created_by' => $creator->id,
             'status' => Transaction::STATUS_COMPLETED,
-        ]);
+        ], $order->branch_id));
 
         $transaction->entries()->create([
             'account_id' => $receivableAccountId,
@@ -681,6 +687,10 @@ class SaleService
         // dedicated service and always carry a non-null idempotency key.
         $checkoutPaymentExists = Transaction::query()
             ->where('user_id', $ownerId)
+            ->when(
+                Schema::hasColumn('transactions', 'branch_id'),
+                fn ($query) => $query->where('branch_id', (int) $order->branch_id)
+            )
             ->where('document_type', 'order')
             ->where('reference_number', (string) $order->id)
             ->whereIn('type', ['income', 'credit_notice'])
@@ -704,7 +714,7 @@ class SaleService
             : $this->resolveCashAccountId();
         $transactionType = $paymentMethod === 'bank_transfer' ? 'credit_notice' : 'income';
         $paymentNote = $paymentMethod === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt';
-        $transaction = Transaction::create([
+        $transaction = Transaction::create($this->withTransactionBranch([
             'user_id' => $ownerId,
             'transaction_date' => now()->toDateString(),
             'description' => "Thu tiền đơn hàng #{$order->id}",
@@ -713,7 +723,7 @@ class SaleService
             'reference_number' => (string) $order->id,
             'created_by' => $creator->id,
             'status' => Transaction::STATUS_COMPLETED,
-        ]);
+        ], $order->branch_id));
 
         $transaction->entries()->create([
             'account_id' => $moneyAccountId,
@@ -734,10 +744,29 @@ class SaleService
     private function hasAccountingTransactionForOrder(Order $order, array $types): bool
     {
         return Transaction::query()
+            ->when(
+                Schema::hasColumn('transactions', 'branch_id'),
+                fn ($query) => $query->where('branch_id', $order->branch_id)
+            )
             ->where('document_type', 'order')
             ->where('reference_number', (string) $order->id)
             ->whereIn('type', $types)
             ->exists();
+    }
+
+    private function withTransactionBranch(array $attributes, mixed $branchId): array
+    {
+        if (! Schema::hasColumn('transactions', 'branch_id')) {
+            return $attributes;
+        }
+
+        if ($branchId === null) {
+            throw new \UnexpectedValueException('Financial transaction source has no Branch snapshot.');
+        }
+
+        $attributes['branch_id'] = (int) $branchId;
+
+        return $attributes;
     }
 
     private function resolveCashAccountId(): int

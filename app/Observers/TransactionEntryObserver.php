@@ -49,7 +49,7 @@ class TransactionEntryObserver
         $transactionId = (int) ($attributes['transaction_id'] ?? 0);
         $transaction = Transaction::query()
             ->whereKey($transactionId)
-            ->first(['transaction_date', 'status', 'user_id']);
+            ->first(['transaction_date', 'status', 'user_id', 'branch_id']);
 
         return [
             'accountId' => (int) ($attributes['account_id'] ?? 0),
@@ -58,6 +58,7 @@ class TransactionEntryObserver
             'transactionDate' => $transaction?->transaction_date,
             'transactionStatus' => $transaction?->status,
             'transactionOwnerId' => $transaction?->user_id,
+            'transactionBranchId' => $transaction?->branch_id,
         ];
     }
 }

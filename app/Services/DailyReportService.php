@@ -7,36 +7,58 @@ use App\Models\ImportDetail;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
+use App\Models\User;
+use App\Support\BranchContext;
 use Exception;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class DailyReportService
 {
     protected $order;
     protected $import;
-    public function __construct(Order $order, ImportCoupon $import)
+    public function __construct(Order $order, ImportCoupon $import, protected BranchContext $branchContext)
     {
         $this->order = $order;
         $this->import = $import;
     }
 
-    public function getDailyOrder()
+    public function getDailyOrder(?User $actor = null)
     {
         try {
+            $actor ??= Auth::user();
+            if (! $actor) {
+                throw new Exception('Authenticated actor is required.');
+            }
             // Paginate orders
-            $orders = $this->order
+            $ordersQuery = $this->order
+                ->newQuery()
                 ->where('status', 1)
                 ->whereDate('created_at', now()->toDateString())
-                ->with(['user', 'client'])
+                ->with(['user', 'client']);
+            $this->branchContext->scope($ordersQuery, $actor);
+            if ($actor->isStaff()) {
+                $actor->storage_id === null
+                    ? $ordersQuery->whereRaw('1 = 0')
+                    : $ordersQuery->whereHas('orderDetails', fn ($query) => $query->where('storage_id', (int) $actor->storage_id));
+            }
+            $orders = $ordersQuery
                 ->latest('created_at')
                 ->paginate(9, ['*'], 'orders_page');
 
             // Retrieve all order details for today
-            $orderDetails = OrderDetail::whereHas('order', function ($query) {
+            $orderDetailsQuery = OrderDetail::whereHas('order', function ($query) use ($actor) {
                 $query->where('status', 1)
                     ->whereDate('created_at', now()->toDateString());
-            })->with(['product', 'order.orderDetails'])->get();
+                $this->branchContext->scope($query, $actor);
+            });
+            if ($actor->isStaff()) {
+                $actor->storage_id === null
+                    ? $orderDetailsQuery->whereRaw('1 = 0')
+                    : $orderDetailsQuery->where('storage_id', (int) $actor->storage_id);
+            }
+            $orderDetails = $orderDetailsQuery->with(['product', 'order.orderDetails'])->get();
 
             // Calculate product sales
             $productSales = [];
@@ -94,22 +116,29 @@ class DailyReportService
     }
 
 
-    public function getDailyImport()
+    public function getDailyImport(?User $actor = null)
     {
         try {
+            $actor ??= Auth::user();
+            if (! $actor) {
+                throw new Exception('Authenticated actor is required.');
+            }
             // Paginate imports
-            $imports = $this->import
+            $importsQuery = $this->import
                 ->newQuery()
                 ->whereDate('created_at', now()->toDateString())
-                ->with('details.product')
+                ->with('details.product');
+            $this->branchContext->scopeThroughStorage($importsQuery, $actor);
+            $imports = $importsQuery
                 ->reorder()
                 ->orderByDesc('created_at')
                 ->orderByDesc('id')
                 ->paginate(3, ['*'], 'import_page');
 
             // Retrieve all import details for today
-            $importDetails = ImportDetail::whereHas('import', function ($query) {
+            $importDetails = ImportDetail::whereHas('import', function ($query) use ($actor) {
                 $query->whereDate('created_at', now()->toDateString());
+                $this->branchContext->scopeThroughStorage($query, $actor);
             })->with('product')->get();
 
             // Calculate product imports

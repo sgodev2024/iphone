@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreGenericBankVoucherRequest;
 use App\Models\BankVoucher;
 use App\Services\GenericBankVoucherService;
+use App\Support\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class GenericBankVoucherController extends Controller
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function store(
         StoreGenericBankVoucherRequest $request,
         GenericBankVoucherService $service
@@ -60,6 +65,10 @@ class GenericBankVoucherController extends Controller
     private function ownedVoucher(BankVoucher $voucher): BankVoucher
     {
         abort_unless((int) $voucher->owner_id === (int) request()->user()->ownerId(), 404);
+        $this->branchContext->authorize(
+            request()->user(),
+            $voucher->branch_id === null ? null : (int) $voucher->branch_id
+        );
 
         return $voucher;
     }

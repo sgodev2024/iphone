@@ -25,10 +25,12 @@ class TransactionController extends Controller
             $status = $request->input('status');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
-            $authUser = session('authUser');
-            $userId = $authUser->id;
-
-            $transactions = $this->transactionService->getPaginatedTransactionsForAdmin($userId, $status, $startDate, $endDate);
+            $transactions = $this->transactionService->getPaginatedTransactionsForAdmin(
+                $request->user(),
+                $status,
+                $startDate,
+                $endDate
+            );
             if ($request->ajax()) {
                 return response()->json([
                     'html' => view('admin.transaction.table', compact('transactions'))->render(),
@@ -48,10 +50,12 @@ class TransactionController extends Controller
             $status = $request->input('status');
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
-            $authUser = session('authUser');
-            $userId = $authUser->id;
-
-            $transactions = $this->transactionService->getPaginatedTransactionsForAdmin($userId, $status, $startDate, $endDate);
+            $transactions = $this->transactionService->getPaginatedTransactionsForAdmin(
+                $request->user(),
+                $status,
+                $startDate,
+                $endDate
+            );
             if ($request->ajax()) {
                 return response()->json([
                     'html' => view('admin.transaction.table', compact('transactions'))->render(),
@@ -75,15 +79,15 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $authUser = session('authUser');
-        $transaction = $this->transactionService->createNewTransaction($request->all(), $authUser->id);
-        $this->exportPDF($transaction->id);
+        $transaction = $this->transactionService->createNewTransaction($request->all(), $request->user());
+        $this->exportPDF($request, $transaction->id);
         return redirect()->route('admin.dashboard');
     }
 
-    public function exportPDF($id)
+    public function exportPDF(Request $request, $id)
     {
         try{
-            $transaction = $this->transactionService->getTransactionById($id);
+            $transaction = $this->transactionService->getTransactionById($request->user(), $id);
 
             $pdf = Pdf::loadView('pdf.transaction', compact('transaction'));
             $fileName = 'Hóa đơn giao dịch của khách hàng '. $transaction->user->name . '.pdf';

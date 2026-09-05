@@ -6,6 +6,7 @@ use App\Exports\SampleCashTransactionExport;
 use App\Http\Controllers\Controller;
 use App\Imports\CashTransactionImport;
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\CashTransaction;
 use App\Models\Client;
 use App\Models\Company;
@@ -18,10 +19,12 @@ use App\Models\Roles;
 use App\Models\User;
 use App\Services\CashActivityReadService;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
@@ -33,7 +36,7 @@ class CashTransactionController extends Controller
         return view('admin.cash-bank.cash');
     }
 
-    public function save(Request $request)
+    public function save(Request $request, BranchContext $branchContext)
     {
         $type = 'cash'; // Phiếu tiền mặt
         $transaction = null;
@@ -58,12 +61,17 @@ class CashTransactionController extends Controller
             ->where('status', true)
             ->first(['id', 'code', 'name']);
 
+        $branches = $request->user()->isAdministrator() && Schema::hasTable('branches')
+            ? Branch::query()->where('user_id', $request->user()->id)->orderBy('name')->get(['id', 'name'])
+            : collect();
+
         if (!empty($transactionId)) {
             // Lấy transaction + entries
-            $transaction = Transaction::query()
+            $transactionQuery = Transaction::query()
                 ->whereIn('user_id', $this->transactionOwnerIds())
-                ->with('entries')
-                ->findOrFail($transactionId);
+                ->with('entries');
+            $branchContext->scope($transactionQuery, $request->user());
+            $transaction = $transactionQuery->findOrFail($transactionId);
 
             abort_if(
                 $transaction->collection_id !== null,
@@ -97,6 +105,7 @@ class CashTransactionController extends Controller
             'type',
             'moneyAccounts',
             'canonicalCashAccount',
+            'branches',
             'transaction',
             'mainEntry',
             'contraEntry'
@@ -459,7 +468,7 @@ class CashTransactionController extends Controller
     }
 
 
-    public function destroy(Request $request)
+    public function destroy(Request $request, BranchContext $branchContext)
     {
         $request->validate([
             'ids' => 'required|array',
@@ -470,9 +479,11 @@ class CashTransactionController extends Controller
             $transactionIds = $request->input('ids');
 
             foreach ($transactionIds as $transactionId) {
-                $transaction = Transaction::query()
+                $transactionQuery = Transaction::query()
                     ->whereIn('user_id', $this->transactionOwnerIds())
-                    ->find($transactionId);
+                    ->whereKey($transactionId);
+                $branchContext->scope($transactionQuery, $request->user());
+                $transaction = $transactionQuery->firstOrFail();
                 if ($transaction) {
                     abort_if(
                         $transaction->collection_id !== null,
@@ -603,7 +614,7 @@ class CashTransactionController extends Controller
         ]);
     }
 
-    public function showPosted(Request $request, int $transactionId)
+    public function showPosted(Request $request, int $transactionId, BranchContext $branchContext)
     {
         $cashAccountIds = DB::table('accounts')
             ->where(function ($query): void {
@@ -617,7 +628,7 @@ class CashTransactionController extends Controller
             })
             ->pluck('id');
 
-        $transaction = Transaction::query()
+        $transactionQuery = Transaction::query()
             ->whereIn('user_id', $this->transactionOwnerIds())
             ->where('type', '!=', 'other')
             ->whereNull('collection_id')
@@ -626,8 +637,9 @@ class CashTransactionController extends Controller
                 'creator:id,name',
                 'entries.account:id,code,name',
                 'entries.tableable',
-            ])
-            ->findOrFail($transactionId);
+            ]);
+        $branchContext->scope($transactionQuery, $request->user());
+        $transaction = $transactionQuery->findOrFail($transactionId);
 
         $totalAmount = $transaction->entries->reduce(
             fn (string $total, TransactionEntry $entry): string => DecimalAmount::add(

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreCustomerDebtCollectionRequest;
 use App\Models\Client;
 use App\Services\CustomerDebtCollectionService;
+use App\Support\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Throwable;
 
 class CustomerDebtPaymentController extends Controller
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function preview(
         Request $request,
         int $clientId,
@@ -51,8 +56,10 @@ class CustomerDebtPaymentController extends Controller
             return response()->json([]);
         }
 
-        $clients = Client::query()
-            ->where('user_id', $request->user()->ownerId())
+        $clientsQuery = Client::query()
+            ->where('user_id', $request->user()->ownerId());
+        $this->branchContext->scope($clientsQuery, $request->user());
+        $clients = $clientsQuery
             ->where(function ($query) use ($keyword): void {
                 $query->where('name', 'like', "%{$keyword}%")
                     ->orWhere('phone', 'like', "%{$keyword}%")

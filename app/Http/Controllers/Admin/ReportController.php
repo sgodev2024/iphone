@@ -144,7 +144,8 @@ class ReportController extends Controller
 
     private function inventoryStorageQuery()
     {
-        return Storage::query()->visibleTo(Auth::user());
+        return app(\App\Support\BranchContext::class)
+            ->scopeStorages(Storage::query(), Auth::user());
     }
 
     private function resolveInitialInventoryStorage(Collection $storages): ?Storage
@@ -267,10 +268,11 @@ class ReportController extends Controller
     {
         try {
             $title = 'Báo cáo lợi nhuận';
-            $storages = Storage::orderBy('name', 'asc')->get();
-            $storage = Storage::first();
-            $storage_id = $storage->id;
-            $profits = $this->profitService->profitReport(1, $storage_id);
+            $storages = $this->inventoryStorageQuery()->orderBy('name', 'asc')->get();
+            $storage = $this->resolveInitialInventoryStorage($storages);
+            $profits = $storage
+                ? $this->profitService->profitReport(Auth::user(), 1, $storage->id)
+                : [];
             return view('admin.profit.index', compact('title', 'profits', 'storages'));
         } catch (Exception $e) {
             Log::error('Failed to get Profit Report: ' . $e->getMessage());
@@ -291,7 +293,8 @@ class ReportController extends Controller
                 return response()->json(['error' => 'Vui lòng chọn ngày bắt đầu và kết thúc'], 400);
             }
 
-            $profits = $this->profitService->profitReport($filter, $storage_id, $start_date, $end_date);
+            $storage = $this->inventoryStorageQuery()->findOrFail((int) $storage_id);
+            $profits = $this->profitService->profitReport(Auth::user(), $filter, $storage->id, $start_date, $end_date);
 
             return response()->json([
                 'profits' => $profits,
@@ -332,7 +335,7 @@ class ReportController extends Controller
     public function getProfitReportByFilterPDF(Request $request)
     {
         try {
-            $storage = Storage::findOrFail($request->input('storage_id'));
+            $storage = $this->inventoryStorageQuery()->findOrFail($request->input('storage_id'));
             $filter = (string) $request->input('filter');
             $pdf = PDF::loadView('admin.profit.myPDF', [
                 'listprofit' => $this->aggregateProfitByProduct($this->filteredProfitDetails($request)),
@@ -351,8 +354,10 @@ class ReportController extends Controller
 
     private function filteredProfitDetails(Request $request): Collection
     {
+        $storage = $this->inventoryStorageQuery()->findOrFail((int) $request->input('storage_id'));
         $query = $this->profitDetailsQuery()
-            ->where('storage_id', $request->input('storage_id'));
+            ->where('storage_id', $storage->id)
+            ->whereHas('order', fn ($orderQuery) => $orderQuery->where('branch_id', $storage->branch_id));
 
         match ((string) $request->input('filter')) {
             '1' => $query->whereDate('created_at', Carbon::today()),
@@ -373,7 +378,10 @@ class ReportController extends Controller
     private function profitDetailsQuery()
     {
         return OrderDetail::query()
-            ->whereHas('order', fn ($query) => $query->where('status', 1))
+            ->whereHas('order', function ($query): void {
+                $query->where('status', 1);
+                app(\App\Support\BranchContext::class)->scope($query, Auth::user());
+            })
             ->with(['product', 'productImei.importDetail', 'order.orderDetails']);
     }
 

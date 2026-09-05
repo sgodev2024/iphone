@@ -5,11 +5,13 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\BankVoucher;
 use App\Models\User;
+use App\Support\BranchContext;
 use App\Support\DecimalAmount;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -17,6 +19,10 @@ use Throwable;
 
 class GenericBankVoucherService
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function create(User $actor, array $data): BankVoucher
     {
         $this->rejectAuthoritativeFields($data);
@@ -40,6 +46,13 @@ class GenericBankVoucherService
 
         $transactionDate = $this->normalizeDate((string) ($data['transaction_date'] ?? ''));
         $ownerId = (int) $actor->ownerId();
+        $branchAware = Schema::hasColumn('bank_vouchers', 'branch_id');
+        $branchId = $branchAware
+            ? $this->branchContext->resolveWriteBranch(
+                $actor,
+                isset($data['branch_id']) ? (int) $data['branch_id'] : null
+            )
+            : null;
         $bankAccount = $this->resolveBankAccount((int) ($data['bank_account_id'] ?? 0));
         $storedAttachment = $this->storeAttachment($data['attachment'] ?? null);
 
@@ -47,6 +60,8 @@ class GenericBankVoucherService
             return DB::transaction(function () use (
                 $actor,
                 $ownerId,
+                $branchId,
+                $branchAware,
                 $direction,
                 $operation,
                 $transactionDate,
@@ -57,7 +72,7 @@ class GenericBankVoucherService
             ): BankVoucher {
                 User::query()->whereKey($ownerId)->lockForUpdate()->firstOrFail();
 
-                return BankVoucher::create([
+                $attributes = [
                     'owner_id' => $ownerId,
                     'voucher_number' => $this->nextVoucherNumber($ownerId, $direction),
                     'direction' => $direction,
@@ -71,7 +86,12 @@ class GenericBankVoucherService
                     'attachment' => $storedAttachment,
                     'accounting_status' => BankVoucher::STATUS_PENDING_ACCOUNTING,
                     'created_by' => (int) $actor->id,
-                ]);
+                ];
+                if ($branchAware) {
+                    $attributes['branch_id'] = $branchId;
+                }
+
+                return BankVoucher::create($attributes);
             }, 3)->fresh(['bankAccount', 'creator']);
         } catch (Throwable $exception) {
             if ($storedAttachment !== null) {

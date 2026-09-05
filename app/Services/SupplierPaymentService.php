@@ -8,15 +8,21 @@ use App\Models\ImportCoupon;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class SupplierPaymentService
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function pay(User $actor, array $data): array
     {
         $ownerId = (int) $actor->ownerId();
@@ -32,18 +38,24 @@ class SupplierPaymentService
                 $payloadHash,
                 $idempotencyKey
             ): array {
-                $importCoupon = ImportCoupon::query()
+                $importQuery = ImportCoupon::query()
+                    ->with('storage')
                     ->whereKey($payload['import_id'])
-                    ->where('user_id', $ownerId)
-                    ->lockForUpdate()
-                    ->firstOrFail();
+                    ->where('user_id', $ownerId);
+                $this->branchContext->scopeThroughStorage($importQuery, $actor);
+                $importCoupon = $importQuery->lockForUpdate()->firstOrFail();
+                $branchId = $this->sourceBranchId($importCoupon);
 
                 $existing = Transaction::query()
                     ->where('user_id', $ownerId)
+                    ->when(
+                        $this->branchAware(),
+                        fn ($query) => $query->where('branch_id', $branchId)
+                    )
                     ->where('idempotency_key', $idempotencyKey)
                     ->first();
 
-                $ledger = $this->validatedLedger($importCoupon, $ownerId);
+                $ledger = $this->validatedLedger($importCoupon, $ownerId, $branchId);
 
                 if ($existing) {
                     return $this->replayResult(
@@ -80,7 +92,7 @@ class SupplierPaymentService
                     ? $this->resolveBankAccount($payload['bank_account_id'])
                     : $this->resolveRequiredActiveAccount('111', 'tài khoản tiền mặt');
                 $reference = $this->paymentReference((int) $importCoupon->id, $idempotencyKey);
-                $transaction = Transaction::create([
+                $transactionData = [
                     'user_id' => $ownerId,
                     'transaction_date' => $payload['transaction_date'],
                     'description' => "Thanh toán NCC cho phiếu nhập #{$importCoupon->id}",
@@ -91,7 +103,13 @@ class SupplierPaymentService
                     'status' => Transaction::STATUS_COMPLETED,
                     'idempotency_key' => $idempotencyKey,
                     'idempotency_hash' => $payloadHash,
-                ]);
+                ];
+
+                if ($this->branchAware()) {
+                    $transactionData['branch_id'] = $branchId;
+                }
+
+                $transaction = Transaction::create($transactionData);
 
                 $transaction->entries()->create([
                     'account_id' => $payableAccount->id,
@@ -110,26 +128,33 @@ class SupplierPaymentService
                         : 'Chi tiền mặt thanh toán nhà cung cấp',
                 ]);
 
-                $ledgerAfter = $this->validatedLedger($importCoupon, $ownerId);
+                $ledgerAfter = $this->validatedLedger($importCoupon, $ownerId, $branchId);
                 $this->syncImportAggregates($importCoupon, $ledgerAfter);
 
                 return $this->result($transaction, $importCoupon->fresh(), $ledgerAfter, false);
             }, 3);
         } catch (UniqueConstraintViolationException $exception) {
-            $existing = Transaction::query()
+            $existingQuery = Transaction::query()
                 ->where('user_id', $ownerId)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
+                ->where('idempotency_key', $idempotencyKey);
+            $this->branchContext->scope($existingQuery, $actor);
+            $existing = $existingQuery->first();
 
             if (! $existing) {
                 throw $exception;
             }
 
-            $importCoupon = ImportCoupon::query()
+            $importQuery = ImportCoupon::query()
+                ->with('storage')
                 ->whereKey($payload['import_id'])
-                ->where('user_id', $ownerId)
-                ->firstOrFail();
-            $ledger = $this->validatedLedger($importCoupon, $ownerId);
+                ->where('user_id', $ownerId);
+            $this->branchContext->scopeThroughStorage($importQuery, $actor);
+            $importCoupon = $importQuery->firstOrFail();
+            $ledger = $this->validatedLedger(
+                $importCoupon,
+                $ownerId,
+                $this->sourceBranchId($importCoupon)
+            );
 
             return $this->replayResult(
                 $existing,
@@ -144,31 +169,43 @@ class SupplierPaymentService
     public function summary(User $actor, int $importCouponId): array
     {
         $ownerId = (int) $actor->ownerId();
-        $importCoupon = ImportCoupon::query()
+        $importQuery = ImportCoupon::query()
+            ->with('storage')
             ->whereKey($importCouponId)
-            ->where('user_id', $ownerId)
-            ->firstOrFail();
+            ->where('user_id', $ownerId);
+        $this->branchContext->scopeThroughStorage($importQuery, $actor);
+        $importCoupon = $importQuery->firstOrFail();
 
-        return $this->summaryResult($this->validatedLedger($importCoupon, $ownerId));
+        return $this->summaryResult($this->validatedLedger(
+            $importCoupon,
+            $ownerId,
+            $this->sourceBranchId($importCoupon)
+        ));
     }
 
     public function outstandingImports(User $actor, int $companyId): array
     {
         $ownerId = (int) $actor->ownerId();
 
-        Company::query()
+        $companyQuery = Company::query()
             ->whereKey($companyId)
-            ->where('user_id', $ownerId)
-            ->firstOrFail();
+            ->where('user_id', $ownerId);
+        $this->branchContext->scope($companyQuery, $actor);
+        $company = $companyQuery->firstOrFail();
+        $branchId = $this->branchAware() ? (int) $company->branch_id : null;
 
-        return ImportCoupon::query()
+        $importsQuery = ImportCoupon::query()
+            ->with('storage')
             ->where('user_id', $ownerId)
-            ->where('companies_id', $companyId)
+            ->where('companies_id', $companyId);
+        $this->branchContext->scopeThroughStorage($importsQuery, $actor);
+
+        return $importsQuery
             ->orderBy('id')
-            ->get(['id', 'user_id', 'coupon_code', 'companies_id', 'total'])
-            ->map(function (ImportCoupon $importCoupon) use ($ownerId): ?array {
+            ->get(['id', 'user_id', 'storage_id', 'coupon_code', 'companies_id', 'total'])
+            ->map(function (ImportCoupon $importCoupon) use ($ownerId, $branchId): ?array {
                 try {
-                    $ledger = $this->validatedLedger($importCoupon, $ownerId);
+                    $ledger = $this->validatedLedger($importCoupon, $ownerId, $branchId);
                 } catch (ValidationException) {
                     return null;
                 }
@@ -228,11 +265,15 @@ class SupplierPaymentService
         ];
     }
 
-    private function validatedLedger(ImportCoupon $importCoupon, int $ownerId): array
+    private function validatedLedger(ImportCoupon $importCoupon, int $ownerId, ?int $branchId): array
     {
         $company = Company::query()
             ->whereKey((int) $importCoupon->companies_id)
             ->where('user_id', $ownerId)
+            ->when(
+                $this->branchAware(),
+                fn ($query) => $query->where('branch_id', $branchId)
+            )
             ->first();
 
         if (! $company) {
@@ -246,6 +287,10 @@ class SupplierPaymentService
         $purchaseReference = $this->purchaseReference((int) $importCoupon->id);
         $purchases = Transaction::query()
             ->where('user_id', $ownerId)
+            ->when(
+                $this->branchAware(),
+                fn ($query) => $query->where('branch_id', $branchId)
+            )
             ->where('type', 'expense')
             ->where('document_type', 'import')
             ->where('reference_number', $purchaseReference)
@@ -296,6 +341,10 @@ class SupplierPaymentService
         $paymentPrefix = $this->paymentPrefix((int) $importCoupon->id);
         $payments = Transaction::query()
             ->where('user_id', $ownerId)
+            ->when(
+                $this->branchAware(),
+                fn ($query) => $query->where('branch_id', $branchId)
+            )
             ->where('type', 'expense')
             ->where('document_type', 'import_payment')
             ->where('reference_number', 'like', $paymentPrefix.'%')
@@ -325,6 +374,28 @@ class SupplierPaymentService
             'paid' => $paid,
             'remaining' => $remaining,
         ];
+    }
+
+    private function branchAware(): bool
+    {
+        return Schema::hasColumn('transactions', 'branch_id');
+    }
+
+    private function sourceBranchId(ImportCoupon $importCoupon): ?int
+    {
+        if (! $this->branchAware()) {
+            return null;
+        }
+
+        $branchId = $importCoupon->storage?->branch_id;
+
+        if ($branchId === null) {
+            throw ValidationException::withMessages([
+                'import_coupon_id' => 'Kho của phiếu nhập chưa có Branch nên không thể thanh toán.',
+            ]);
+        }
+
+        return (int) $branchId;
     }
 
     private function validatedPaymentDebit(

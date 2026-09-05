@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Transaction;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class CustomerSaleBackfillService
@@ -122,7 +123,15 @@ class CustomerSaleBackfillService
             $revenueAccount = $analysis['accounts']['5111'];
 
             foreach ($analysis['orders'] as $order) {
-                $transaction = Transaction::create([
+                $branchAware = Schema::hasColumn('transactions', 'branch_id');
+
+                if ($branchAware && $order->branch_id === null) {
+                    throw new RuntimeException(
+                        'Order #'.$order->id.' has no Branch snapshot and cannot be backfilled.'
+                    );
+                }
+
+                $transactionData = [
                     'user_id' => (int) $order->user_id,
                     'transaction_date' => $order->created_at->toDateString(),
                     'description' => "Bán hàng theo đơn #{$order->id}",
@@ -131,7 +140,13 @@ class CustomerSaleBackfillService
                     'reference_number' => (string) $order->id,
                     'created_by' => $analysis['batch']['sale_created_by'],
                     'status' => Transaction::STATUS_COMPLETED,
-                ]);
+                ];
+
+                if ($branchAware) {
+                    $transactionData['branch_id'] = (int) $order->branch_id;
+                }
+
+                $transaction = Transaction::create($transactionData);
 
                 $transaction->entries()->create([
                     'account_id' => $receivableAccount->id,
@@ -450,6 +465,8 @@ class CustomerSaleBackfillService
         $prefix = "Sale transaction #{$transaction->id} for order #{$order->id}";
 
         if ((int) $transaction->user_id !== (int) $order->user_id
+            || (Schema::hasColumn('transactions', 'branch_id')
+                && (int) $transaction->branch_id !== (int) $order->branch_id)
             || (int) $transaction->created_by !== $batch['sale_created_by']
             || $transaction->transaction_date?->toDateString() !== $order->created_at?->toDateString()
             || (string) $transaction->description !== "Bán hàng theo đơn #{$order->id}"
@@ -528,6 +545,8 @@ class CustomerSaleBackfillService
 
         if ($transaction->type !== $expectedType
             || (int) $transaction->user_id !== $batch['owner_id']
+            || (Schema::hasColumn('transactions', 'branch_id')
+                && (int) $transaction->branch_id !== (int) $order->branch_id)
             || (int) $transaction->created_by !== $batch['payment_created_by']
             || $transaction->transaction_date?->toDateString() !== $order->created_at?->toDateString()
             || $transaction->created_at?->toDateTimeString() !== $order->created_at?->toDateTimeString()

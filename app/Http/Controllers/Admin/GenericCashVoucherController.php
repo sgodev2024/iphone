@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreGenericCashVoucherRequest;
 use App\Models\CashVoucher;
 use App\Services\GenericCashVoucherService;
+use App\Support\BranchContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class GenericCashVoucherController extends Controller
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function store(
         StoreGenericCashVoucherRequest $request,
         GenericCashVoucherService $service
@@ -61,6 +66,10 @@ class GenericCashVoucherController extends Controller
     private function ownedVoucher(CashVoucher $voucher): CashVoucher
     {
         abort_unless((int) $voucher->owner_id === (int) request()->user()->ownerId(), 404);
+        $this->branchContext->authorize(
+            request()->user(),
+            $voucher->branch_id === null ? null : (int) $voucher->branch_id
+        );
 
         return $voucher;
     }

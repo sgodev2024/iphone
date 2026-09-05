@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\MoneyAccount;
@@ -16,10 +17,12 @@ use App\Models\User;
 use App\Services\CustomerDebtCollectionService;
 use App\Services\BankActivityReadService;
 use App\Services\SupplierPaymentService;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -77,7 +80,8 @@ class BankTransactionController extends Controller
     public function save(
         Request $request,
         CustomerDebtCollectionService $collectionService,
-        SupplierPaymentService $supplierPaymentService
+        SupplierPaymentService $supplierPaymentService,
+        BranchContext $branchContext
     )
     {
         $type = 'bank';
@@ -86,6 +90,9 @@ class BankTransactionController extends Controller
         $contraEntry = null;
 
         $transactionId = $request->input('transactionId', null);
+        $branches = $request->user()->isAdministrator() && Schema::hasTable('branches')
+            ? Branch::query()->where('user_id', $request->user()->id)->orderBy('name')->get(['id', 'name'])
+            : collect();
 
         // Lấy danh sách tài khoản ngân hàng (con của 112)
         $moneyAccounts = Account::query()
@@ -110,10 +117,11 @@ class BankTransactionController extends Controller
         }
 
         if (!empty($transactionId)) {
-            $transaction = Transaction::query()
+            $transactionQuery = Transaction::query()
                 ->whereIn('user_id', $this->transactionOwnerIds())
-                ->with('entries')
-                ->findOrFail($transactionId);
+                ->with('entries');
+            $branchContext->scope($transactionQuery, $request->user());
+            $transaction = $transactionQuery->findOrFail($transactionId);
 
             abort_if(
                 $transaction->collection_id !== null,
@@ -147,6 +155,7 @@ class BankTransactionController extends Controller
             'moneyAccounts',
             'collectionMoneyAccounts',
             'supplierMoneyAccounts',
+            'branches',
             'transaction',
             'mainEntry',
             'contraEntry'
@@ -548,7 +557,7 @@ class BankTransactionController extends Controller
         });
     }
 
-    public function destroy(Request $request)
+    public function destroy(Request $request, BranchContext $branchContext)
     {
         $request->validate([
             'ids' => 'required|array',
@@ -559,9 +568,11 @@ class BankTransactionController extends Controller
             $transactionIds = $request->input('ids');
 
             foreach ($transactionIds as $transactionId) {
-                $transaction = Transaction::query()
+                $transactionQuery = Transaction::query()
                     ->whereIn('user_id', $this->transactionOwnerIds())
-                    ->find($transactionId);
+                    ->whereKey($transactionId);
+                $branchContext->scope($transactionQuery, $request->user());
+                $transaction = $transactionQuery->firstOrFail();
                 if ($transaction) {
                     abort_if(
                         $transaction->collection_id !== null,

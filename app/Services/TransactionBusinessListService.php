@@ -2,15 +2,48 @@
 
 namespace App\Services;
 
+use App\Models\User;
+use App\Support\BranchContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class TransactionBusinessListService
 {
-    public function entries(array $ownerIds, Collection $moneyAccountIds, string $from, string $to): Collection
+    public function __construct(private BranchContext $branchContext)
     {
-        return DB::table('transactions as t')
-            ->whereIn('t.user_id', $ownerIds)
+    }
+
+    public function entries(
+        User|array $actor,
+        array|Collection $ownerIds,
+        Collection|string $moneyAccountIds,
+        string $from,
+        ?string $to = null
+    ): Collection
+    {
+        if (is_array($actor)) {
+            if (Schema::hasColumn('transactions', 'branch_id')) {
+                throw new \LogicException('A User actor is required for Branch-scoped transaction reads.');
+            }
+
+            [$actor, $ownerIds, $moneyAccountIds, $from, $to] = [
+                null,
+                $actor,
+                $ownerIds,
+                $moneyAccountIds,
+                $from,
+            ];
+        }
+
+        $query = DB::table('transactions as t')
+            ->whereIn('t.user_id', $ownerIds);
+
+        if ($actor instanceof User) {
+            $this->branchContext->scope($query, $actor, 't.branch_id');
+        }
+
+        return $query
             ->join('transaction_entries as te', 'te.transaction_id', '=', 't.id')
             ->join('accounts as ma', 'ma.id', '=', 'te.account_id')
             ->join('transaction_entries as te_contra', function ($join): void {

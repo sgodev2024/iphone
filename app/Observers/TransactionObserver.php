@@ -15,6 +15,7 @@ class TransactionObserver
             'transaction_date',
             'status',
             'user_id',
+            'branch_id',
         ])) {
             return;
         }
@@ -29,6 +30,8 @@ class TransactionObserver
         $newStatus = $transaction->getAttribute('status');
         $oldOwnerId = $transaction->getOriginal('user_id');
         $newOwnerId = $transaction->getAttribute('user_id');
+        $oldBranchId = $transaction->getOriginal('branch_id');
+        $newBranchId = $transaction->getAttribute('branch_id');
         $contributions = [];
 
         foreach ($transaction->entries()->get() as $entry) {
@@ -39,6 +42,7 @@ class TransactionObserver
                 'transactionDate' => $oldDate,
                 'transactionStatus' => $oldStatus,
                 'transactionOwnerId' => $oldOwnerId,
+                'transactionBranchId' => $oldBranchId,
             ];
             $contributions[] = [
                 'accountId' => (int) $entry->account_id,
@@ -47,6 +51,7 @@ class TransactionObserver
                 'transactionDate' => $newDate,
                 'transactionStatus' => $newStatus,
                 'transactionOwnerId' => $newOwnerId,
+                'transactionBranchId' => $newBranchId,
             ];
         }
 
@@ -68,6 +73,7 @@ class TransactionObserver
             'transactionDate' => $transactionDate,
             'transactionStatus' => $transaction->getAttribute('status'),
             'transactionOwnerId' => $transaction->getAttribute('user_id'),
+            'transactionBranchId' => $transaction->getAttribute('branch_id'),
         ])->all();
 
         app(CustomerDebtSnapshotInvalidator::class)->invalidateMany($contributions);

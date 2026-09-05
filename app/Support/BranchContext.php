@@ -2,9 +2,13 @@
 
 namespace App\Support;
 
+use App\Models\Branch;
 use App\Models\Storage;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 final class BranchContext
@@ -26,13 +30,37 @@ final class BranchContext
         return (int) $user->branch_id;
     }
 
-    public function scope(Builder $query, User $user, string $column = 'branch_id'): Builder
+    public function scope(Builder|QueryBuilder $query, User $user, string $column = 'branch_id'): Builder|QueryBuilder
     {
-        if ($this->isGlobal($user)) {
+        if (! $this->hasBranchColumn($query, $column) || $this->isGlobal($user)) {
             return $query;
         }
 
         return $query->where($column, $this->branchId($user));
+    }
+
+    public function resolveWriteBranch(User $user, ?int $requestedBranchId = null): int
+    {
+        if (! Schema::hasTable('branches')) {
+            return (int) ($user->branch_id ?? 0);
+        }
+
+        if (! $this->isGlobal($user)) {
+            return $this->branchId($user);
+        }
+
+        if ($requestedBranchId === null
+            || ! Branch::query()
+                ->whereKey($requestedBranchId)
+                ->where('user_id', $user->id)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'branch_id' => ['Cửa hàng không hợp lệ hoặc không thuộc phạm vi quản trị.'],
+            ]);
+        }
+
+        return $requestedBranchId;
     }
 
     public function authorize(User $user, ?int $branchId): void
@@ -48,8 +76,18 @@ final class BranchContext
 
     public function scopeStorages(Builder $query, User $user): Builder
     {
+        if (! Schema::hasColumn('storages', 'branch_id')) {
+            return $query;
+        }
+
         if ($this->isGlobal($user)) {
             return $query;
+        }
+
+        if (! Schema::hasTable('branches')) {
+            $this->branchId($user);
+
+            return $query->visibleTo($user);
         }
 
         $query->where('branch_id', $this->branchId($user));
@@ -68,8 +106,21 @@ final class BranchContext
         User $user,
         string $relation = 'storage'
     ): Builder {
+        if (! Schema::hasColumn('storages', 'branch_id')) {
+            return $query;
+        }
+
         if ($this->isGlobal($user)) {
             return $query;
+        }
+
+        if (! Schema::hasTable('branches')) {
+            $this->branchId($user);
+
+            return $query->whereHas(
+                $relation,
+                fn (Builder $storageQuery) => $storageQuery->visibleTo($user)
+            );
         }
 
         $branchId = $this->branchId($user);
@@ -90,7 +141,21 @@ final class BranchContext
 
     public function authorizeStorage(User $user, Storage $storage): void
     {
+        if (! Schema::hasColumn('storages', 'branch_id')) {
+            return;
+        }
+
         if ($this->isGlobal($user)) {
+            return;
+        }
+
+        if (! Schema::hasTable('branches')) {
+            $this->branchId($user);
+            abort_unless(
+                Storage::query()->visibleTo($user)->whereKey($storage->id)->exists(),
+                Response::HTTP_NOT_FOUND
+            );
+
             return;
         }
 
@@ -102,4 +167,48 @@ final class BranchContext
             abort(Response::HTTP_NOT_FOUND);
         }
     }
+
+    private function hasBranchColumn(Builder|QueryBuilder $query, string $column): bool
+    {
+        $table = $query instanceof Builder
+            ? $query->getModel()->getTable()
+            : (string) $query->from;
+        $table = preg_split('/\s+(?:as\s+)?/i', trim($table))[0] ?? $table;
+        $column = str_contains($column, '.')
+            ? substr($column, strrpos($column, '.') + 1)
+            : $column;
+
+        $connection = $query instanceof Builder
+            ? $query->getQuery()->getConnection()
+            : $query->getConnection();
+        $driver = $connection->getDriverName();
+        $pdo = $connection->getPdo();
+
+        if ($driver === 'sqlite'
+            && preg_match('/^[A-Za-z0-9_]+$/', $table) === 1
+        ) {
+            $statement = $pdo->query('PRAGMA table_info("'.$table.'")');
+
+            foreach ($statement?->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $definition) {
+                if (($definition['name'] ?? null) === $column) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if ($driver === 'mysql') {
+            $statement = $pdo->prepare(
+                'SELECT 1 FROM information_schema.columns '
+                .'WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1'
+            );
+            $statement->execute([$table, $column]);
+
+            return $statement->fetchColumn() !== false;
+        }
+
+        return Schema::connection($connection->getName())->hasColumn($table, $column);
+    }
+
 }

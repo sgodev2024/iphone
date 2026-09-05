@@ -11,6 +11,17 @@
                 <input type="hidden" name="transaction_id" value="{{ optional($transaction)->id }}">
                 <input type="hidden" name="entry_id" value="{{ optional($mainEntry)->id }}">
                 @if ($type === 'cash' && empty($transaction))
+                    @if (auth()->user()?->isAdministrator())
+                        <div class='p-3 pb-0'>
+                            <label class='form-label required' for='branch-id'>Cửa hàng</label>
+                            <select class='form-select' id='branch-id' name='branch_id' required>
+                                <option value=''>Chọn cửa hàng</option>
+                                @foreach ($branches ?? collect() as $branch)
+                                    <option value='{{ $branch->id }}'>{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     <input type="hidden" id="collection-idempotency-key" name="idempotency_key">
                     <div class="border-bottom p-3 bg-light cash-unified-header">
                         <div class="row g-3">
@@ -37,6 +48,17 @@
                         </div>
                     </div>
                 @elseif ($type === 'bank' && empty($transaction))
+                    @if (auth()->user()?->isAdministrator())
+                        <div class='p-3 pb-0'>
+                            <label class='form-label required' for='branch-id'>Cửa hàng</label>
+                            <select class='form-select' id='branch-id' name='branch_id' required>
+                                <option value=''>Chọn cửa hàng</option>
+                                @foreach ($branches ?? collect() as $branch)
+                                    <option value='{{ $branch->id }}'>{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     <input type="hidden" id="collection-idempotency-key" name="idempotency_key">
                     <div class="border-bottom p-3 bg-light cash-unified-header">
                         <div class="row g-3">
@@ -1128,6 +1150,7 @@
                     formData.set('description', $('[name="description"]').val());
                     if (fileInput?.files[0]) formData.set('attachment', fileInput.files[0]);
                     requestUrl = isUnifiedBank ? bankVoucherStoreUrl : fullUrl;
+                    if ($('#branch-id').length) formData.set('branch_id', $('#branch-id').val());
                 } else {
                     formData = new FormData(this);
                     const objId = $('#object_id').val();

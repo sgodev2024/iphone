@@ -8,10 +8,14 @@ use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductStorage;
+use App\Models\Storage;
+use App\Models\User;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class ProfitService
 {
@@ -21,21 +25,35 @@ class ProfitService
         protected ImportCoupon $importCoupon,
         protected ImportDetail $importDetail,
         protected Product $product,
-        protected ProductStorage $productStorage
+        protected ProductStorage $productStorage,
+        protected BranchContext $branchContext
     ) {}
 
     public function profitReport(
+        User|string|int $actor,
         $period,
-        $storageId,
+        $storageId = null,
         ?string $startDate = null,
         ?string $endDate = null
     ): array {
         try {
+            if (! $actor instanceof User) {
+                [$actor, $period, $storageId] = [Auth::user(), $actor, $period];
+            }
+            if (! $actor instanceof User) {
+                throw new Exception('Authenticated actor is required.');
+            }
+
+            $storage = Storage::query()->findOrFail((int) $storageId);
+            $this->branchContext->authorizeStorage($actor, $storage);
+
             $details = $this->orderDetail
                 ->newQuery()
                 ->where('storage_id', $storageId)
-                ->whereHas('order', function (Builder $query) use ($period, $startDate, $endDate): void {
-                    $query->where('status', 1);
+                ->whereHas('order', function (Builder $query) use ($actor, $storage, $period, $startDate, $endDate): void {
+                    $query->where('status', 1)
+                        ->where('branch_id', $storage->branch_id);
+                    $this->branchContext->scope($query, $actor);
                     $this->applyPeriod($query, (string) $period, $startDate, $endDate);
                 })
                 ->with([

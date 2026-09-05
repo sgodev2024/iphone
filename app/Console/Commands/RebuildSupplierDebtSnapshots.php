@@ -12,6 +12,7 @@ class RebuildSupplierDebtSnapshots extends Command
     protected $signature = 'accounting:rebuild-supplier-debt-snapshots
                             {--from-year= : Năm ledger đầu tiên có thể đã thay đổi}
                             {--owner= : Chỉ rebuild canonical owner này}
+                            {--branch= : Chỉ rebuild Branch này}
                             {--chunk=1000 : Số Company mỗi chunk}';
 
     protected $description = 'Cascade rebuild opening TK331 sau năm ledger đã thay đổi';
@@ -35,12 +36,30 @@ class RebuildSupplierDebtSnapshots extends Command
         $this->info("Ledger từ năm {$ledgerYear} được xem lại; rebuild openings từ ".($ledgerYear + 1).' trở đi.');
 
         foreach ($ownerIds as $ownerId) {
-            try {
-                $result = $service->rebuildOwnerFromLedgerYear((int) $ownerId, $ledgerYear, $chunk);
-                $this->line("Owner {$ownerId}: ".json_encode($result, JSON_UNESCAPED_UNICODE));
-            } catch (Throwable $exception) {
-                $failed++;
-                $this->error("Owner {$ownerId}: {$exception->getMessage()}");
+            $branchIds = $this->option('branch') !== null
+                ? collect([(int) $this->option('branch')])
+                : collect([null])->merge(
+                    DB::table('companies')
+                        ->where('user_id', $ownerId)
+                        ->whereNotNull('branch_id')
+                        ->distinct()
+                        ->orderBy('branch_id')
+                        ->pluck('branch_id')
+                );
+            foreach ($branchIds as $branchId) {
+                try {
+                    $result = $service->rebuildOwnerFromLedgerYear(
+                        (int) $ownerId,
+                        $ledgerYear,
+                        $chunk,
+                        $branchId === null ? null : (int) $branchId,
+                        true
+                    );
+                    $this->line('Owner '.$ownerId.', Branch '.($branchId ?? 'NULL').': '.json_encode($result, JSON_UNESCAPED_UNICODE));
+                } catch (Throwable $exception) {
+                    $failed++;
+                    $this->error('Owner '.$ownerId.', Branch '.($branchId ?? 'NULL').': '.$exception->getMessage());
+                }
             }
         }
 

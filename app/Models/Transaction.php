@@ -19,6 +19,7 @@ class Transaction extends Model
 
     protected $fillable = [
         'user_id',
+        'branch_id',
         'transaction_date',
         'description',
         'reference_number',
@@ -50,6 +51,11 @@ class Transaction extends Model
     public function entries(): HasMany
     {
         return $this->hasMany(TransactionEntry::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function customerDebtCollection(): BelongsTo
@@ -86,6 +92,7 @@ class Transaction extends Model
     }
 
     protected $casts = [
+        'branch_id' => 'integer',
         'transaction_date' => 'date',
     ];
 }

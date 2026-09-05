@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerDebtCollection;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class CustomerDebtCollectionController extends Controller
 {
+    public function __construct(private BranchContext $branchContext)
+    {
+    }
+
     public function index(Request $request)
     {
         $request->validate([
@@ -26,8 +31,10 @@ class CustomerDebtCollectionController extends Controller
         $customer = trim((string) $request->query('customer'));
         $collectionNumber = trim((string) $request->query('collection_number'));
 
-        $collections = CustomerDebtCollection::query()
-            ->where('owner_id', $ownerId)
+        $collectionsQuery = CustomerDebtCollection::query()
+            ->where('owner_id', $ownerId);
+        $this->branchContext->scope($collectionsQuery, $request->user());
+        $collections = $collectionsQuery
             ->with([
                 'client:id,code,name,phone',
                 'creator:id,name',
@@ -60,8 +67,10 @@ class CustomerDebtCollectionController extends Controller
 
     public function show(Request $request, int $collection)
     {
-        $collection = CustomerDebtCollection::query()
-            ->where('owner_id', (int) $request->user()->ownerId())
+        $collectionQuery = CustomerDebtCollection::query()
+            ->where('owner_id', (int) $request->user()->ownerId());
+        $this->branchContext->scope($collectionQuery, $request->user());
+        $collection = $collectionQuery
             ->with([
                 'client:id,code,name,phone',
                 'creator:id,name',
@@ -87,9 +96,10 @@ class CustomerDebtCollectionController extends Controller
 
     public function attachment(Request $request, int $collection)
     {
-        $collection = CustomerDebtCollection::query()
-            ->where('owner_id', (int) $request->user()->ownerId())
-            ->findOrFail($collection);
+        $collectionQuery = CustomerDebtCollection::query()
+            ->where('owner_id', (int) $request->user()->ownerId());
+        $this->branchContext->scope($collectionQuery, $request->user());
+        $collection = $collectionQuery->findOrFail($collection);
 
         abort_if($collection->attachment === null, Response::HTTP_NOT_FOUND);
 

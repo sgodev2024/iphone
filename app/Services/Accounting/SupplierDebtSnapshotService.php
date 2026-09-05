@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class SupplierDebtSnapshotService
@@ -19,18 +20,24 @@ class SupplierDebtSnapshotService
         int $ownerId,
         int $fiscalYear,
         int $chunkSize = 1000,
-        ?string $nameFilter = null
+        ?string $nameFilter = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         $this->validateFiscalYear($fiscalYear);
-        $this->buildOwnerYear($ownerId, $fiscalYear, $chunkSize, $nameFilter);
+        $this->buildOwnerYear($ownerId, $fiscalYear, $chunkSize, $nameFilter, $branchId, $branchScoped);
 
         return DB::table('companies as c')
-            ->join('supplier_debt_yearly_snapshots as s', function ($join) use ($ownerId, $fiscalYear): void {
+            ->join('supplier_debt_yearly_snapshots as s', function ($join) use ($ownerId, $fiscalYear, $branchId, $branchScoped): void {
                 $join->on('s.company_id', '=', 'c.id')
                     ->where('s.owner_id', $ownerId)
                     ->where('s.fiscal_year', $fiscalYear);
+                if ($branchScoped) {
+                    $join->where('s.branch_id', $branchId);
+                }
             })
             ->where('c.user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('c.branch_id', $branchId))
             ->when($nameFilter !== null && trim($nameFilter) !== '', function ($query) use ($nameFilter): void {
                 $query->where('c.name', 'like', '%'.trim($nameFilter).'%');
             })
@@ -60,12 +67,24 @@ class SupplierDebtSnapshotService
             ->where('user_id', $ownerId)
             ->firstOrFail();
 
-        $this->buildCompanyChunk($ownerId, collect([(int) $company->id]), $fiscalYear);
+        $branchScoped = Schema::hasColumn('transactions', 'branch_id')
+            && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id');
+        $branchId = $branchScoped ? ($company->branch_id === null ? null : (int) $company->branch_id) : null;
+
+        $this->buildCompanyChunk(
+            $ownerId,
+            collect([(int) $company->id]),
+            $fiscalYear,
+            null,
+            $branchId,
+            $branchScoped
+        );
 
         return SupplierDebtYearlySnapshot::query()
             ->where('owner_id', $ownerId)
             ->where('company_id', $companyId)
             ->where('fiscal_year', $fiscalYear)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->firstOrFail();
     }
 
@@ -73,7 +92,9 @@ class SupplierDebtSnapshotService
         int $ownerId,
         int $fiscalYear,
         int $chunkSize = 1000,
-        ?string $nameFilter = null
+        ?string $nameFilter = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): array {
         $this->validateFiscalYear($fiscalYear);
         $accountId = $this->resolvePayableAccountId();
@@ -87,6 +108,7 @@ class SupplierDebtSnapshotService
 
         DB::table('companies')
             ->where('user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->when($nameFilter !== null && trim($nameFilter) !== '', function ($query) use ($nameFilter): void {
                 $query->where('name', 'like', '%'.trim($nameFilter).'%');
             })
@@ -95,10 +117,19 @@ class SupplierDebtSnapshotService
                 $ownerId,
                 $fiscalYear,
                 $accountId,
+                $branchId,
+                $branchScoped,
                 &$statistics
             ): void {
                 $companyIds = $companies->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
-                $chunkStatistics = $this->buildCompanyChunk($ownerId, $companyIds, $fiscalYear, $accountId);
+                $chunkStatistics = $this->buildCompanyChunk(
+                    $ownerId,
+                    $companyIds,
+                    $fiscalYear,
+                    $accountId,
+                    $branchId,
+                    $branchScoped
+                );
 
                 foreach ($statistics as $key => $value) {
                     $statistics[$key] += $chunkStatistics[$key];
@@ -111,7 +142,9 @@ class SupplierDebtSnapshotService
     public function rebuildOwnerFromLedgerYear(
         int $ownerId,
         int $ledgerYear,
-        int $chunkSize = 1000
+        int $chunkSize = 1000,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): array {
         $this->validateFiscalYear($ledgerYear);
         $openingYear = $ledgerYear + 1;
@@ -120,21 +153,26 @@ class SupplierDebtSnapshotService
             $openingYear,
             (int) SupplierDebtYearlySnapshot::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->max('fiscal_year')
         );
         $now = now();
 
         DB::table('companies')
             ->where('user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->orderBy('id')
             ->chunkById(max(1, $chunkSize), function (Collection $companies) use (
                 $ownerId,
                 $openingYear,
-                $now
+                $now,
+                $branchId,
+                $branchScoped
             ): void {
                 $companyIds = $companies->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
                 $rows = $companyIds->map(fn (int $companyId): array => [
                     'owner_id' => $ownerId,
+                    ...$this->branchAttribute('supplier_debt_snapshot_states', $branchId),
                     'company_id' => $companyId,
                     'ledger_version' => 0,
                     'dirty_from_year' => null,
@@ -142,10 +180,27 @@ class SupplierDebtSnapshotService
                     'updated_at' => $now,
                 ])->all();
 
-                DB::transaction(function () use ($rows, $ownerId, $companyIds, $openingYear): void {
-                    DB::table('supplier_debt_snapshot_states')->insertOrIgnore($rows);
+                DB::transaction(function () use (
+                    $rows,
+                    $ownerId,
+                    $companyIds,
+                    $openingYear,
+                    $branchId,
+                    $branchScoped
+                ): void {
+                    foreach ($rows as $row) {
+                        $stateQuery = DB::table('supplier_debt_snapshot_states')->where([
+                            'owner_id' => $row['owner_id'],
+                            'company_id' => $row['company_id'],
+                            ...$this->branchAttribute('supplier_debt_snapshot_states', $branchId),
+                        ]);
+                        if (! $stateQuery->exists()) {
+                            DB::table('supplier_debt_snapshot_states')->insert($row);
+                        }
+                    }
                     $states = SupplierDebtSnapshotState::query()
                         ->where('owner_id', $ownerId)
+                        ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                         ->whereIn('company_id', $companyIds)
                         ->orderBy('company_id')
                         ->lockForUpdate()
@@ -162,19 +217,31 @@ class SupplierDebtSnapshotService
                 }, 3);
             }, 'id');
 
-        return $this->buildOwnerYear($ownerId, $targetYear, $chunkSize);
+        return $this->buildOwnerYear(
+            $ownerId,
+            $targetYear,
+            $chunkSize,
+            null,
+            $branchId,
+            $branchScoped
+        );
     }
 
     public function fullLedgerOpeningNets(
         int $ownerId,
         Collection $companyIds,
-        int $fiscalYear
+        int $fiscalYear,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         return $this->aggregateTotals(
             $ownerId,
             $companyIds,
             null,
-            Carbon::create($fiscalYear, 1, 1)->toDateString()
+            Carbon::create($fiscalYear, 1, 1)->toDateString(),
+            null,
+            $branchId,
+            $branchScoped
         )->map(fn (array $totals): string => DecimalAmount::subtract(
             $totals['credit'],
             $totals['debit']
@@ -186,7 +253,10 @@ class SupplierDebtSnapshotService
         $ledgerNet = $this->fullLedgerOpeningNets(
             (int) $snapshot->owner_id,
             collect([(int) $snapshot->company_id]),
-            (int) $snapshot->fiscal_year
+            (int) $snapshot->fiscal_year,
+            $snapshot->branch_id === null ? null : (int) $snapshot->branch_id,
+            Schema::hasColumn('transactions', 'branch_id')
+                && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id')
         )->get((int) $snapshot->company_id, '0.00');
         $snapshotNet = DecimalAmount::subtract(
             (string) $snapshot->opening_credit,
@@ -200,7 +270,9 @@ class SupplierDebtSnapshotService
         int $ownerId,
         Collection $companyIds,
         int $fiscalYear,
-        ?int $accountId = null
+        ?int $accountId = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): array {
         $statistics = [
             'scanned' => $companyIds->count(),
@@ -221,21 +293,34 @@ class SupplierDebtSnapshotService
             $companyIds,
             $fiscalYear,
             $accountId,
+            $branchId,
+            $branchScoped,
             $statistics
         ): array {
             $now = now();
             $stateRows = $companyIds->map(fn (int $companyId): array => [
                 'owner_id' => $ownerId,
+                ...$this->branchAttribute('supplier_debt_snapshot_states', $branchId),
                 'company_id' => $companyId,
                 'ledger_version' => 0,
                 'dirty_from_year' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all();
-            DB::table('supplier_debt_snapshot_states')->insertOrIgnore($stateRows);
+            foreach ($stateRows as $row) {
+                $stateQuery = DB::table('supplier_debt_snapshot_states')->where([
+                    'owner_id' => $row['owner_id'],
+                    'company_id' => $row['company_id'],
+                    ...$this->branchAttribute('supplier_debt_snapshot_states', $branchId),
+                ]);
+                if (! $stateQuery->exists()) {
+                    DB::table('supplier_debt_snapshot_states')->insert($row);
+                }
+            }
 
             $states = SupplierDebtSnapshotState::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('company_id', $companyIds)
                 ->orderBy('company_id')
                 ->lockForUpdate()
@@ -248,6 +333,7 @@ class SupplierDebtSnapshotService
 
             $snapshots = SupplierDebtYearlySnapshot::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('company_id', $companyIds)
                 ->orderBy('company_id')
                 ->orderBy('fiscal_year')
@@ -265,7 +351,8 @@ class SupplierDebtSnapshotService
                 $targetSnapshot = $companySnapshots->get($fiscalYear);
                 $targetIsValid = $targetSnapshot
                     && (int) $targetSnapshot->source_version === (int) $state->ledger_version
-                    && (string) $targetSnapshot->source_through_date === Carbon::create($fiscalYear - 1, 12, 31)->toDateString()
+                    && $targetSnapshot->source_through_date?->toDateString()
+                        === Carbon::create($fiscalYear - 1, 12, 31)->toDateString()
                     && ($dirtyFrom === null || $fiscalYear < $dirtyFrom);
                 $originalVersions[$companyId] = (int) $state->ledger_version;
                 $targetExisted[$companyId] = (bool) $targetSnapshot;
@@ -339,6 +426,8 @@ class SupplierDebtSnapshotService
                     Carbon::create($year - 1, 1, 1)->toDateString(),
                     Carbon::create($year, 1, 1)->toDateString(),
                     $accountId
+                    , $branchId
+                    , $branchScoped
                 );
                 $bootstrapTotals = $this->aggregateTotals(
                     $ownerId,
@@ -346,6 +435,8 @@ class SupplierDebtSnapshotService
                     null,
                     Carbon::create($year, 1, 1)->toDateString(),
                     $accountId
+                    , $branchId
+                    , $branchScoped
                 );
 
                 foreach ($yearCompanyIds as $companyId) {
@@ -370,6 +461,7 @@ class SupplierDebtSnapshotService
                     [$openingDebit, $openingCredit] = $this->splitPayableNet($net);
                     $record = [
                         'owner_id' => $ownerId,
+                        ...$this->branchAttribute('supplier_debt_yearly_snapshots', $branchId),
                         'company_id' => $companyId,
                         'fiscal_year' => $year,
                         'opening_debit' => $openingDebit,
@@ -394,6 +486,7 @@ class SupplierDebtSnapshotService
 
             $currentVersions = SupplierDebtSnapshotState::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('company_id', array_keys($plans))
                 ->pluck('ledger_version', 'company_id');
 
@@ -403,18 +496,17 @@ class SupplierDebtSnapshotService
                 }
             }
 
-            SupplierDebtYearlySnapshot::query()->upsert(
-                $records,
-                ['owner_id', 'company_id', 'fiscal_year'],
-                [
-                    'opening_debit',
-                    'opening_credit',
-                    'source_through_date',
-                    'source_version',
-                    'calculated_at',
-                    'updated_at',
-                ]
-            );
+            foreach ($records as $record) {
+                SupplierDebtYearlySnapshot::query()->updateOrCreate(
+                    [
+                        'owner_id' => $record['owner_id'],
+                        'company_id' => $record['company_id'],
+                        'fiscal_year' => $record['fiscal_year'],
+                        ...$this->branchAttribute('supplier_debt_yearly_snapshots', $branchId),
+                    ],
+                    $record
+                );
+            }
 
             foreach ($plans as $companyId => $years) {
                 $state = $states[$companyId];
@@ -440,7 +532,9 @@ class SupplierDebtSnapshotService
         Collection $companyIds,
         ?string $fromInclusive,
         string $toExclusive,
-        ?int $accountId = null
+        ?int $accountId = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         if ($companyIds->isEmpty()) {
             return collect();
@@ -459,6 +553,7 @@ class SupplierDebtSnapshotService
             ->whereIn('te.tableable_id', $companyIds)
             ->where('t.user_id', $ownerId)
             ->where('t.status', 'completed')
+            ->when($branchScoped, fn ($query) => $query->where('t.branch_id', $branchId))
             ->when($fromInclusive !== null, fn ($query) => $query->where('t.transaction_date', '>=', $fromInclusive))
             ->where('t.transaction_date', '<', $toExclusive)
             ->groupBy('te.tableable_id')
@@ -508,5 +603,12 @@ class SupplierDebtSnapshotService
         if ($fiscalYear < 1970 || $fiscalYear > 2100) {
             throw new RuntimeException('Fiscal year must be between 1970 and 2100.');
         }
+    }
+
+    private function branchAttribute(string $table, ?int $branchId): array
+    {
+        return Schema::hasColumn($table, 'branch_id')
+            ? ['branch_id' => $branchId]
+            : [];
     }
 }

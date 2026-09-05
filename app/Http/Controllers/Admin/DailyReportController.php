@@ -18,10 +18,10 @@ class DailyReportController extends Controller
     {
         $this->dailyReport = $dailyReport;
     }
-    public function getDailyOrderData()
+    public function getDailyOrderData(Request $request)
     {
         try {
-            $reportData = $this->dailyReport->getDailyOrder();
+            $reportData = $this->dailyReport->getDailyOrder($request->user());
 
             // Generate Excel file
             $excel = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -75,10 +75,10 @@ class DailyReportController extends Controller
         }
     }
 
-    public function getDailyOrder()
+    public function getDailyOrder(Request $request)
     {
         try {
-            $reportData = $this->dailyReport->getDailyOrder();
+            $reportData = $this->dailyReport->getDailyOrder($request->user());
             return view('admin.report.order', $reportData);
         } catch (Exception $e) {
             Log::error("Failed to get today's report: " . $e->getMessage());
@@ -86,10 +86,10 @@ class DailyReportController extends Controller
         }
     }
 
-    public function getDailyImport()
+    public function getDailyImport(Request $request)
     {
         try {
-            $reportData = $this->dailyReport->getDailyImport();
+            $reportData = $this->dailyReport->getDailyImport($request->user());
             return view('admin.report.import', $reportData);
         } catch (Exception $e) {
             Log::error("Failed to get today's Importation: " . $e->getMessage());
@@ -97,11 +97,11 @@ class DailyReportController extends Controller
         }
     }
 
-    public function getDailyImportData()
+    public function getDailyImportData(Request $request)
     {
         try {
             // Lấy dữ liệu báo cáo từ service
-            $reportData = $this->dailyReport->getDailyImport();
+            $reportData = $this->dailyReport->getDailyImport($request->user());
 
             // Tạo đối tượng Spreadsheet mới
             $excel = new Spreadsheet();

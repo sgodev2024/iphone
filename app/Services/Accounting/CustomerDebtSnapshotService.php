@@ -7,27 +7,82 @@ use App\Models\Client;
 use App\Models\CustomerDebtSnapshotState;
 use App\Models\CustomerDebtYearlySnapshot;
 use App\Models\Transaction;
+use App\Models\User;
+use App\Support\BranchContext;
 use App\Support\DecimalAmount;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class CustomerDebtSnapshotService
 {
+    public function __construct(private readonly BranchContext $branchContext) {}
+
+    public function reportFor(
+        User $actor,
+        string $fromDate,
+        string $toDate,
+        ?string $nameFilter = null
+    ): Collection {
+        $ownerId = (int) $actor->ownerId();
+
+        if (! Schema::hasTable('branches')
+            || ! Schema::hasColumn('transactions', 'branch_id')
+            || ! Schema::hasColumn('customer_debt_yearly_snapshots', 'branch_id')
+        ) {
+            return $this->report($ownerId, $fromDate, $toDate, $nameFilter);
+        }
+
+        if (! $this->branchContext->isGlobal($actor)) {
+            return $this->report(
+                $ownerId,
+                $fromDate,
+                $toDate,
+                $nameFilter,
+                $this->branchContext->branchId($actor),
+                true
+            );
+        }
+
+        $branchIds = DB::table('clients')
+            ->where('user_id', $ownerId)
+            ->whereNotNull('branch_id')
+            ->distinct()
+            ->orderBy('branch_id')
+            ->pluck('branch_id')
+            ->map(fn ($id) => (int) $id)
+            ->push(null);
+
+        return $branchIds
+            ->flatMap(fn (?int $branchId) => $this->report(
+                $ownerId,
+                $fromDate,
+                $toDate,
+                $nameFilter,
+                $branchId,
+                true
+            ))
+            ->sortBy(fn ($row) => [$row->client_name, $row->client_id])
+            ->values();
+    }
+
     public function report(
         int $ownerId,
         string $fromDate,
         string $toDate,
-        ?string $nameFilter = null
+        ?string $nameFilter = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         $from = Carbon::parse($fromDate);
         $fiscalYear = $from->year;
         $yearStart = $from->copy()->startOfYear()->toDateString();
         $accountId = $this->resolveReceivableAccountId();
 
-        $this->buildOwnerYear($ownerId, $fiscalYear, 1000, $nameFilter);
+        $this->buildOwnerYear($ownerId, $fiscalYear, 1000, $nameFilter, $branchId, $branchScoped);
 
         $ledger = DB::table('transaction_entries as te')
             ->join('transactions as t', 't.id', '=', 'te.transaction_id')
@@ -38,6 +93,7 @@ class CustomerDebtSnapshotService
             ->where('te.account_id', $accountId)
             ->where('te.tableable_type', Client::class)
             ->where('t.status', Transaction::STATUS_COMPLETED)
+            ->when($branchScoped, fn ($query) => $query->where('t.branch_id', $branchId))
             ->where('t.transaction_date', '>=', $yearStart)
             ->where('t.transaction_date', '<=', $toDate)
             ->groupBy('te.tableable_id')
@@ -60,13 +116,17 @@ class CustomerDebtSnapshotService
             );
 
         return DB::table('clients as c')
-            ->join('customer_debt_yearly_snapshots as s', function ($join) use ($ownerId, $fiscalYear): void {
+            ->join('customer_debt_yearly_snapshots as s', function ($join) use ($ownerId, $fiscalYear, $branchId, $branchScoped): void {
                 $join->on('s.client_id', '=', 'c.id')
                     ->where('s.owner_id', $ownerId)
                     ->where('s.fiscal_year', $fiscalYear);
+                if ($branchScoped) {
+                    $join->where('s.branch_id', $branchId);
+                }
             })
             ->leftJoinSub($ledger, 'l', fn ($join) => $join->on('l.client_id', '=', 'c.id'))
             ->where('c.user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('c.branch_id', $branchId))
             ->when($nameFilter !== null && $nameFilter !== '', fn ($query) => $query->where('c.name', 'like', "%{$nameFilter}%"))
             ->orderBy('c.name')
             ->orderBy('c.id')
@@ -123,12 +183,23 @@ class CustomerDebtSnapshotService
             ->where('user_id', $ownerId)
             ->firstOrFail();
 
-        $this->buildClientChunk($ownerId, collect([(int) $client->id]), $fiscalYear);
+        $branchScoped = Schema::hasColumn('transactions', 'branch_id')
+            && Schema::hasColumn('customer_debt_yearly_snapshots', 'branch_id');
+        $branchId = $branchScoped ? ($client->branch_id === null ? null : (int) $client->branch_id) : null;
+
+        $this->buildClientChunk(
+            $ownerId,
+            collect([(int) $client->id]),
+            $fiscalYear,
+            $branchId,
+            $branchScoped
+        );
 
         return CustomerDebtYearlySnapshot::query()
             ->where('owner_id', $ownerId)
             ->where('client_id', $clientId)
             ->where('fiscal_year', $fiscalYear)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->firstOrFail();
     }
 
@@ -136,7 +207,9 @@ class CustomerDebtSnapshotService
         int $ownerId,
         int $fiscalYear,
         int $chunkSize = 1000,
-        ?string $nameFilter = null
+        ?string $nameFilter = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): array {
         $this->resolveReceivableAccountId();
         $statistics = [
@@ -149,15 +222,24 @@ class CustomerDebtSnapshotService
 
         DB::table('clients')
             ->where('user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->when($nameFilter !== null && $nameFilter !== '', fn ($query) => $query->where('name', 'like', "%{$nameFilter}%"))
             ->orderBy('id')
             ->chunkById(max(1, $chunkSize), function (Collection $clients) use (
                 $ownerId,
                 $fiscalYear,
+                $branchId,
+                $branchScoped,
                 &$statistics
             ): void {
                 $clientIds = $clients->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
-                $chunkStatistics = $this->buildClientChunk($ownerId, $clientIds, $fiscalYear);
+                $chunkStatistics = $this->buildClientChunk(
+                    $ownerId,
+                    $clientIds,
+                    $fiscalYear,
+                    $branchId,
+                    $branchScoped
+                );
 
                 foreach ($statistics as $key => $value) {
                     $statistics[$key] += $chunkStatistics[$key];
@@ -170,24 +252,35 @@ class CustomerDebtSnapshotService
     public function rebuildOwnerFromLedgerYear(
         int $ownerId,
         int $ledgerYear,
-        int $chunkSize = 1000
+        int $chunkSize = 1000,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): array {
         $openingYear = $ledgerYear + 1;
         $targetYear = max(
             now()->year,
             (int) CustomerDebtYearlySnapshot::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->max('fiscal_year')
         );
         $now = now();
 
         DB::table('clients')
             ->where('user_id', $ownerId)
+            ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
             ->orderBy('id')
-            ->chunkById(max(1, $chunkSize), function (Collection $clients) use ($ownerId, $openingYear, $now): void {
+            ->chunkById(max(1, $chunkSize), function (Collection $clients) use (
+                $ownerId,
+                $openingYear,
+                $now,
+                $branchId,
+                $branchScoped
+            ): void {
                 $clientIds = $clients->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
                 $rows = $clientIds->map(fn (int $clientId): array => [
                     'owner_id' => $ownerId,
+                    ...$this->branchAttribute('customer_debt_snapshot_states', $branchId),
                     'client_id' => $clientId,
                     'ledger_version' => 0,
                     'dirty_from_year' => null,
@@ -195,10 +288,29 @@ class CustomerDebtSnapshotService
                     'updated_at' => $now,
                 ])->all();
 
-                DB::transaction(function () use ($rows, $ownerId, $clientIds, $openingYear): void {
-                    DB::table('customer_debt_snapshot_states')->insertOrIgnore($rows);
+                DB::transaction(function () use (
+                    $rows,
+                    $ownerId,
+                    $clientIds,
+                    $openingYear,
+                    $branchId,
+                    $branchScoped
+                ): void {
+                    foreach ($rows as $row) {
+                        $stateQuery = DB::table('customer_debt_snapshot_states')->where(
+                            [
+                                'owner_id' => $row['owner_id'],
+                                'client_id' => $row['client_id'],
+                                ...$this->branchAttribute('customer_debt_snapshot_states', $branchId),
+                            ]
+                        );
+                        if (! $stateQuery->exists()) {
+                            DB::table('customer_debt_snapshot_states')->insert($row);
+                        }
+                    }
                     $states = CustomerDebtSnapshotState::query()
                         ->where('owner_id', $ownerId)
+                        ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                         ->whereIn('client_id', $clientIds)
                         ->orderBy('client_id')
                         ->lockForUpdate()
@@ -215,28 +327,58 @@ class CustomerDebtSnapshotService
                 }, 3);
             }, 'id');
 
-        return $this->buildOwnerYear($ownerId, $targetYear, $chunkSize);
+        return $this->buildOwnerYear(
+            $ownerId,
+            $targetYear,
+            $chunkSize,
+            null,
+            $branchId,
+            $branchScoped
+        );
     }
 
-    public function fullLedgerOpeningNet(int $clientId, int $fiscalYear): string
+    public function fullLedgerOpeningNet(
+        int $clientId,
+        int $fiscalYear,
+        ?int $branchId = null,
+        bool $branchScoped = false
+    ): string
     {
-        return $this->fullLedgerOpeningNets(collect([$clientId]), $fiscalYear)
+        return $this->fullLedgerOpeningNets(
+            collect([$clientId]),
+            $fiscalYear,
+            $branchId,
+            $branchScoped
+        )
             ->get($clientId, '0.00');
     }
 
-    public function fullLedgerOpeningNets(Collection $clientIds, int $fiscalYear): Collection
-    {
+    public function fullLedgerOpeningNets(
+        Collection $clientIds,
+        int $fiscalYear,
+        ?int $branchId = null,
+        bool $branchScoped = false
+    ): Collection {
         return $this->aggregateTotals(
             $clientIds,
             null,
-            Carbon::create($fiscalYear, 1, 1)->toDateString()
+            Carbon::create($fiscalYear, 1, 1)->toDateString(),
+            null,
+            $branchId,
+            $branchScoped
         )->map(fn (array $totals): string => DecimalAmount::subtract(
             $totals['debit'],
             $totals['credit']
         ));
     }
 
-    private function buildClientChunk(int $ownerId, Collection $clientIds, int $fiscalYear): array
+    private function buildClientChunk(
+        int $ownerId,
+        Collection $clientIds,
+        int $fiscalYear,
+        ?int $branchId = null,
+        bool $branchScoped = false
+    ): array
     {
         $statistics = [
             'scanned' => $clientIds->count(),
@@ -257,21 +399,36 @@ class CustomerDebtSnapshotService
             $clientIds,
             $fiscalYear,
             $accountId,
+            $branchId,
+            $branchScoped,
             $statistics
         ): array {
             $now = now();
             $stateRows = $clientIds->map(fn (int $clientId): array => [
                 'owner_id' => $ownerId,
+                ...$this->branchAttribute('customer_debt_snapshot_states', $branchId),
                 'client_id' => $clientId,
                 'ledger_version' => 0,
                 'dirty_from_year' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all();
-            DB::table('customer_debt_snapshot_states')->insertOrIgnore($stateRows);
+            foreach ($stateRows as $row) {
+                $stateQuery = DB::table('customer_debt_snapshot_states')->where(
+                    [
+                        'owner_id' => $row['owner_id'],
+                        'client_id' => $row['client_id'],
+                        ...$this->branchAttribute('customer_debt_snapshot_states', $branchId),
+                    ]
+                );
+                if (! $stateQuery->exists()) {
+                    DB::table('customer_debt_snapshot_states')->insert($row);
+                }
+            }
 
             $states = CustomerDebtSnapshotState::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('client_id', $clientIds)
                 ->orderBy('client_id')
                 ->lockForUpdate()
@@ -284,6 +441,7 @@ class CustomerDebtSnapshotService
 
             $snapshots = CustomerDebtYearlySnapshot::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('client_id', $clientIds)
                 ->orderBy('client_id')
                 ->orderBy('fiscal_year')
@@ -361,13 +519,17 @@ class CustomerDebtSnapshotService
                     $movementClientIds,
                     Carbon::create($year - 1, 1, 1)->toDateString(),
                     Carbon::create($year, 1, 1)->toDateString(),
-                    $accountId
+                    $accountId,
+                    $branchId,
+                    $branchScoped
                 );
                 $bootstrapTotals = $this->aggregateTotals(
                     $bootstrapClientIds,
                     null,
                     Carbon::create($year, 1, 1)->toDateString(),
-                    $accountId
+                    $accountId,
+                    $branchId,
+                    $branchScoped
                 );
 
                 foreach ($yearClientIds as $clientId) {
@@ -391,6 +553,7 @@ class CustomerDebtSnapshotService
                     $split = DecimalAmount::splitNet($net);
                     $record = [
                         'owner_id' => $ownerId,
+                        ...$this->branchAttribute('customer_debt_yearly_snapshots', $branchId),
                         'client_id' => $clientId,
                         'fiscal_year' => $year,
                         'opening_debit' => $split['debit'],
@@ -415,6 +578,7 @@ class CustomerDebtSnapshotService
 
             $currentVersions = CustomerDebtSnapshotState::query()
                 ->where('owner_id', $ownerId)
+                ->when($branchScoped, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('client_id', array_keys($plans))
                 ->pluck('ledger_version', 'client_id');
 
@@ -424,18 +588,17 @@ class CustomerDebtSnapshotService
                 }
             }
 
-            CustomerDebtYearlySnapshot::query()->upsert(
-                $records,
-                ['owner_id', 'client_id', 'fiscal_year'],
-                [
-                    'opening_debit',
-                    'opening_credit',
-                    'source_through_date',
-                    'source_version',
-                    'calculated_at',
-                    'updated_at',
-                ]
-            );
+            foreach ($records as $record) {
+                CustomerDebtYearlySnapshot::query()->updateOrCreate(
+                    [
+                        'owner_id' => $record['owner_id'],
+                        'client_id' => $record['client_id'],
+                        'fiscal_year' => $record['fiscal_year'],
+                        ...$this->branchAttribute('customer_debt_yearly_snapshots', $branchId),
+                    ],
+                    $record
+                );
+            }
 
             foreach ($plans as $clientId => $years) {
                 $state = $states[$clientId];
@@ -460,7 +623,9 @@ class CustomerDebtSnapshotService
         Collection $clientIds,
         ?string $fromInclusive,
         string $toExclusive,
-        ?int $accountId = null
+        ?int $accountId = null,
+        ?int $branchId = null,
+        bool $branchScoped = false
     ): Collection {
         if ($clientIds->isEmpty()) {
             return collect();
@@ -474,6 +639,7 @@ class CustomerDebtSnapshotService
             ->where('te.tableable_type', Client::class)
             ->whereIn('te.tableable_id', $clientIds)
             ->where('t.status', Transaction::STATUS_COMPLETED)
+            ->when($branchScoped, fn ($query) => $query->where('t.branch_id', $branchId))
             ->when($fromInclusive !== null, fn ($query) => $query->where('t.transaction_date', '>=', $fromInclusive))
             ->where('t.transaction_date', '<', $toExclusive)
             ->groupBy('te.tableable_id')
@@ -501,5 +667,12 @@ class CustomerDebtSnapshotService
         }
 
         return (int) $accountId;
+    }
+
+    private function branchAttribute(string $table, ?int $branchId): array
+    {
+        return Schema::hasColumn($table, 'branch_id')
+            ? ['branch_id' => $branchId]
+            : [];
     }
 }

@@ -58,12 +58,15 @@ class CustomerDebtSnapshotInvalidator
             ->whereIn('id', $clientIds)
             ->get(['id', 'user_id'])
             ->keyBy('id');
-        $dirtyByClient = [];
+        $dirtyStates = [];
 
         foreach ($contributions as $contribution) {
             $accountId = (int) ($contribution['accountId'] ?? 0);
             $clientId = (int) ($contribution['tableableId'] ?? 0);
             $transactionDate = $contribution['transactionDate'] ?? null;
+            $branchId = isset($contribution['transactionBranchId'])
+                ? (int) $contribution['transactionBranchId']
+                : null;
 
             if (! in_array($accountId, $receivableAccountIds, true)
                 || ($contribution['tableableType'] ?? null) !== Client::class
@@ -74,21 +77,29 @@ class CustomerDebtSnapshotInvalidator
             }
 
             $dirtyYear = Carbon::parse($transactionDate)->year + 1;
-            $dirtyByClient[$clientId] = isset($dirtyByClient[$clientId])
-                ? min($dirtyByClient[$clientId], $dirtyYear)
-                : $dirtyYear;
+            $stateKey = $clientId.':'.($branchId ?? 'null');
+            $dirtyStates[$stateKey] = [
+                'client_id' => $clientId,
+                'branch_id' => $branchId,
+                'dirty_year' => isset($dirtyStates[$stateKey])
+                    ? min($dirtyStates[$stateKey]['dirty_year'], $dirtyYear)
+                    : $dirtyYear,
+            ];
         }
 
-        if ($dirtyByClient === []) {
+        if ($dirtyStates === []) {
             return;
         }
 
         $now = now();
-        $rows = collect(array_keys($dirtyByClient))
-            ->sort()
-            ->map(function (int $clientId) use ($clients, $now): array {
+        $branchAware = Schema::hasColumn('customer_debt_snapshot_states', 'branch_id');
+        $rows = collect($dirtyStates)
+            ->sortBy(fn (array $item) => [$item['client_id'], $item['branch_id']])
+            ->map(function (array $item) use ($clients, $now, $branchAware): array {
+                $clientId = $item['client_id'];
                 return [
                     'owner_id' => (int) $clients[$clientId]->user_id,
+                    ...($branchAware ? ['branch_id' => $item['branch_id']] : []),
                     'client_id' => $clientId,
                     'ledger_version' => 0,
                     'dirty_from_year' => null,
@@ -98,16 +109,27 @@ class CustomerDebtSnapshotInvalidator
             })
             ->all();
 
-        DB::table('customer_debt_snapshot_states')->insertOrIgnore($rows);
+        foreach ($rows as $row) {
+            $stateQuery = DB::table('customer_debt_snapshot_states')->where([
+                'owner_id' => $row['owner_id'],
+                'client_id' => $row['client_id'],
+                ...($branchAware ? ['branch_id' => $row['branch_id']] : []),
+            ]);
+            if (! $stateQuery->exists()) {
+                DB::table('customer_debt_snapshot_states')->insert($row);
+            }
+        }
 
-        foreach (collect(array_keys($dirtyByClient))->sort() as $clientId) {
+        foreach (collect($dirtyStates)->sortBy(fn (array $item) => [$item['client_id'], $item['branch_id']]) as $item) {
+            $clientId = $item['client_id'];
             $client = $clients[$clientId];
             $state = CustomerDebtSnapshotState::query()
                 ->where('owner_id', $client->user_id)
+                ->when($branchAware, fn ($query) => $query->where('branch_id', $item['branch_id']))
                 ->where('client_id', $clientId)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $dirtyYear = $dirtyByClient[$clientId];
+            $dirtyYear = $item['dirty_year'];
 
             $state->forceFill([
                 'ledger_version' => (int) $state->ledger_version + 1,

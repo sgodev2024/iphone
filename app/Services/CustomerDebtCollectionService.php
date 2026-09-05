@@ -10,19 +10,32 @@ use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class CustomerDebtCollectionService
 {
+    private BranchContext $branchContext;
+    private bool $branchAware;
+
+    public function __construct(?BranchContext $branchContext = null)
+    {
+        $this->branchContext = $branchContext ?? app(BranchContext::class);
+        $this->branchAware = Schema::hasColumn('transactions', 'branch_id')
+            && Schema::hasColumn('clients', 'branch_id');
+    }
+
     public function collect(User $actor, array $data): array
     {
         $ownerId = (int) $actor->ownerId();
+        $branchAware = $this->branchAware;
         $payload = $this->normalizedPayload($data);
         $idempotencyKey = strtolower(trim((string) ($data['idempotency_key'] ?? '')));
 
@@ -37,18 +50,25 @@ class CustomerDebtCollectionService
                 $actor,
                 $ownerId,
                 $payload,
-                $idempotencyKey
+                $idempotencyKey,
+                $branchAware
             ): array {
                 // Lock the business aggregate first. Every collection for this Client
                 // is serialized before any remaining balance is read.
                 $client = Client::withTrashed()
                     ->whereKey($payload['client_id'])
                     ->where('user_id', $ownerId)
+                    ->when($branchAware, fn ($query) => $query->whereNotNull('branch_id'))
                     ->lockForUpdate()
                     ->firstOrFail();
+                $branchId = $branchAware ? (int) $client->branch_id : null;
+                if ($branchAware) {
+                    $this->branchContext->authorize($actor, $branchId);
+                }
 
                 $existing = CustomerDebtCollection::query()
                     ->where('owner_id', $ownerId)
+                    ->when($branchAware, fn ($query) => $query->where('branch_id', $branchId))
                     ->where('idempotency_key', $idempotencyKey)
                     ->first();
 
@@ -67,7 +87,7 @@ class CustomerDebtCollectionService
                 unset($payload['requested_money_account_id']);
                 $payloadHash = $this->payloadHash($payload);
 
-                $ledger = $this->canonicalLedger($ownerId, $client, true);
+                $ledger = $this->canonicalLedger($ownerId, $branchId, $client, true);
                 $this->assertReconciled($ledger);
                 $this->validateCollectibleAmount($payload['amount'], $ledger['collectible_total']);
 
@@ -100,7 +120,7 @@ class CustomerDebtCollectionService
                     ]);
                 }
 
-                $collection = CustomerDebtCollection::create([
+                $collectionData = [
                     'owner_id' => $ownerId,
                     'client_id' => (int) $client->id,
                     'collection_number' => $this->nextCollectionNumber($ownerId),
@@ -114,7 +134,11 @@ class CustomerDebtCollectionService
                     'idempotency_key' => $idempotencyKey,
                     'idempotency_hash' => $payloadHash,
                     'created_by' => (int) $actor->id,
-                ]);
+                ];
+                if (Schema::hasColumn('customer_debt_collections', 'branch_id')) {
+                    $collectionData['branch_id'] = $branchId;
+                }
+                $collection = CustomerDebtCollection::create($collectionData);
 
                 $unallocated = $payload['amount'];
                 $allocationTotal = '0.00';
@@ -138,7 +162,8 @@ class CustomerDebtCollectionService
                         $sequence,
                         $moneyAccount,
                         $actor,
-                        $ownerId
+                        $ownerId,
+                        $branchId
                     );
                     $allocation = CustomerDebtCollectionAllocation::create([
                         'collection_id' => (int) $collection->id,
@@ -161,7 +186,7 @@ class CustomerDebtCollectionService
                     throw new \LogicException('FIFO allocation did not consume the exact collection amount.');
                 }
 
-                $ledgerAfter = $this->canonicalLedger($ownerId, $client, false);
+                $ledgerAfter = $this->canonicalLedger($ownerId, $branchId, $client, false);
                 $this->assertReconciled($ledgerAfter);
                 $this->syncOrderAggregates($ledgerAfter, $allocatedOrderIds);
 
@@ -170,10 +195,11 @@ class CustomerDebtCollectionService
                 return $this->result($collection, $ledgerAfter, false);
             }, 3);
         } catch (UniqueConstraintViolationException $exception) {
-            $existing = CustomerDebtCollection::query()
+            $existingQuery = CustomerDebtCollection::query()
                 ->where('owner_id', $ownerId)
-                ->where('idempotency_key', $idempotencyKey)
-                ->first();
+                ->where('idempotency_key', $idempotencyKey);
+            $this->branchContext->scope($existingQuery, $actor);
+            $existing = $existingQuery->first();
 
             if (! $existing) {
                 throw $exception;
@@ -189,11 +215,17 @@ class CustomerDebtCollectionService
     public function preview(User $actor, int $clientId, string|int|null $amount = null, ?string $date = null): array
     {
         $ownerId = (int) $actor->ownerId();
+        $branchAware = $this->branchAware;
         $client = Client::withTrashed()
             ->whereKey($clientId)
             ->where('user_id', $ownerId)
+            ->when($branchAware, fn ($query) => $query->whereNotNull('branch_id'))
             ->firstOrFail();
-        $ledger = $this->canonicalLedger($ownerId, $client, false);
+        $branchId = $branchAware ? (int) $client->branch_id : null;
+        if ($branchAware) {
+            $this->branchContext->authorize($actor, $branchId);
+        }
+        $ledger = $this->canonicalLedger($ownerId, $branchId, $client, false);
         $this->assertReconciled($ledger);
         $collectionDate = $date ? $this->normalizeCollectionDate($date) : now()->toDateString();
         $previewAmount = $amount === null ? null : $this->normalizeAmount($amount);
@@ -352,11 +384,12 @@ class CustomerDebtCollectionService
         return $normalized;
     }
 
-    private function canonicalLedger(int $ownerId, Client $client, bool $lockOrders): array
+    private function canonicalLedger(int $ownerId, ?int $branchId, Client $client, bool $lockOrders): array
     {
         $accounts = $this->canonicalAccounts();
         $ordersQuery = Order::query()
             ->where('user_id', $ownerId)
+            ->when($this->branchAware && $branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
             ->where('client_id', $client->id)
             ->orderBy('id');
 
@@ -371,6 +404,7 @@ class CustomerDebtCollectionService
             : Transaction::query()
                 ->with('entries')
                 ->where('user_id', $ownerId)
+                ->when($this->branchAware && $branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
                 ->where('document_type', 'order')
                 ->whereIn('reference_number', $references)
                 ->whereIn('type', ['sale', 'income', 'credit_notice'])
@@ -425,7 +459,7 @@ class CustomerDebtCollectionService
             ->sort(fn (array $left, array $right): int => [$left['sale_date'], (int) $left['order']->id]
                 <=> [$right['sale_date'], (int) $right['order']->id])
             ->values();
-        $clientNet = $this->clientTk131Net($ownerId, $client, (int) $accounts['receivable']->id);
+        $clientNet = $this->clientTk131Net($ownerId, $branchId, $client, (int) $accounts['receivable']->id);
 
         return [
             'orders' => $orderLedgers->keyBy(fn (array $item): int => (int) $item['order']->id),
@@ -544,11 +578,17 @@ class CustomerDebtCollectionService
         return $receivableCredit;
     }
 
-    private function clientTk131Net(int $ownerId, Client $client, int $receivableAccountId): string
+    private function clientTk131Net(
+        int $ownerId,
+        ?int $branchId,
+        Client $client,
+        int $receivableAccountId
+    ): string
     {
         $row = DB::table('transaction_entries as te')
             ->join('transactions as t', 't.id', '=', 'te.transaction_id')
             ->where('t.user_id', $ownerId)
+            ->when($this->branchAware && $branchId !== null, fn ($query) => $query->where('t.branch_id', $branchId))
             ->where('t.status', Transaction::STATUS_COMPLETED)
             ->where('te.account_id', $receivableAccountId)
             ->where('te.tableable_type', Client::class)
@@ -649,13 +689,14 @@ class CustomerDebtCollectionService
         int $sequence,
         Account $moneyAccount,
         User $actor,
-        int $ownerId
+        int $ownerId,
+        ?int $branchId
     ): Transaction {
         $order = $item['order'];
         $receivable = $this->resolveRequiredActiveAccount('131', 'tài khoản phải thu khách hàng');
         $isBank = $collection->payment_method === Order::PAYMENT_METHOD_BANK_TRANSFER;
         $note = $isBank ? 'Chuyển khoản' : 'Tiền mặt';
-        $transaction = Transaction::create([
+        $transactionData = [
             'user_id' => $ownerId,
             'transaction_date' => $collection->collection_date->toDateString(),
             'description' => "Thu công nợ {$collection->collection_number} cho đơn #{$order->id}",
@@ -677,7 +718,11 @@ class CustomerDebtCollectionService
                 'amount' => $amount,
             ], JSON_UNESCAPED_SLASHES)),
             'collection_id' => (int) $collection->id,
-        ]);
+        ];
+        if (Schema::hasColumn('transactions', 'branch_id')) {
+            $transactionData['branch_id'] = $branchId;
+        }
+        $transaction = Transaction::create($transactionData);
 
         $transaction->entries()->create([
             'account_id' => (int) $moneyAccount->id,
@@ -756,7 +801,10 @@ class CustomerDebtCollectionService
         }
 
         $client = Client::withTrashed()->findOrFail($collection->client_id);
-        $ledger = $this->canonicalLedger((int) $collection->owner_id, $client, false);
+        $branchId = Schema::hasColumn('customer_debt_collections', 'branch_id')
+            ? ($collection->branch_id === null ? null : (int) $collection->branch_id)
+            : null;
+        $ledger = $this->canonicalLedger((int) $collection->owner_id, $branchId, $client, false);
 
         return $this->result($collection, $ledger, true);
     }

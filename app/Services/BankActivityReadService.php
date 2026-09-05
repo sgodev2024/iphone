@@ -6,14 +6,17 @@ use App\Data\BankActivityItem;
 use App\Models\BankVoucher;
 use App\Models\User;
 use App\Support\DecimalAmount;
+use App\Support\BranchContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class BankActivityReadService
 {
-    public function __construct(private TransactionBusinessListService $transactionList)
-    {
+    public function __construct(
+        private TransactionBusinessListService $transactionList,
+        private BranchContext $branchContext
+    ) {
     }
 
     /**
@@ -31,12 +34,14 @@ class BankActivityReadService
         int $perPage = 25
     ): array {
         $posted = $this->transactionList
-            ->entries($transactionOwnerIds, $bankAccountIds, $from, $to)
+            ->entries($actor, $transactionOwnerIds, $bankAccountIds, $from, $to)
             ->map(fn (object $entry): BankActivityItem => $this->postedItem($entry));
 
-        $pending = BankVoucher::query()
+        $pendingQuery = BankVoucher::query()
             ->with(['bankAccount:id,code,name', 'creator:id,name'])
-            ->where('owner_id', (int) $actor->ownerId())
+            ->where('owner_id', (int) $actor->ownerId());
+        $this->branchContext->scope($pendingQuery, $actor);
+        $pending = $pendingQuery
             ->whereDate('transaction_date', '>=', $from)
             ->whereDate('transaction_date', '<=', $to)
             ->whereIn('bank_account_id', $bankAccountIds)

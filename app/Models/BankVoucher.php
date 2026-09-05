@@ -19,6 +19,7 @@ class BankVoucher extends Model
 
     protected $fillable = [
         'owner_id',
+        'branch_id',
         'voucher_number',
         'direction',
         'operation',
@@ -34,6 +35,7 @@ class BankVoucher extends Model
     ];
 
     protected $casts = [
+        'branch_id' => 'integer',
         'transaction_date' => 'date',
         'amount' => 'decimal:2',
     ];
@@ -41,6 +43,11 @@ class BankVoucher extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function bankAccount(): BelongsTo

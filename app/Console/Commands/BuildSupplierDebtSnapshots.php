@@ -12,6 +12,7 @@ class BuildSupplierDebtSnapshots extends Command
     protected $signature = 'accounting:build-supplier-debt-snapshots
                             {--year= : Năm opening cần build}
                             {--owner= : Chỉ build canonical owner này}
+                            {--branch= : Chỉ build Branch này}
                             {--chunk=1000 : Số Company mỗi chunk}';
 
     protected $description = 'Build idempotent opening snapshot TK331 theo năm';
@@ -33,15 +34,34 @@ class BuildSupplierDebtSnapshots extends Command
         $totals = ['scanned' => 0, 'built' => 0, 'rebuilt' => 0, 'skipped' => 0, 'failed' => 0];
 
         foreach ($ownerIds as $ownerId) {
-            try {
-                $result = $service->buildOwnerYear((int) $ownerId, $year, $chunk);
+            $branchIds = $this->option('branch') !== null
+                ? collect([(int) $this->option('branch')])
+                : collect([null])->merge(
+                    DB::table('companies')
+                        ->where('user_id', $ownerId)
+                        ->whereNotNull('branch_id')
+                        ->distinct()
+                        ->orderBy('branch_id')
+                        ->pluck('branch_id')
+                );
+            foreach ($branchIds as $branchId) {
+                try {
+                    $result = $service->buildOwnerYear(
+                        (int) $ownerId,
+                        $year,
+                        $chunk,
+                        null,
+                        $branchId === null ? null : (int) $branchId,
+                        true
+                    );
 
-                foreach ($totals as $key => $value) {
-                    $totals[$key] += $result[$key];
+                    foreach ($totals as $key => $value) {
+                        $totals[$key] += $result[$key];
+                    }
+                } catch (Throwable $exception) {
+                    $totals['failed']++;
+                    $this->error('Owner '.$ownerId.', Branch '.($branchId ?? 'NULL').': '.$exception->getMessage());
                 }
-            } catch (Throwable $exception) {
-                $totals['failed']++;
-                $this->error("Owner {$ownerId}: {$exception->getMessage()}");
             }
         }
 

@@ -6,12 +6,14 @@ use App\Models\SupplierDebtYearlySnapshot;
 use App\Services\Accounting\SupplierDebtSnapshotService;
 use App\Support\DecimalAmount;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 
 class ReconcileSupplierDebtSnapshots extends Command
 {
     protected $signature = 'accounting:reconcile-supplier-debt-snapshots
                             {--year= : Năm opening cần đối chiếu}
                             {--owner= : Chỉ canonical owner này}
+                            {--branch= : Chỉ Branch này; dùng NULL cho legacy}
                             {--company= : Chỉ Company này}';
 
     protected $description = 'Read-only reconcile snapshot TK331 với full ledger';
@@ -29,6 +31,12 @@ class ReconcileSupplierDebtSnapshots extends Command
             ->where('fiscal_year', $year)
             ->when($this->option('owner') !== null, fn ($builder) => $builder->where('owner_id', (int) $this->option('owner')))
             ->when($this->option('company') !== null, fn ($builder) => $builder->where('company_id', (int) $this->option('company')))
+            ->when(
+                $this->option('branch') !== null && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id'),
+                fn ($builder) => strtoupper((string) $this->option('branch')) === 'NULL'
+                    ? $builder->whereNull('branch_id')
+                    : $builder->where('branch_id', (int) $this->option('branch'))
+            )
             ->orderBy('owner_id')
             ->orderBy('company_id');
         $checked = 0;
@@ -39,7 +47,10 @@ class ReconcileSupplierDebtSnapshots extends Command
                 $ledgerNet = $service->fullLedgerOpeningNets(
                     (int) $snapshot->owner_id,
                     collect([(int) $snapshot->company_id]),
-                    (int) $snapshot->fiscal_year
+                    (int) $snapshot->fiscal_year,
+                    $snapshot->branch_id === null ? null : (int) $snapshot->branch_id,
+                    Schema::hasColumn('transactions', 'branch_id')
+                        && Schema::hasColumn('supplier_debt_yearly_snapshots', 'branch_id')
                 )->get((int) $snapshot->company_id, '0.00');
                 $snapshotNet = DecimalAmount::subtract(
                     (string) $snapshot->opening_credit,
@@ -51,7 +62,8 @@ class ReconcileSupplierDebtSnapshots extends Command
                 if (! DecimalAmount::isZero($difference)) {
                     $mismatches++;
                     $this->error(
-                        "owner={$snapshot->owner_id} company={$snapshot->company_id} "
+                        "owner={$snapshot->owner_id} branch=".($snapshot->branch_id ?? 'NULL')
+                        ." company={$snapshot->company_id} "
                         ."snapshot={$snapshotNet} ledger={$ledgerNet} difference={$difference}"
                     );
                 }

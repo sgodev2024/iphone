@@ -6,6 +6,7 @@ use App\Models\BankVoucher;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Illuminate\Support\Facades\Schema;
 
 class StoreGenericBankVoucherRequest extends FormRequest
 {
@@ -43,6 +44,12 @@ class StoreGenericBankVoucherRequest extends FormRequest
             'reference_number' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:255'],
             'attachment' => ['nullable', 'file', 'max:2048', 'mimes:jpg,jpeg,png,pdf,webp'],
+            'branch_id' => [
+                Rule::requiredIf(fn (): bool => Schema::hasColumn('bank_vouchers', 'branch_id')
+                    && ($this->user()?->isAdministrator() ?? false)),
+                'nullable',
+                'integer',
+            ],
             'account_id' => ['prohibited'],
             'cash_account_id' => ['prohibited'],
             'counter_account_id' => ['prohibited'],

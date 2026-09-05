@@ -58,6 +58,9 @@ class SupplierDebtSnapshotInvalidator
             $transactionDate = $contribution['transactionDate'] ?? null;
             $transactionStatus = (string) ($contribution['transactionStatus'] ?? '');
             $transactionOwnerId = (int) ($contribution['transactionOwnerId'] ?? 0);
+            $branchId = isset($contribution['transactionBranchId'])
+                ? (int) $contribution['transactionBranchId']
+                : null;
 
             if (! in_array($accountId, $payableAccountIds, true)
                 || ($contribution['tableableType'] ?? null) !== Company::class
@@ -81,9 +84,10 @@ class SupplierDebtSnapshotInvalidator
             }
 
             $dirtyYear = Carbon::parse($transactionDate)->year + 1;
-            $key = $transactionOwnerId.':'.$companyId;
+            $key = $transactionOwnerId.':'.$companyId.':'.($branchId ?? 'null');
             $dirtyByCompany[$key] = [
                 'owner_id' => $transactionOwnerId,
+                'branch_id' => $branchId,
                 'company_id' => $companyId,
                 'dirty_from_year' => isset($dirtyByCompany[$key])
                     ? min($dirtyByCompany[$key]['dirty_from_year'], $dirtyYear)
@@ -97,10 +101,12 @@ class SupplierDebtSnapshotInvalidator
 
         DB::transaction(function () use ($dirtyByCompany): void {
             $now = now();
+            $branchAware = Schema::hasColumn('supplier_debt_snapshot_states', 'branch_id');
             $rows = collect($dirtyByCompany)
-                ->sortBy(fn (array $row): string => $row['owner_id'].':'.$row['company_id'])
+                ->sortBy(fn (array $row): string => $row['owner_id'].':'.$row['company_id'].':'.($row['branch_id'] ?? 'null'))
                 ->map(fn (array $row): array => [
                     'owner_id' => $row['owner_id'],
+                    ...($branchAware ? ['branch_id' => $row['branch_id']] : []),
                     'company_id' => $row['company_id'],
                     'ledger_version' => 0,
                     'dirty_from_year' => null,
@@ -109,11 +115,21 @@ class SupplierDebtSnapshotInvalidator
                 ])
                 ->values()
                 ->all();
-            DB::table('supplier_debt_snapshot_states')->insertOrIgnore($rows);
+            foreach ($rows as $row) {
+                $stateQuery = DB::table('supplier_debt_snapshot_states')->where([
+                    'owner_id' => $row['owner_id'],
+                    'company_id' => $row['company_id'],
+                    ...($branchAware ? ['branch_id' => $row['branch_id']] : []),
+                ]);
+                if (! $stateQuery->exists()) {
+                    DB::table('supplier_debt_snapshot_states')->insert($row);
+                }
+            }
 
-            foreach (collect($dirtyByCompany)->sortBy(fn (array $row): string => $row['owner_id'].':'.$row['company_id']) as $row) {
+            foreach (collect($dirtyByCompany)->sortBy(fn (array $row): string => $row['owner_id'].':'.$row['company_id'].':'.($row['branch_id'] ?? 'null')) as $row) {
                 $state = SupplierDebtSnapshotState::query()
                     ->where('owner_id', $row['owner_id'])
+                    ->when($branchAware, fn ($query) => $query->where('branch_id', $row['branch_id']))
                     ->where('company_id', $row['company_id'])
                     ->lockForUpdate()
                     ->firstOrFail();

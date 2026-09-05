@@ -22,9 +22,8 @@ class DebtController extends Controller
         $nameFilter = trim((string) $request->input('name', ''));
 
         try {
-            $ownerId = $request->user()->ownerId();
-            $debtReports = $snapshotService->report(
-                $ownerId,
+            $debtReports = $snapshotService->reportFor(
+                $request->user(),
                 $startDate,
                 $endDate,
                 $nameFilter

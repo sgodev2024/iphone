@@ -4,14 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\User;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class AccountController extends Controller
 {
+    public function __construct(private readonly BranchContext $branchContext) {}
+
     public function index()
     {
         return view('admin.account.index');
@@ -215,6 +220,15 @@ class AccountController extends Controller
                 $startDate = $endDate->copy()->subMonth()->startOfDay();
             }
 
+            $actor = $request->user();
+            $globalBranchScope = $this->branchContext->isGlobal($actor);
+            $branchId = $globalBranchScope ? null : $this->branchContext->branchId($actor);
+            $ownerIds = $this->ownerUserIds($actor);
+            $ownerPlaceholders = implode(',', array_fill(0, count($ownerIds), '?'));
+            $branchJoin = Schema::hasColumn('transactions', 'branch_id')
+                ? 'AND (? = 1 OR t.branch_id = ?)'
+                : '';
+
             $query = "
                 WITH RECURSIVE account_tree AS (
                     SELECT ma.id, ma.code, ma.name, ma.parent_id, ma.level, CAST(ma.code AS CHAR(255)) AS path
@@ -269,7 +283,8 @@ class AccountController extends Controller
                     LEFT JOIN transactions t
                         ON t.id = te.transaction_id
                         AND t.type != 'other'
-                        AND t.user_id = ?   -- lọc theo user_id
+                        AND t.user_id IN ({$ownerPlaceholders})
+                        {$branchJoin}
                 WHERE (at.code LIKE ? OR at.name LIKE ?)
                 GROUP BY at.id, at.code, at.name, at.level, at.path
                 ORDER BY at.path
@@ -294,10 +309,16 @@ class AccountController extends Controller
                 $startDate,
                 $startDate,
                 $endDate,
-                Auth::id(),  // ✅ binding user_id
-                "%{$searchInput}%",
-                "%{$searchInput}%"
+                ...$ownerIds,
             ];
+
+            if ($branchJoin !== '') {
+                $bindings[] = $globalBranchScope ? 1 : 0;
+                $bindings[] = $branchId;
+            }
+
+            $bindings[] = "%{$searchInput}%";
+            $bindings[] = "%{$searchInput}%";
 
             $accounts = DB::select($query, $bindings);
 
@@ -308,5 +329,21 @@ class AccountController extends Controller
         }
 
         return view('admin.account.balance');
+    }
+
+    /** @return list<int> */
+    private function ownerUserIds(User $actor): array
+    {
+        $ownerId = (int) $actor->owner()->id;
+
+        return User::query()
+            ->whereKey($ownerId)
+            ->orWhere('manager_id', $ownerId)
+            ->pluck('id')
+            ->push($actor->id)
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 }

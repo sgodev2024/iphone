@@ -8,6 +8,7 @@ class SupplierDebtYearlySnapshot extends Model
 {
     protected $fillable = [
         'owner_id',
+        'branch_id',
         'company_id',
         'fiscal_year',
         'opening_debit',
@@ -19,6 +20,7 @@ class SupplierDebtYearlySnapshot extends Model
 
     protected $casts = [
         'owner_id' => 'integer',
+        'branch_id' => 'integer',
         'company_id' => 'integer',
         'fiscal_year' => 'integer',
         'opening_debit' => 'decimal:2',
