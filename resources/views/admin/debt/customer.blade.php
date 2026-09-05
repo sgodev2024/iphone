@@ -19,16 +19,9 @@
             </ul>
         </div> --}}
 
-        <div class="d-flex justify-content-end mb-2">
-            <a class="btn btn-outline-primary" href="{{ route('admin.debts.customer.collections.index') }}">
-                <i class="bi bi-clock-history"></i> Lịch sử thu công nợ
-            </a>
-        </div>
-
         <div class="card customer-debt-filter-card p-3 mb-3 shadow-sm">
             <form id="customerDebtFilterForm" class="customer-debt-filter" method="GET"
                 action="{{ route('admin.debts.customer') }}">
-                <!-- Lọc ngày sang trái -->
                 <div class="customer-debt-date">
                     <input type="text" id="dateFilter" class="form-control"
                         value="{{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}"
@@ -37,13 +30,19 @@
                     <input type="hidden" id="toDate" name="to_date" value="{{ $endDate }}">
                 </div>
 
-                <!-- Tên khách hàng và nút Lọc sang phải -->
-                <div class="customer-debt-search">
-                    <input type="text" class="form-control customer-debt-name" name="name"
-                        value="{{ request()->query('name', '') }}" placeholder="Tên khách hàng">
-                    <button type="submit" id="filter" class="btn btn-primary customer-debt-filter-button">
-                        <i class="bi bi-search"></i> <span>Lọc</span>
-                    </button>
+                <div class="customer-debt-actions">
+                    <a class="btn btn-outline-primary customer-debt-history"
+                        href="{{ route('admin.debts.customer.collections.index') }}">
+                        <i class="bi bi-clock-history"></i> Lịch sử thu công nợ
+                    </a>
+
+                    <div class="customer-debt-search">
+                        <input type="text" class="form-control customer-debt-name" name="name"
+                            value="{{ request()->query('name', '') }}" placeholder="Tên khách hàng">
+                        <button type="submit" id="filter" class="btn btn-primary customer-debt-filter-button">
+                            <i class="bi bi-search"></i> <span>Lọc</span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -169,6 +168,10 @@
             overflow-x: hidden;
         }
 
+        .customer-debt-page > nav[aria-label="breadcrumb"] .breadcrumb {
+            margin-bottom: 0.5rem;
+        }
+
         .customer-debt-page .customer-debt-filter-card,
         .customer-debt-page .customer-debt-table-wrap {
             width: 100%;
@@ -183,15 +186,41 @@
             gap: 8px;
         }
 
-        .customer-debt-page .customer-debt-date,
-        .customer-debt-page .customer-debt-search {
+        .customer-debt-page .customer-debt-date {
+            flex: 0 1 250px;
+            min-width: 220px;
+        }
+
+        .customer-debt-page .customer-debt-date .form-control {
+            width: 100%;
+        }
+
+        .customer-debt-page .customer-debt-actions {
             display: flex;
             align-items: center;
-            margin-bottom: 8px;
+            justify-content: flex-end;
+            gap: 8px;
+            flex: 0 1 auto;
+            min-width: 0;
+            margin-left: auto;
+        }
+
+        .customer-debt-page .customer-debt-history {
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
 
         .customer-debt-page .customer-debt-search {
+            display: flex;
+            align-items: center;
             gap: 8px;
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+
+        .customer-debt-page .customer-debt-name {
+            flex: 0 1 230px;
+            min-width: 180px;
         }
 
         .customer-debt-page .customer-debt-filter-button {
@@ -209,7 +238,7 @@
             width: 100%;
             min-width: 1150px;
             max-width: none;
-            table-layout: fixed;
+            table-layout: auto;
         }
 
         .customer-debt-page .customer-debt-table col.col-stt {
@@ -217,7 +246,7 @@
         }
 
         .customer-debt-page .customer-debt-table col.col-customer {
-            width: 220px;
+            width: 320px;
         }
 
         .customer-debt-page .customer-debt-table col.col-money {
@@ -254,14 +283,15 @@
         }
 
         .customer-debt-page .customer-cell {
-            min-width: 220px;
+            width: 320px;
+            min-width: 320px;
             white-space: nowrap;
         }
 
         .customer-debt-page .customer-name,
         .customer-debt-page .customer-phone {
             display: inline;
-            white-space: inherit;
+            white-space: nowrap;
         }
 
         .customer-debt-page .customer-name {
@@ -320,9 +350,24 @@
             }
 
             .customer-debt-page .customer-debt-date,
+            .customer-debt-page .customer-debt-actions {
+                width: 100%;
+                min-width: 0;
+                margin-left: 0;
+            }
+
+            .customer-debt-page .customer-debt-actions {
+                flex-wrap: wrap;
+                justify-content: stretch;
+            }
+
+            .customer-debt-page .customer-debt-history {
+                flex: 1 1 100%;
+            }
+
             .customer-debt-page .customer-debt-search {
                 width: 100%;
-                margin-bottom: 0;
+                flex: 1 1 100%;
             }
 
             .customer-debt-page .customer-debt-date .form-control,
@@ -369,7 +414,7 @@
 
             .customer-debt-page .customer-debt-table th:nth-child(2),
             .customer-debt-page .customer-debt-table td:nth-child(2) {
-                min-width: 220px;
+                min-width: 320px;
             }
 
             .customer-debt-page .customer-debt-table tbody td:nth-child(n+3) {
