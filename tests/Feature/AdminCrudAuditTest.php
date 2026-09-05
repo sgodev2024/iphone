@@ -567,24 +567,24 @@ class AdminCrudAuditTest extends TestCase
     public function test_company_create_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
-        $bankId = $this->createBank();
 
-        $this->actingAs($admin)->get('/admin/company/create')->assertOk();
+        $form = $this->actingAs($admin)->get('/admin/company/create')->assertOk();
+        $form->assertSee('novalidate', false);
+        $form->assertDontSee('required', false);
 
         $this->actingAs($admin)->postJson('/admin/company', [
-            'name' => 'NCC Apple',
+            'name' => 'NCC Minimal',
             'phone' => '0905000001',
-            'email' => 'company@example.com',
             'address' => 'Ha Noi',
-            'tax_number' => 'TAX001',
-            'bank_account' => '123456',
-            'bank_id' => $bankId,
-            'city_id' => null,
             'status' => '1',
         ])->assertCreated();
 
-        $company = Company::where('email', 'company@example.com')->first();
+        $company = Company::where('name', 'NCC Minimal')->first();
         $this->assertSame($admin->id, (int) $company->user_id);
+        $this->assertNull($company->email);
+        $this->assertNull($company->tax_number);
+        $this->assertNull($company->bank_account);
+        $this->assertNull($company->bank_id);
 
         $this->assertDatabaseHas('companies', [
             'id' => $company->id,
@@ -592,33 +592,24 @@ class AdminCrudAuditTest extends TestCase
         ]);
 
         $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
-            'name' => 'NCC Apple Update',
-            'phone' => '0905000001',
-            'email' => 'company@example.com',
+            'name' => 'NCC Minimal Update',
+            'phone' => '0905000002',
             'address' => 'Sai Gon',
-            'tax_number' => 'TAX001',
-            'bank_account' => '123456',
-            'bank_id' => $bankId,
-            'city_id' => null,
             'status' => '0',
         ])->assertOk();
 
         $this->assertDatabaseHas('companies', [
             'id' => $company->id,
-            'name' => 'NCC Apple Update',
+            'name' => 'NCC Minimal Update',
+            'phone' => '0905000002',
             'user_id' => $admin->id,
             'status' => 0,
         ]);
 
         $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
-            'name' => 'NCC Apple Update',
-            'phone' => '0905000001',
-            'email' => 'company@example.com',
+            'name' => 'NCC Minimal Update',
+            'phone' => '0905000002',
             'address' => 'Sai Gon',
-            'tax_number' => 'TAX001',
-            'bank_account' => '123456',
-            'bank_id' => $bankId,
-            'city_id' => null,
             'status' => '1',
         ])->assertOk();
 
@@ -630,11 +621,16 @@ class AdminCrudAuditTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/company', [
             'name' => '',
             'phone' => '123',
-            'email' => 'company@example.com',
-            'tax_number' => 'TAX001',
-            'bank_id' => 999,
+            'email' => 'invalid-email',
         ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['name', 'phone', 'email', 'address', 'bank_account', 'bank_id', 'tax_number']);
+            ->assertJsonValidationErrors(['name', 'phone', 'email', 'address']);
+
+        $this->actingAs($admin)->postJson('/admin/company', [
+            'name' => 'NCC Invalid Phone',
+            'phone' => '012345687',
+            'address' => 'Ha Noi',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
 
         $staff = $this->createUser('staff5@example.com', '0905000005', 3);
         $this->actingAs($staff)->postJson('/admin/company', [
@@ -1134,10 +1130,10 @@ class AdminCrudAuditTest extends TestCase
             $table->string('phone');
             $table->string('address');
             $table->unsignedBigInteger('city_id')->nullable();
-            $table->string('email')->unique();
-            $table->string('tax_number')->unique();
-            $table->string('bank_account');
-            $table->unsignedBigInteger('bank_id');
+            $table->string('email')->nullable()->unique();
+            $table->string('tax_number')->nullable()->unique();
+            $table->string('bank_account')->nullable();
+            $table->unsignedBigInteger('bank_id')->nullable();
             $table->text('note')->nullable();
             $table->boolean('status')->default(false);
             $table->timestamps();

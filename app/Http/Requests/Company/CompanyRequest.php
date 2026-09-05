@@ -30,14 +30,14 @@ class CompanyRequest extends FormRequest
                 : ['prohibited'],
             'name' => 'required|max:255|unique:companies,name,' . $id,
             'phone' => 'required|regex:/^[0-9]{10,11}$/|unique:companies,phone,' . $id,
-            'email' => 'required|email|unique:companies,email,' . $id,
+            'email' => ['nullable', 'email', Rule::unique('companies', 'email')->ignore($id)],
             'address' => 'required|max:255',
-            'tax_number' => ['required', 'max:255', Rule::unique('companies', 'tax_number')->ignore($id)],
-            'bank_account' => 'required|max:255',
-            'bank_id' => 'required|exists:banks,id',
+            'tax_number' => ['nullable', 'max:255', Rule::unique('companies', 'tax_number')->ignore($id)],
+            'bank_account' => 'nullable|max:255',
+            'bank_id' => 'nullable|exists:banks,id',
             'note' => 'nullable|max:255',
             'city_id' => 'nullable|exists:city,id',
-            'status' => 'required|in:0,1',
+            'status' => 'nullable|in:0,1',
         ];
     }
 

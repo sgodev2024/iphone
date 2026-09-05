@@ -5,7 +5,7 @@
         <x-breadcrumb :items="[['label' => 'nhà cung cấp', 'url' => route('admin.company.index')], ['label' => $title]]" />
 
 
-        <form id="myForm">
+        <form id="myForm" novalidate>
 
             @if (!empty($company))
                 @method('PUT')
@@ -31,7 +31,7 @@
                                 @endif
 
                                 <div class="col-md-12">
-                                    <label for="name" class="form-label mb-1 fw-bold">Tên nhà cung cấp</label>
+                                    <label for="name" class="form-label mb-1 fw-bold">Tên nhà cung cấp <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" name="name"
                                         value="{{ optional($company)->name }}" placeholder="Nhập tên nhà cung cấp">
                                 </div>
@@ -43,13 +43,13 @@
                                 </div>
 
                                 <div class="col-md-6">
-                                    <label for="phone" class="form-label mb-1 fw-bold">Số điện thoại</label>
-                                    <input type="phone" class="form-control" name="phone"
+                                    <label for="phone" class="form-label mb-1 fw-bold">Số điện thoại <span class="text-danger">*</span></label>
+                                    <input type="tel" class="form-control" name="phone"
                                         value="{{ optional($company)->phone }}" placeholder="Nhập số điện thoại">
                                 </div>
 
                                 <div class="col-md-12">
-                                    <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
+                                    <label for="address" class="form-label mb-1 fw-bold">Địa chỉ <span class="text-danger">*</span></label>
                                     <textarea name="address" placeholder="Nhập địa chỉ" class="form-control">{{ optional($company)->address }}</textarea>
                                 </div>
 
