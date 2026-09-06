@@ -92,11 +92,14 @@ class EmployeeController extends Controller
                 $credentials['manager_id'] = Auth::id();
                 $credentials['password'] = Hash::make($credentials['password']);
                 $actor = $this->authorizedManager();
-                $storage = $this->branchContext
-                    ->scope(Storage::query(), $actor)
-                    ->findOrFail($credentials['storage_id']);
+                $storageId = $credentials['storage_id'] ?? null;
+                $storage = $storageId === null
+                    ? null
+                    : $this->branchContext
+                        ->scope(Storage::query(), $actor)
+                        ->findOrFail($storageId);
                 $credentials['branch_id'] = $actor->isAdministrator()
-                    ? $storage->branch_id
+                    ? $storage?->branch_id
                     : $this->branchContext->branchId($actor);
 
                 return User::create($credentials);
@@ -236,7 +239,7 @@ class EmployeeController extends Controller
         } else {
             $rules['address'] = ['nullable', 'string', 'max:255'];
             $rules['storage_id'] = [
-                'required',
+                $id ? 'required' : 'nullable',
                 'integer',
                 Rule::exists('storages', 'id')->where(
                     fn ($query) => $query->whereIn('id', $this->storageOptions()->modelKeys())

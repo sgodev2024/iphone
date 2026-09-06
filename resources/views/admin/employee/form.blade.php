@@ -34,7 +34,8 @@
                                         name="name" value="{{ old('name', optional($user)->name) }}"
                                         placeholder="Nhập tên tài khoản {{ $accountLabel }}">
                                     @error('name')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        <span
+                                            class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -44,7 +45,8 @@
                                         name="email" value="{{ old('email', optional($user)->email) }}"
                                         placeholder="Nhập email">
                                     @error('email')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        <span
+                                            class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -55,7 +57,8 @@
                                     <i class="fa-regular fa-eye position-absolute toggle-password"
                                         style="top: 38px; right: 25px; cursor: pointer;"></i>
                                     @error('password')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        <span
+                                            class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -66,7 +69,8 @@
                                         name="phone" value="{{ old('phone', optional($user)->phone) }}"
                                         placeholder="Nhập số điện thoại">
                                     @error('phone')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        <span
+                                            class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                     @enderror
                                 </div>
 
@@ -75,18 +79,21 @@
                                     <input type="file" class="form-control @error('img_url') is-invalid @enderror"
                                         name="img_url" accept="image/jpeg,image/png,image/jpg,image/gif">
                                     @error('img_url')
-                                        <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                        <span
+                                            class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                     @enderror
                                 </div>
 
                                 @if ($requiresStorage)
                                     <div class="col-md-6">
-                                        <label for="storage_id" class="form-label mb-1 fw-bold">Kho bán hàng</label>
+                                        <label for="storage_id" class="form-label mb-1 fw-bold">
+                                            Kho bán hàng
+                                        </label>
                                         <select name="storage_id"
                                             class="form-select form-control @error('storage_id') is-invalid @enderror"
                                             @disabled($storages->isEmpty())>
                                             <option value="">
-                                                {{ $storages->isEmpty() ? 'Chưa có kho bán hàng' : 'Chọn kho bán hàng' }}
+                                                {{ $storages->isEmpty() ? 'Chưa có kho bán hàng' : (empty($user) ? 'Không chọn kho bán hàng' : 'Chọn kho bán hàng') }}
                                             </option>
                                             @foreach ($storages as $storage)
                                                 <option value="{{ $storage->id }}" @selected((string) $selectedStorageId === (string) $storage->id)>
@@ -104,14 +111,16 @@
                                 @if ($isAdminAccount)
                                     <div class="col-md-6">
                                         <label class="form-label mb-1 fw-bold">Nơi làm việc</label>
-                                        <div class="form-control bg-light">{{ $adminWorkplaceLabel ?? 'Toàn hệ thống' }}</div>
+                                        <div class="form-control bg-light">{{ $adminWorkplaceLabel ?? 'Toàn hệ thống' }}
+                                        </div>
                                     </div>
                                 @else
                                     <div class="col-md-12">
                                         <label for="address" class="form-label mb-1 fw-bold">Địa chỉ</label>
                                         <textarea name="address" placeholder="Nhập địa chỉ" class="form-control @error('address') is-invalid @enderror">{{ old('address', optional($user)->address) }}</textarea>
                                         @error('address')
-                                            <span class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
+                                            <span
+                                                class="invalid-feedback d-block server-validation-error">{{ $message }}</span>
                                         @enderror
                                     </div>
                                 @endif

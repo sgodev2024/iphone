@@ -164,9 +164,15 @@ class AdminEmployeeCreationTest extends TestCase
         ]);
     }
 
-    public function test_employee_storage_is_required_for_staff_accounts(): void
+    public function test_employee_can_be_created_without_storage(): void
     {
+        Mail::fake();
         $admin = $this->createAdmin();
+
+        $this->actingAs($admin)
+            ->get('/admin/employees/create')
+            ->assertOk()
+            ->assertSee('(Không bắt buộc)');
 
         $response = $this->actingAs($admin)->postJson('/admin/employees', [
             'name' => 'Nhân viên thiếu kho',
@@ -176,12 +182,34 @@ class AdminEmployeeCreationTest extends TestCase
             'status' => 'active',
         ]);
 
-        $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['storage_id']);
+        $response->assertCreated()
+            ->assertJsonPath('success', true);
 
-        $this->assertDatabaseMissing('users', [
-            'email' => 'missing-storage@example.com',
+        $employee = User::where('email', 'missing-storage@example.com')->firstOrFail();
+        $this->assertNull($employee->storage_id);
+        $this->assertNull($employee->branch_id);
+
+        $adminStore = User::create([
+            'name' => 'Admin Store',
+            'email' => 'optional-storage-manager@example.com',
+            'phone' => '0901234569',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 10,
+            'status' => 'active',
         ]);
+
+        $this->actingAs($adminStore)->postJson('/admin/employees', [
+            'name' => 'Nhân viên không chọn kho',
+            'email' => 'optional-storage@example.com',
+            'phone' => '0901234570',
+            'password' => 'secret123',
+            'status' => 'active',
+        ])->assertCreated();
+
+        $branchEmployee = User::where('email', 'optional-storage@example.com')->firstOrFail();
+        $this->assertNull($branchEmployee->storage_id);
+        $this->assertSame(10, (int) $branchEmployee->branch_id);
     }
 
     public function test_current_admin_appears_first_without_checkbox_or_delete_button(): void
