@@ -1022,6 +1022,10 @@ class AdminOrderDisplayTest extends TestCase
 
         $this->assertSame(10, substr_count($html, '<td class="text-end fw-semibold order-col-debt">'));
         $this->assertStringContainsString('Trang 1 / 2', $html);
+        $this->assertMatchesRegularExpression(
+            '/<div class="pagination-page-summary mb-2 text-center">\s*Trang 1 \/ 2\s*<\/div>\s*<ul class="pagination/',
+            $html
+        );
         $this->assertStringContainsString('s=LEDGER-PAGE', html_entity_decode($html));
     }
 

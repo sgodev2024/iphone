@@ -1,5 +1,9 @@
 @if ($paginator->hasPages())
-    <nav>
+    <nav aria-label="Phân trang">
+        <div class="pagination-page-summary mb-2 text-center">
+            Trang {{ $paginator->currentPage() }} / {{ $paginator->lastPage() }}
+        </div>
+
         <ul class="pagination justify-content-center gap-2">
             {{-- Previous Page Link --}}
             @if ($paginator->onFirstPage())
@@ -12,9 +16,6 @@
                             class="pagination-arrow-desktop">&laquo;</span><span
                             class="pagination-arrow-mobile">&lsaquo;</span></a></li>
             @endif
-
-            <li class="client-pagination-mobile-label">Trang {{ $paginator->currentPage() }} /
-                {{ $paginator->lastPage() }}</li>
 
             {{-- Pagination Elements --}}
             @foreach ($elements as $element)
