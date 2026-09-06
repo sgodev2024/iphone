@@ -919,7 +919,7 @@ class AdminCrudAuditTest extends TestCase
         $this->assertDatabaseMissing('branches', ['name' => 'Concurrent B']);
         $this->assertDatabaseMissing('storages', ['name' => 'Kho Concurrent B']);
     }
-    public function test_branch_form_keeps_current_admin_store_for_edit_and_disables_empty_create_state(): void
+    public function test_branch_form_keeps_current_admin_store_for_edit_and_explains_empty_create_state(): void
     {
         $administrator = $this->createUser(roleId: 1);
         $current = $this->createUser('current-store@example.com', '0902000086', 2);
@@ -929,7 +929,15 @@ class AdminCrudAuditTest extends TestCase
         $this->actingAs($administrator)->getJson("/admin/branchs/{$branch->id}/show")->assertOk()->assertJsonPath('data.admin_store.id', $current->id);
         $this->actingAs($administrator)->get('/admin/branchs/create')->assertOk()->assertSee('available-store@example.com')->assertDontSee('current-store@example.com');
         $this->actingAs($administrator)->postJson('/admin/branchs', ['name' => 'Available Branch', 'admin_store_user_id' => $available->id, 'address' => 'Da Nang', 'status' => '1'])->assertCreated();
-        $this->actingAs($administrator)->get('/admin/branchs/create')->assertOk()->assertSee('Không còn tài khoản Admin Store chưa được gán cửa hàng.');
+        $this->actingAs($administrator)
+            ->get('/admin/branchs/create')
+            ->assertOk()
+            ->assertSee('Không còn tài khoản Admin Store chưa được gán cửa hàng.')
+            ->assertSee('data-has-available-admin-store="0"', false)
+            ->assertSee('Chưa thể thêm chi nhánh', false)
+            ->assertSee('Không thể thêm chi nhánh vì không còn tài khoản Admin Store chưa được gán.', false)
+            ->assertSee('Tạo Admin Store', false)
+            ->assertDontSee('id="show-modal" disabled', false);
     }
     public function test_empty_default_storage_can_be_deleted_but_inventory_blocks_branch_delete(): void
     {
@@ -937,7 +945,13 @@ class AdminCrudAuditTest extends TestCase
         $emptyStore = $this->createUser('empty-delete-store@example.com', '0902000088', 2);
         $this->actingAs($administrator)->postJson('/admin/branchs', ['name' => 'Empty Delete Branch', 'admin_store_user_id' => $emptyStore->id, 'address' => 'Ha Noi', 'status' => '1'])->assertCreated();
         $emptyBranch = Branch::where('name', 'Empty Delete Branch')->firstOrFail();
-        $this->actingAs($administrator)->deleteJson('/admin/branchs', ['ids' => [$emptyBranch->id]])->assertOk();
+        $this->actingAs($emptyStore)
+            ->deleteJson("/admin/branches/{$emptyBranch->id}")
+            ->assertForbidden();
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$emptyBranch->id}")
+            ->assertOk()
+            ->assertJsonMissingValidationErrors('model');
         $this->assertDatabaseMissing('branches', ['id' => $emptyBranch->id]);
         $this->assertDatabaseMissing('storages', ['branch_id' => $emptyBranch->id]);
         $this->assertNull($emptyStore->fresh()->branch_id);
@@ -947,7 +961,10 @@ class AdminCrudAuditTest extends TestCase
         $usedBranch = Branch::where('name', 'Used Delete Branch')->firstOrFail();
         $storage = Storage::where('branch_id', $usedBranch->id)->firstOrFail();
         DB::table('product_storage')->insert(['product_id' => 1, 'storage_id' => $storage->id, 'quantity' => 1, 'created_at' => now(), 'updated_at' => now()]);
-        $this->actingAs($administrator)->deleteJson('/admin/branchs', ['ids' => [$usedBranch->id]])->assertUnprocessable();
+        $this->actingAs($administrator)
+            ->deleteJson('/admin/branches', ['ids' => [$usedBranch->id]])
+            ->assertUnprocessable()
+            ->assertJsonMissingValidationErrors('model');
         $this->assertDatabaseHas('branches', ['id' => $usedBranch->id]);
         $this->assertDatabaseHas('storages', ['id' => $storage->id]);
     }
@@ -985,6 +1002,272 @@ class AdminCrudAuditTest extends TestCase
         $this->assertSame($branch->id, (int) $adminStore->fresh()->branch_id);
     }
 
+    public function test_branch_single_delete_ui_uses_the_dedicated_resource_route(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+        [$branch] = $this->createBranchForDeletion($administrator, 1);
+
+        $this->actingAs($administrator)
+            ->get('/admin/branche')
+            ->assertRedirect('/admin/branches');
+
+        $response = $this->actingAs($administrator)
+            ->get('/admin/branches');
+
+        $response
+            ->assertOk()
+            ->assertSee("/admin/branches/{$branch->id}", false)
+            ->assertSee("method: 'DELETE'", false)
+            ->assertSee('Bạn có chắc muốn xóa chi nhánh này?', false)
+            ->assertSee('if (!result.isConfirmed)', false)
+            ->assertSee('Không thể xóa chi nhánh. Vui lòng kiểm tra dữ liệu liên quan.', false)
+            ->assertSee('showBranchDeleteNotification', false)
+            ->assertSee("title: type === 'success' ? 'Đã xóa chi nhánh' : 'Không thể xóa chi nhánh'", false)
+            ->assertSee('timeout: 15000', false)
+            ->assertSee('complete: () =>', false)
+            ->assertSee(".prop('disabled', originalButtonState.disabled)", false)
+            ->assertSee('const branchIndexUrl', false)
+            ->assertSee('assets/js/sweetalert2.js', false)
+            ->assertDontSee('window.location.pathname', false)
+            ->assertSee("response?.errors?.branch?.[0]", false)
+            ->assertDontSee('handleDestroy([id])', false);
+
+        $urlConstants = array_values(array_filter(
+            preg_split('/\R/', $response->getContent()),
+            fn (string $line): bool => (
+                str_contains($line, 'const branch')
+                || str_contains($line, 'const adminStoreCreateUrl')
+            ) && str_contains($line, 'Url = '),
+        ));
+
+        $this->assertCount(6, $urlConstants);
+        foreach ($urlConstants as $constant) {
+            $this->assertStringEndsWith(';', trim($constant));
+        }
+    }
+
+    public function test_administrators_manage_branches_globally_while_admin_store_and_staff_are_denied(): void
+    {
+        $administratorA = $this->createUser(roleId: 1);
+        $administratorB = $this->createUser('global-admin-b@example.com', '0902970002', 1);
+        [$branch, $adminStore, $storage] = $this->createBranchForDeletion($administratorA, 40);
+        $staff = $this->createUser('branch-denied-staff@example.com', '0902970003', 3);
+
+        $this->actingAs($administratorB)
+            ->get('/admin/branches')
+            ->assertOk()
+            ->assertSee($branch->name);
+        $this->actingAs($administratorB)
+            ->get('/admin/branches/create')
+            ->assertOk();
+        $this->actingAs($administratorB)
+            ->getJson("/admin/branches/{$branch->id}/show")
+            ->assertOk()
+            ->assertJsonPath('data.id', $branch->id);
+
+        $this->actingAs($administratorB)
+            ->putJson("/admin/branches/{$branch->id}", [
+                'name' => 'Globally Updated Branch',
+                'admin_store_user_id' => $adminStore->id,
+                'address' => 'Da Nang',
+                'status' => '1',
+            ])
+            ->assertOk();
+        $this->assertDatabaseHas('branches', [
+            'id' => $branch->id,
+            'user_id' => $administratorA->id,
+            'name' => 'Globally Updated Branch',
+            'address' => 'Da Nang',
+        ]);
+
+        $this->actingAs($administratorB)
+            ->patchJson('/admin/branches/change-status', ['ids' => [$branch->id]])
+            ->assertOk();
+        $this->assertFalse((bool) $branch->fresh()->status);
+
+        $validPayload = [
+            'name' => 'Denied Branch Write',
+            'admin_store_user_id' => $adminStore->id,
+            'address' => 'Ha Noi',
+            'status' => '1',
+        ];
+
+        foreach ([$adminStore, $staff] as $actor) {
+            $this->actingAs($actor)->get('/admin/branches')->assertForbidden();
+            $this->actingAs($actor)->get('/admin/branches/create')->assertForbidden();
+            $this->actingAs($actor)->getJson("/admin/branches/{$branch->id}/show")->assertForbidden();
+            $this->actingAs($actor)->postJson('/admin/branches', $validPayload)->assertForbidden();
+            $this->actingAs($actor)->putJson("/admin/branches/{$branch->id}", $validPayload)->assertForbidden();
+            $this->actingAs($actor)
+                ->patchJson('/admin/branches/change-status', ['ids' => [$branch->id]])
+                ->assertForbidden();
+            $this->actingAs($actor)->deleteJson("/admin/branches/{$branch->id}")->assertForbidden();
+            $this->actingAs($actor)
+                ->deleteJson('/admin/branches', ['ids' => [$branch->id]])
+                ->assertForbidden();
+        }
+
+        $this->actingAs($administratorB)
+            ->deleteJson("/admin/branches/{$branch->id}")
+            ->assertOk();
+        $this->assertDatabaseMissing('branches', ['id' => $branch->id]);
+        $this->assertDatabaseMissing('storages', ['id' => $storage->id]);
+        $this->assertNull($adminStore->fresh()->branch_id);
+
+        [$bulkBranchA, $bulkStoreA, $bulkStorageA] = $this->createBranchForDeletion($administratorA, 41);
+        [$bulkBranchB, $bulkStoreB, $bulkStorageB] = $this->createBranchForDeletion($administratorA, 42);
+
+        $this->actingAs($administratorB)
+            ->deleteJson('/admin/branches', ['ids' => [$bulkBranchA->id, $bulkBranchB->id]])
+            ->assertOk()
+            ->assertJsonMissingValidationErrors('model');
+
+        $this->assertDatabaseMissing('branches', ['id' => $bulkBranchA->id]);
+        $this->assertDatabaseMissing('branches', ['id' => $bulkBranchB->id]);
+        $this->assertDatabaseMissing('storages', ['id' => $bulkStorageA->id]);
+        $this->assertDatabaseMissing('storages', ['id' => $bulkStorageB->id]);
+        $this->assertNull($bulkStoreA->fresh()->branch_id);
+        $this->assertNull($bulkStoreB->fresh()->branch_id);
+    }
+
+    public function test_branch_bulk_delete_uses_ids_without_a_model_payload(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+        [$branchA, $storeA, $storageA] = $this->createBranchForDeletion($administrator, 2);
+        [$branchB, $storeB, $storageB] = $this->createBranchForDeletion($administrator, 3);
+
+        $this->actingAs($administrator)
+            ->deleteJson('/admin/branches', ['ids' => [$branchA->id, $branchB->id]])
+            ->assertOk()
+            ->assertJsonMissingValidationErrors('model');
+
+        $this->assertDatabaseMissing('branches', ['id' => $branchA->id]);
+        $this->assertDatabaseMissing('branches', ['id' => $branchB->id]);
+        $this->assertDatabaseMissing('storages', ['id' => $storageA->id]);
+        $this->assertDatabaseMissing('storages', ['id' => $storageB->id]);
+        $this->assertNull($storeA->fresh()->branch_id);
+        $this->assertNull($storeB->fresh()->branch_id);
+    }
+
+    public function test_branch_bulk_delete_is_atomic_when_one_branch_is_blocked(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+        [$emptyBranch, $emptyStore, $emptyStorage] = $this->createBranchForDeletion($administrator, 50);
+        [$blockedBranch, $blockedStore, $blockedStorage] = $this->createBranchForDeletion($administrator, 51);
+        $staff = $this->createUser('atomic-delete-staff@example.com', '0902980051', 3);
+        $staff->update(['branch_id' => $blockedBranch->id]);
+
+        $this->actingAs($administrator)
+            ->deleteJson('/admin/branches', ['ids' => [$emptyBranch->id, $blockedBranch->id]])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có nhân viên.');
+
+        $this->assertDatabaseHas('branches', ['id' => $emptyBranch->id]);
+        $this->assertDatabaseHas('branches', ['id' => $blockedBranch->id]);
+        $this->assertDatabaseHas('storages', ['id' => $emptyStorage->id]);
+        $this->assertDatabaseHas('storages', ['id' => $blockedStorage->id]);
+        $this->assertSame($emptyBranch->id, (int) $emptyStore->fresh()->branch_id);
+        $this->assertSame($blockedBranch->id, (int) $blockedStore->fresh()->branch_id);
+    }
+
+    public function test_branch_delete_rejects_each_direct_business_reference(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+
+        [$staffBranch] = $this->createBranchForDeletion($administrator, 4);
+        $staff = $this->createUser('delete-staff@example.com', '0902980004', 3);
+        $staff->update(['branch_id' => $staffBranch->id]);
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$staffBranch->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có nhân viên.')
+            ->assertJsonPath('errors.branch.0', 'Không thể xóa chi nhánh vì đang có nhân viên.');
+
+        [$orderBranch] = $this->createBranchForDeletion($administrator, 5);
+        DB::table('orders')->insert([
+            'branch_id' => $orderBranch->id,
+            'total_money' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$orderBranch->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có đơn hàng.');
+
+        [$customerBranch] = $this->createBranchForDeletion($administrator, 6);
+        DB::table('clients')->insert([
+            'branch_id' => $customerBranch->id,
+            'code' => 'DELETE-CLIENT',
+            'name' => 'Customer',
+            'phone' => '0902991006',
+            'email' => 'delete-client@example.com',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$customerBranch->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có khách hàng.');
+
+        [$companyBranch] = $this->createBranchForDeletion($administrator, 7);
+        DB::table('companies')->insert([
+            'branch_id' => $companyBranch->id,
+            'name' => 'Delete Company',
+            'phone' => '0902991007',
+            'address' => 'Ha Noi',
+            'email' => 'delete-company@example.com',
+            'tax_number' => 'DELETE-COMPANY',
+            'bank_account' => '123456',
+            'bank_id' => 1,
+            'status' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$companyBranch->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có nhà cung cấp.');
+
+        [$returnBranch] = $this->createBranchForDeletion($administrator, 8);
+        DB::table('order_returns')->insert(['branch_id' => $returnBranch->id]);
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$returnBranch->id}")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Không thể xóa chi nhánh vì đang có phiếu trả hàng.');
+    }
+
+    public function test_branch_delete_rejects_inventory_imei_and_import_storage_references(): void
+    {
+        $administrator = $this->createUser(roleId: 1);
+
+        $storageReferences = [
+            'product_storage' => 'Không thể xóa chi nhánh vì kho vẫn còn tồn kho.',
+            'product_imeis' => 'Không thể xóa chi nhánh vì kho vẫn còn IMEI.',
+            'import_coupon' => 'Không thể xóa chi nhánh vì kho đang có phiếu nhập hàng.',
+        ];
+
+        foreach (array_keys($storageReferences) as $offset => $table) {
+            $message = $storageReferences[$table];
+            [$branch, , $storage] = $this->createBranchForDeletion($administrator, 20 + $offset);
+
+            $payload = ['storage_id' => $storage->id];
+            if ($table === 'product_storage') {
+                $payload += ['product_id' => 1, 'quantity' => 1];
+            }
+            DB::table($table)->insert($payload);
+
+            $this->actingAs($administrator)
+                ->deleteJson("/admin/branches/{$branch->id}")
+                ->assertUnprocessable()
+                ->assertJsonPath('message', $message)
+                ->assertJsonPath('errors.branch.0', $message);
+
+            $this->assertDatabaseHas('branches', ['id' => $branch->id]);
+            $this->assertDatabaseHas('storages', ['id' => $storage->id]);
+        }
+    }
+
     public function test_branch_delete_rolls_back_storage_and_admin_store_when_branch_delete_fails(): void
     {
         $administrator = $this->createUser(roleId: 1);
@@ -1001,7 +1284,14 @@ class AdminCrudAuditTest extends TestCase
         Branch::deleting(static function (): void { throw new \RuntimeException('branch delete failure'); });
 
         try {
-            $this->actingAs($administrator)->deleteJson('/admin/branchs', ['ids' => [$branch->id]])->assertStatus(500);
+            $this->actingAs($administrator)
+                ->deleteJson("/admin/branches/{$branch->id}")
+                ->assertStatus(500)
+                ->assertJsonPath(
+                    'message',
+                    'Không thể xóa chi nhánh. Vui lòng kiểm tra dữ liệu liên quan.'
+                )
+                ->assertDontSee('branch delete failure');
         } finally {
             Branch::setEventDispatcher($dispatcher);
         }
@@ -1068,6 +1358,21 @@ class AdminCrudAuditTest extends TestCase
             $table->unsignedBigInteger('storage_id');
             $table->integer('quantity')->default(0);
             $table->timestamps();
+        });
+
+        Schema::create('product_imeis', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('storage_id');
+        });
+
+        Schema::create('import_coupon', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('storage_id');
+        });
+
+        Schema::create('order_returns', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('branch_id');
         });
 
         Schema::create('products', function (Blueprint $table) {
@@ -1192,6 +1497,29 @@ class AdminCrudAuditTest extends TestCase
             'manager_id' => $managerId,
             'status' => 'active',
         ]);
+    }
+
+    private function createBranchForDeletion(User $administrator, int $sequence): array
+    {
+        $adminStore = $this->createUser(
+            "delete-store-{$sequence}@example.com",
+            sprintf('090299%04d', $sequence),
+            2,
+        );
+
+        $this->actingAs($administrator)
+            ->postJson('/admin/branches', [
+                'name' => "Delete Branch {$sequence}",
+                'admin_store_user_id' => $adminStore->id,
+                'address' => 'Ha Noi',
+                'status' => '1',
+            ])
+            ->assertCreated();
+
+        $branch = Branch::where('name', "Delete Branch {$sequence}")->firstOrFail();
+        $storage = Storage::where('branch_id', $branch->id)->firstOrFail();
+
+        return [$branch, $adminStore, $storage];
     }
 
     private function createBank(): int

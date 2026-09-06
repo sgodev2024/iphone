@@ -10,7 +10,7 @@
     <script src="{{ asset('assets/js/plugin/bootstrap-notify/bootstrap-notify.min.js') }}"></script>
     <script src="{{ asset('assets/js/plugin/jsvectormap/jsvectormap.min.js') }}"></script>
     <script src="{{ asset('assets/js/plugin/jsvectormap/world.js') }}"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.22.4/sweetalert2.min.js"></script>
+    <script src="{{ asset('assets/js/sweetalert2.js') }}?v={{ filemtime(public_path('assets/js/sweetalert2.js')) }}"></script>
     <script src="{{ asset('assets/js/plugin/webfont/webfont.min.js') }}"></script>
     <script src="{{ asset('assets/js/kaiadmin.min.js') }}"></script>
     <script src="{{ asset('assets/js/kaiadmin.js') }}"></script>

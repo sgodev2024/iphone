@@ -12,7 +12,7 @@
                     <i class="icon-arrow-right"></i>
                 </li>
                 <li class="nav-item">
-                    <a href="/admin/branchs">Chi nhánh</a>
+                    <a href="{{ route('admin.branches.index') }}">Chi nhánh</a>
                 </li>
                 <li class="separator">
                     <i class="icon-arrow-right"></i>
@@ -31,7 +31,7 @@
                     <div class="card-body">
                         <div class="">
                             <div id="basic-datatables_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
-                                <form method="post" action="{{ route('admin.branch.update', ['id' => $branch->id]) }}"
+                                <form method="post" action="{{ route('admin.branches.update', ['id' => $branch->id]) }}"
                                     id="editemployee">
                                     @csrf
                                     <div class="modal-body">

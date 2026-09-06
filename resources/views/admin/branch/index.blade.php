@@ -23,13 +23,15 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title">Danh sách chi nhánh</h5>
-                        <button class="btn btn-primary" id="show-modal" @disabled(auth()->user()?->isAdministrator() && $adminStoreUsers->isEmpty())>Thêm
-                            mới</button>
+                        <button class="btn btn-primary" id="show-modal"
+                            data-has-available-admin-store="{{ $adminStoreUsers->isNotEmpty() ? '1' : '0' }}">
+                            Thêm mới
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="btn-group">
-                                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown"
+                                <button type="button" class="btn btn-primary dropdown-toggle" id="branch-actions-button" data-bs-toggle="dropdown"
                                     aria-expanded="false">
                                     Thao tác
                                 </button>
@@ -143,7 +145,13 @@
     <script>
         $(document).ready(function() {
 
-            let currentPage = 1
+            let currentPage = 1;
+            const branchIndexUrl = @json(route('admin.branches.index'));
+            const branchBulkDeleteUrl = @json(route('admin.branches.bulk-destroy'));
+            const branchShowUrl = @json(route('admin.branches.show', ['id' => '__BRANCH_ID__']));
+            const branchStoreUrl = @json(route('admin.branches.store'));
+            const branchUpdateUrl = @json(route('admin.branches.update', ['id' => '__BRANCH_ID__']));
+            const adminStoreCreateUrl = @json(route('admin.users.create'));
 
             function debounce(fn, delay = 500) {
                 let timer;
@@ -154,6 +162,33 @@
             }
 
             $('#show-modal').click(function() {
+                const hasAvailableAdminStore = $(this).data('has-available-admin-store') === 1
+
+                if (!hasAvailableAdminStore) {
+                    const message =
+                        'Không thể thêm chi nhánh vì không còn tài khoản Admin Store chưa được gán. Vui lòng tạo một tài khoản Admin Store mới trước.'
+
+                    if (typeof window.Swal?.fire !== 'function') {
+                        window.alert(message)
+                        return
+                    }
+
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Chưa thể thêm chi nhánh',
+                        text: message,
+                        showCancelButton: true,
+                        confirmButtonText: 'Tạo Admin Store',
+                        cancelButtonText: 'Đóng'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = adminStoreCreateUrl
+                        }
+                    })
+
+                    return
+                }
+
                 $('#branchModal').modal('show')
                 $('#branchForm')[0].reset()
                 $('#branch-admin_store_user_id option[data-current-admin-store]').remove()
@@ -190,7 +225,7 @@
             // Hàm fetch data
             const fetchBranches = (page = 1, search = '') => {
                 $.ajax({
-                    url: window.location.pathname, // chỉ lấy path, bỏ query cũ
+                    url: branchIndexUrl,
                     method: 'GET',
                     data: {
                         page,
@@ -208,15 +243,17 @@
             }
 
             $(document).on('click', '.btn-delete', function() {
-                let id = $(this).data('id');
-                handleDestroy([id])
+                const $button = $(this)
+                const deleteUrl = $(this).data('delete-url')
+
+                confirmBranchDelete(deleteUrl, {}, $button)
             });
 
             $(document).on('click', '.btn-edit', function() {
                 let id = $(this).data('id');
 
                 $.ajax({
-                    url: `/admin/branchs/${id}/show`,
+                    url: branchShowUrl.replace('__BRANCH_ID__', id),
                     type: 'GET',
                     success: (res) => {
                         const current = res.data.admin_store;
@@ -247,13 +284,104 @@
 
             })
 
-            $('#bulk-delete').click(function() {
+            $('#bulk-delete').click(function(e) {
+                e.preventDefault()
                 const ids = $('.checked-item:checked').map((i, el) => $(el).val()).get()
 
                 if (ids.length <= 0) return datgin.warning('Vui lòng chọn ít nhất 1 hàng!')
 
-                handleDestroy(ids)
+                confirmBranchDelete(branchBulkDeleteUrl, {
+                    ids
+                }, $('#branch-actions-button'))
             })
+
+            function showBranchDeleteNotification(type, message) {
+                try {
+                    if (typeof window.datgin?.[type] === 'function') {
+                        window.datgin[type](message)
+                        return
+                    }
+                } catch (error) {
+                    console.error('Branch delete notification failed.', error)
+                }
+
+                Swal.fire({
+                    icon: type === 'success' ? 'success' : 'error',
+                    title: type === 'success' ? 'Đã xóa chi nhánh' : 'Không thể xóa chi nhánh',
+                    text: message
+                })
+            }
+
+            function confirmBranchDelete(url, data = {}, $trigger = $()) {
+                const isBulkDelete = Array.isArray(data.ids)
+
+                Swal.fire({
+                    title: "Xác nhận xóa?",
+                    text: isBulkDelete
+                        ? "Bạn có chắc muốn xóa các chi nhánh đã chọn?"
+                        : "Bạn có chắc muốn xóa chi nhánh này?",
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#3085d6",
+                    cancelButtonColor: "#d33",
+                    confirmButtonText: "Vâng, xóa ngay!",
+                    cancelButtonText: "Hủy"
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return
+                    }
+
+                    const originalButtonState = {
+                        disabled: $trigger.prop('disabled'),
+                        html: $trigger.html(),
+                        opacity: $trigger[0]?.style.opacity ?? '',
+                        ariaBusy: $trigger.attr('aria-busy')
+                    }
+
+                    $.ajax({
+                        url,
+                        method: 'DELETE',
+                        data,
+                        timeout: 15000,
+                        beforeSend: () => {
+                            if (!$trigger.length) return
+
+                            $trigger
+                                .prop('disabled', true)
+                                .attr('aria-busy', 'true')
+                                .css('opacity', '0.65')
+                                .html('<i class="fa-solid fa-spinner fa-spin"></i>')
+                        },
+                        success: (res) => {
+                            showBranchDeleteNotification('success', res.message)
+                            $('input[type="checkbox"]').prop('checked', false)
+                            fetchBranches(currentPage, searchText)
+                        },
+                        error: (xhr) => {
+                            const response = xhr.responseJSON
+                            const message = response?.message ||
+                                response?.errors?.branch?.[0] ||
+                                'Không thể xóa chi nhánh. Vui lòng kiểm tra dữ liệu liên quan.'
+
+                            showBranchDeleteNotification('error', message)
+                        },
+                        complete: () => {
+                            if (!$trigger.length) return
+
+                            $trigger
+                                .prop('disabled', originalButtonState.disabled)
+                                .html(originalButtonState.html)
+                                .css('opacity', originalButtonState.opacity)
+
+                            if (originalButtonState.ariaBusy === undefined) {
+                                $trigger.removeAttr('aria-busy')
+                            } else {
+                                $trigger.attr('aria-busy', originalButtonState.ariaBusy)
+                            }
+                        }
+                    })
+                })
+            }
 
             $('#bulk-status').click(function() {
                 const ids = $('.checked-item:checked').map((i, el) => $(el).val()).get()
@@ -276,7 +404,7 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         $.ajax({
-                            url: '/admin/branchs/change-status',
+                            url: @json(route('admin.branches.status.update')),
                             method: 'PATCH',
                             data: {
                                 ids
@@ -310,7 +438,9 @@
                 })
 
                 $.ajax({
-                    url: '/admin/branchs' + (method === 'PUT' ? '/' + $form.attr('data-id') : ''),
+                    url: method === 'PUT'
+                        ? branchUpdateUrl.replace('__BRANCH_ID__', $form.attr('data-id'))
+                        : branchStoreUrl,
                     type: 'POST',
                     data: formData,
                     success: (res) => {

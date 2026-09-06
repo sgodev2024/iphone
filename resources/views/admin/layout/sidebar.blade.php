@@ -492,7 +492,7 @@
                                 @if (Auth::user()?->isAdministrator())
                                     @canany(['branch.view', 'branch.create', 'user.view'])
                                         <li class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                                            <a href="{{ route('admin.branchs.index') }}">
+                                            <a href="{{ route('admin.branches.index') }}">
                                                 <span class="sub-item">Cửa Hàng / Chi Nhánh</span>
                                             </a>
                                         </li>

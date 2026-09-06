@@ -31,7 +31,7 @@
                     <div class="card-body">
                         <div class="">
                             <div id="basic-datatables_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
-                                <form action="{{ route('admin.branch.add') }}" id="addemployee" method="post">
+                                <form action="{{ route('admin.branches.store') }}" id="addemployee" method="post">
                                     @csrf
                                     <div class="modal-body">
                                         <div class="row">

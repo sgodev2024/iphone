@@ -35,7 +35,9 @@
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </button>
 
-                            <button class="btn btn-danger btn-sm btn-delete" data-id="{{ $branch->id }}">
+                            <button type="button" class="btn btn-danger btn-sm btn-delete"
+                                data-id="{{ $branch->id }}"
+                                data-delete-url="{{ route('admin.branches.destroy', ['branch' => $branch->id]) }}">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         </div>

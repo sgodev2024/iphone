@@ -51,6 +51,7 @@ use App\Http\Controllers\Staff\WareHomeController;
 use App\Http\Controllers\SuperAdmin\StoreController;
 use App\Http\Controllers\SuperAdmin\SuperAdminController;
 use App\Http\Middleware\CheckLoginSuperAdmin;
+use Illuminate\Routing\RedirectController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Staff\OrderReturnController;
 
@@ -389,9 +390,9 @@ Route::middleware(['auth'])
         |--------------------------------------------------------------------------
         */
 
-        Route::prefix('branchs')
+        Route::prefix('branches')
             ->controller(BranchController::class)
-            ->name('branchs.')
+            ->name('branches.')
             ->group(function () {
 
                 Route::get('/', 'index')
@@ -414,13 +415,39 @@ Route::middleware(['auth'])
                     ->middleware('permission:branch.update')
                     ->name('update');
 
-                Route::delete('/', 'destroy')
+                Route::delete('/', 'bulkDestroy')
+                    ->middleware('permission:branch.delete')
+                    ->name('bulk-destroy');
+
+                Route::delete('{branch}', 'destroy')
                     ->middleware('permission:branch.delete')
                     ->name('destroy');
 
                 Route::patch('change-status', 'changeStatus')
                     ->middleware('permission:branch.status')
                     ->name('status.update');
+            });
+
+        // Recover stale bookmarks/tabs that used the old singular URL.
+        Route::match(['GET', 'HEAD'], 'branche', RedirectController::class)
+            ->defaults('destination', '/admin/branches')
+            ->defaults('status', 302)
+            ->middleware('permission:branch.view')
+            ->name('branche.redirect');
+
+        // Keep the historical misspelled URLs working for existing links and clients.
+        Route::prefix('branchs')
+            ->controller(BranchController::class)
+            ->name('branchs.')
+            ->group(function () {
+                Route::get('/', 'index')->middleware('permission:branch.view')->name('index');
+                Route::get('create', 'create')->middleware('permission:branch.create')->name('create');
+                Route::post('/', 'store')->middleware('permission:branch.create')->name('store');
+                Route::get('{id}/show', 'show')->middleware('permission:branch.view')->name('show');
+                Route::put('{id}', 'update')->middleware('permission:branch.update')->name('update');
+                Route::delete('/', 'bulkDestroy')->middleware('permission:branch.delete')->name('bulk-destroy');
+                Route::delete('{branch}', 'destroy')->middleware('permission:branch.delete')->name('destroy');
+                Route::patch('change-status', 'changeStatus')->middleware('permission:branch.status')->name('status.update');
             });
 
         /*

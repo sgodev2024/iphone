@@ -11,20 +11,24 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class BranchController extends Controller
 {
     public function index(Request $request)
     {
+        $this->ensureAdministrator();
+
         $searchText = $request->input('s');
 
         $branchs = Branch::query()
             ->with(['adminStore', 'storages'])
-            ->where('user_id', Auth::id())
             ->when(! empty($searchText), function (Builder $query) use ($searchText) {
                 $query->where('name', 'like', "%{$searchText}%");
             })
@@ -59,9 +63,10 @@ class BranchController extends Controller
 
     public function show(string $id)
     {
+        $this->ensureAdministrator();
+
         $branch = Branch::query()
             ->with('adminStore')
-            ->where('user_id', Auth::id())
             ->find($id);
 
         if (! $branch) {
@@ -93,7 +98,7 @@ class BranchController extends Controller
     {
         $this->ensureAdministrator();
         DB::transaction(function () use ($request, $id): void {
-            $branch = Branch::query()->where('user_id', Auth::id())->lockForUpdate()->find($id);
+            $branch = Branch::query()->lockForUpdate()->find($id);
             if (! $branch) abort(Response::HTTP_NOT_FOUND);
             $data = $this->validateBranch($request, $branch->id);
             $previous = $branch->admin_store_user_id ? (int) $branch->admin_store_user_id : null;
@@ -104,30 +109,32 @@ class BranchController extends Controller
         }, 3);
         return response()->json(['message' => 'Cap nhat chi nhanh thanh cong.'], Response::HTTP_OK);
     }
-    public function destroy(Request $request)
+    public function destroy(Branch $branch)
     {
         $this->ensureAdministrator();
+
+        return $this->deleteBranchesWithResponse(
+            [$branch->id],
+            'Xóa chi nhánh thành công.',
+        );
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $this->ensureAdministrator();
+
         $validated = $request->validate([
             'ids' => ['required', 'array'],
             'ids.*' => [
                 'integer',
-                Rule::exists('branches', 'id')->where(fn ($query) => $query->where('user_id', Auth::id())),
+                Rule::exists('branches', 'id'),
             ],
-        ]);
+        ], __('request.messages'));
 
-        DB::transaction(function () use ($validated): void {
-            $branches = Branch::query()->where('user_id', Auth::id())->whereIn('id', $validated['ids'])->lockForUpdate()->get();
-            foreach ($branches as $branch) {
-                $this->ensureBranchCanBeDeleted($branch);
-                $this->deleteRemovableDefaultStorage($branch);
-                $this->clearAdminStoreAssignment($branch);
-                $branch->delete();
-            }
-        });
-
-        return response()->json([
-            'message' => 'Xoa chi nhanh thanh cong.',
-        ], Response::HTTP_OK);
+        return $this->deleteBranchesWithResponse(
+            array_values(array_unique($validated['ids'])),
+            'Xóa các chi nhánh đã chọn thành công.',
+        );
     }
 
     public function changeStatus(Request $request)
@@ -137,12 +144,11 @@ class BranchController extends Controller
             'ids' => ['required', 'array'],
             'ids.*' => [
                 'integer',
-                Rule::exists('branches', 'id')->where(fn ($query) => $query->where('user_id', Auth::id())),
+                Rule::exists('branches', 'id'),
             ],
         ]);
 
         Branch::query()
-            ->where('user_id', Auth::id())
             ->whereIn('id', $validated['ids'])
             ->each(function (Branch $branch) {
                 $branch->update(['status' => ! $branch->status]);
@@ -161,7 +167,7 @@ class BranchController extends Controller
 
     private function validateBranch(Request $request, $id = null): array
     {
-        return $request->validate(['name' => ['required','string','max:255',Rule::unique('branches','name')->where(fn ($q) => $q->where('user_id',Auth::id()))->ignore($id)], 'admin_store_user_id' => ['required','integer',Rule::exists('users','id')->where(fn ($q) => $q->whereIn('role_id',Roles::adminStoreIds())),Rule::unique('branches','admin_store_user_id')->ignore($id)], 'address' => ['required','string','max:500'], 'phone' => ['nullable','string','regex:/^0[0-9]{9}$/'], 'email' => ['nullable','email','max:255'], 'status' => ['required','in:0,1']], __('request.messages'));
+        return $request->validate(['name' => ['required','string','max:255',Rule::unique('branches','name')->ignore($id)], 'admin_store_user_id' => ['required','integer',Rule::exists('users','id')->where(fn ($q) => $q->whereIn('role_id',Roles::adminStoreIds())),Rule::unique('branches','admin_store_user_id')->ignore($id)], 'address' => ['required','string','max:500'], 'phone' => ['nullable','string','regex:/^0[0-9]{9}$/'], 'email' => ['nullable','email','max:255'], 'status' => ['required','in:0,1']], __('request.messages'));
     }
 
     private function ensureAdministrator(): void { abort_unless(Auth::user()?->isAdministrator(), Response::HTTP_FORBIDDEN); }
@@ -177,10 +183,33 @@ class BranchController extends Controller
     private function ensureBranchCanBeDeleted(Branch $branch): void
     {
         $staff = User::query()->where('branch_id', $branch->id)->where('id', '<>', $branch->admin_store_user_id)->exists();
-        if ($staff) throw ValidationException::withMessages(['ids' => ['Khong the xoa chi nhanh vi da co nhan vien lien quan.']]);
-        foreach (['orders' => 'don hang', 'clients' => 'khach hang', 'companies' => 'nha cung cap', 'order_returns' => 'tra hang'] as $table => $label) {
+        if ($staff) {
+            throw ValidationException::withMessages([
+                'branch' => ['Không thể xóa chi nhánh vì đang có nhân viên.'],
+            ]);
+        }
+
+        $businessReferences = [
+            'orders' => 'Không thể xóa chi nhánh vì đang có đơn hàng.',
+            'clients' => 'Không thể xóa chi nhánh vì đang có khách hàng.',
+            'companies' => 'Không thể xóa chi nhánh vì đang có nhà cung cấp.',
+            'order_returns' => 'Không thể xóa chi nhánh vì đang có phiếu trả hàng.',
+            'transactions' => 'Không thể xóa chi nhánh vì đang có giao dịch tài chính.',
+            'cash_vouchers' => 'Không thể xóa chi nhánh vì đang có phiếu thu/chi tiền mặt.',
+            'bank_vouchers' => 'Không thể xóa chi nhánh vì đang có phiếu thu/chi ngân hàng.',
+            'customer_debt_collections' => 'Không thể xóa chi nhánh vì đang có phiếu thu công nợ khách hàng.',
+            'customer_debt_yearly_snapshots' => 'Không thể xóa chi nhánh vì đang có dữ liệu công nợ khách hàng.',
+            'customer_debt_snapshot_states' => 'Không thể xóa chi nhánh vì đang có trạng thái công nợ khách hàng.',
+            'supplier_debt_yearly_snapshots' => 'Không thể xóa chi nhánh vì đang có dữ liệu công nợ nhà cung cấp.',
+            'supplier_debt_snapshot_states' => 'Không thể xóa chi nhánh vì đang có trạng thái công nợ nhà cung cấp.',
+            'supplier_debts' => 'Không thể xóa chi nhánh vì đang có công nợ nhà cung cấp.',
+        ];
+
+        foreach ($businessReferences as $table => $message) {
             if (Schema::hasTable($table) && Schema::hasColumn($table, 'branch_id') && DB::table($table)->where('branch_id', $branch->id)->exists()) {
-                throw ValidationException::withMessages(['ids' => ["Khong the xoa chi nhanh vi da co du lieu {$label} lien quan."]]);
+                throw ValidationException::withMessages([
+                    'branch' => [$message],
+                ]);
             }
         }
     }
@@ -192,15 +221,69 @@ class BranchController extends Controller
             return;
         }
         if ($storages->count() !== 1) {
-            throw ValidationException::withMessages(['ids' => ['Khong the xoa chi nhanh vi co nhieu kho lien quan.']]);
+            throw ValidationException::withMessages([
+                'branch' => ['Không thể xóa chi nhánh vì đang có nhiều kho liên quan.'],
+            ]);
         }
         $storage = $storages->first();
-        foreach (['users', 'product_storage', 'product_imeis', 'import_coupon', 'order_details', 'order_return_details'] as $table) {
+        $storageReferences = [
+            'users' => 'Không thể xóa chi nhánh vì kho đang được gán cho nhân viên.',
+            'product_storage' => 'Không thể xóa chi nhánh vì kho vẫn còn tồn kho.',
+            'product_imeis' => 'Không thể xóa chi nhánh vì kho vẫn còn IMEI.',
+            'import_coupon' => 'Không thể xóa chi nhánh vì kho đang có phiếu nhập hàng.',
+            'order_details' => 'Không thể xóa chi nhánh vì kho đang có dữ liệu đơn hàng.',
+            'order_return_details' => 'Không thể xóa chi nhánh vì kho đang có dữ liệu trả hàng.',
+        ];
+        foreach ($storageReferences as $table => $message) {
             if (Schema::hasTable($table) && Schema::hasColumn($table, 'storage_id') && DB::table($table)->where('storage_id', $storage->id)->exists()) {
-                throw ValidationException::withMessages(['ids' => ['Khong the xoa chi nhanh vi kho mac dinh da co ton kho hoac giao dich.']]);
+                throw ValidationException::withMessages([
+                    'branch' => [$message],
+                ]);
             }
         }
         $storage->delete();
+    }
+
+    private function deleteBranchesWithResponse(array $ids, string $successMessage)
+    {
+        try {
+            $this->deleteBranches($ids);
+
+            return response()->json([
+                'message' => $successMessage,
+            ], Response::HTTP_OK);
+        } catch (ValidationException | HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error('Không thể xóa chi nhánh.', [
+                'branch_ids' => $ids,
+                'exception' => $exception,
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể xóa chi nhánh. Vui lòng kiểm tra dữ liệu liên quan.',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private function deleteBranches(array $ids): void
+    {
+        DB::transaction(function () use ($ids): void {
+            $branches = Branch::query()
+                ->whereIn('id', $ids)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            abort_unless($branches->count() === count($ids), Response::HTTP_NOT_FOUND);
+
+            foreach ($branches as $branch) {
+                $this->ensureBranchCanBeDeleted($branch);
+                $this->deleteRemovableDefaultStorage($branch);
+                $this->clearAdminStoreAssignment($branch);
+                $branch->delete();
+            }
+        }, 3);
     }
 
     private function clearAdminStoreAssignment(Branch $branch): void
