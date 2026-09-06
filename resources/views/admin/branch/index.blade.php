@@ -2,21 +2,7 @@
 
 @section('content')
     <div class="page-inner">
-        <div class="page-header">
-            <ul class="breadcrumbs mb-3">
-                <li class="nav-home">
-                    <a href="{{ route('admin.dashboard') }}">
-                        <i class="icon-home"></i>
-                    </a>
-                </li>
-                <li class="separator">
-                    <i class="icon-arrow-right"></i>
-                </li>
-                <li class="nav-item">
-                    <a href="#">Danh sách chi nhánh</a>
-                </li>
-            </ul>
-        </div>
+        <x-breadcrumb :items="[['label' => 'Danh sách chi nhánh']]" />
 
         <div class="row">
             <div class="col-md-12">

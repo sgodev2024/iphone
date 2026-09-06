@@ -7,8 +7,10 @@ use App\Mail\SendMailInfo;
 use App\Models\Storage;
 use App\Models\Roles;
 use App\Models\User;
+use App\Services\EmployeeDeletionService;
 use App\Services\SaleStorageResolver;
 use App\Support\BranchContext;
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +19,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class EmployeeController extends Controller
@@ -26,6 +30,7 @@ class EmployeeController extends Controller
     public function __construct(
         private SaleStorageResolver $saleStorageResolver,
         private BranchContext $branchContext,
+        private EmployeeDeletionService $employeeDeletionService,
     )
     {
     }
@@ -217,6 +222,33 @@ class EmployeeController extends Controller
                 isToastr: true
             );
         });
+    }
+
+    public function destroy(User $employee)
+    {
+        try {
+            $this->employeeDeletionService->delete($this->authorizedManager(), $employee);
+
+            return response()->json([
+                'message' => 'Xóa nhân viên thành công.',
+            ], Response::HTTP_OK);
+        } catch (DomainException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], Response::HTTP_CONFLICT);
+        } catch (ValidationException | HttpExceptionInterface $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error('Không thể xóa nhân viên.', [
+                'employee_id' => $employee->getKey(),
+                'actor_id' => Auth::id(),
+                'exception' => $exception,
+            ]);
+
+            return response()->json([
+                'message' => 'Không thể xóa nhân viên. Vui lòng kiểm tra dữ liệu liên quan.',
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     private function validateRequest($request, $id = null, string $accountType = 'employee')

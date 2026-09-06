@@ -2,7 +2,8 @@
     $employees = $employees ?? ($users ?? collect());
 @endphp
 
-<table class="table table-hover table-striped table-bordered mt-3">
+<div class="table-responsive" style="overflow-x: auto;">
+<table class="table table-hover table-striped table-bordered mt-3" style="min-width: 1450px;">
     <thead>
         <tr>
             <th style="width: 3%"><input type="checkbox" id="check-all"></th>
@@ -13,7 +14,7 @@
             <th style="width: 12%">Điện thoại</th>
             <th style="width: 16%">Nơi làm việc</th>
             <th style="width: 12%">Trạng thái</th>
-            <th style="width: 12%" class="text-center">Hành động</th>
+            <th style="width: 150px; min-width: 150px;" class="text-center">Hành động</th>
         </tr>
     </thead>
     <tbody>
@@ -84,6 +85,7 @@
                     @endif
                 </td>
                 <td class="text-center">
+                    <div class="d-flex flex-nowrap justify-content-center gap-1">
                     <a href="/admin/{{ $mode }}/{{ $employee->id }}/edit" class="btn btn-primary btn-sm"
                         title="Sửa">
                         <i class="fa-solid fa-pen-to-square"></i>
@@ -93,7 +95,16 @@
                             title="Ngừng hoạt động">
                             <i class="fa-solid fa-user-slash"></i>
                         </button>
+                        @if ($employee->isStaff())
+                            <button type="button" class="btn btn-danger btn-sm btn-delete-employee"
+                                data-id="{{ $employee->id }}"
+                                data-url="{{ route('admin.employees.destroy', ['employee' => $employee->id]) }}"
+                                title="Xóa nhân viên">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        @endif
                     @endunless
+                    </div>
                 </td>
             </tr>
             @empty
@@ -103,6 +114,7 @@
             @endforelse
         </tbody>
     </table>
+</div>
 
 
     <div class="row">

@@ -87,6 +87,55 @@
                 })
             });
 
+            $(document).on('click', '.btn-delete-employee', function() {
+                const $button = $(this);
+                const originalHtml = $button.html();
+                const originalOpacity = $button.css('opacity');
+
+                Swal.fire({
+                    title: 'Bạn có chắc muốn xóa nhân viên này?',
+                    text: 'Chỉ có thể xóa nếu nhân viên chưa phát sinh nghiệp vụ trong hệ thống.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Xóa nhân viên',
+                    cancelButtonText: 'Hủy'
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+
+                    $button
+                        .prop('disabled', true)
+                        .css('opacity', '0.65')
+                        .html('<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>');
+
+                    $.ajax({
+                        url: $button.data('url'),
+                        method: 'DELETE',
+                        success: (res) => {
+                            datgin.success(res.message || 'Xóa nhân viên thành công.');
+                            fetchUsers(currentPage, searchText);
+                        },
+                        error: (xhr) => {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Không thể xóa nhân viên',
+                                text: xhr.responseJSON?.message ||
+                                    'Không thể xóa nhân viên. Vui lòng kiểm tra dữ liệu liên quan.'
+                            });
+                        },
+                        complete: () => {
+                            $button
+                                .prop('disabled', false)
+                                .css('opacity', originalOpacity)
+                                .html(originalHtml);
+                        }
+                    });
+                });
+            });
+
             $('#bulk-delete').click(function() {
                 handleDestroy(function() {
                     fetchUsers(1, searchText)
