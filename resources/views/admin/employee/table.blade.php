@@ -3,20 +3,20 @@
     $actor = $actor ?? Auth::user();
 @endphp
 
-<div class="table-responsive" style="overflow-x: auto;">
-<table class="table table-hover table-striped table-bordered mt-3" style="min-width: 1550px;">
+<div class="table-responsive employee-table-scroll">
+<table class="table table-hover table-striped table-bordered mt-3 employee-table">
     <thead>
         <tr>
-            <th style="width: 3%"><input type="checkbox" id="check-all"></th>
-            <th style="width: 8%">ID</th>
-            <th style="width: 14%">Ngày tạo</th>
-            <th style="width: 25%"> Tên</th>
-            <th style="width: 12%">Vai trò</th>
-            <th style="width: 20%">Email</th>
-            <th style="width: 12%">Điện thoại</th>
-            <th style="width: 16%">Nơi làm việc</th>
-            <th style="width: 12%">Trạng thái</th>
-            <th style="width: 150px; min-width: 150px;" class="text-center">Hành động</th>
+            <th><input type="checkbox" id="check-all"></th>
+            <th>ID</th>
+            <th>Ngày tạo</th>
+            <th>Tên</th>
+            <th>Vai trò</th>
+            <th>Email</th>
+            <th>Điện thoại</th>
+            <th>Nơi làm việc</th>
+            <th>Trạng thái</th>
+            <th class="text-center">Hành động</th>
         </tr>
     </thead>
     <tbody>

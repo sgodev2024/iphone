@@ -1,5 +1,109 @@
 @extends('admin.layout.index')
 
+@push('style')
+    <style>
+        #table-wrapper {
+            min-width: 0;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        #table-wrapper > .table-responsive {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #table-wrapper .table {
+            width: 100% !important;
+            min-width: 1550px;
+            table-layout: auto;
+        }
+
+        #table-wrapper .table thead th {
+            white-space: nowrap;
+        }
+
+        #table-wrapper .table th:nth-child(1),
+        #table-wrapper .table td:nth-child(1) {
+            width: 50px !important;
+            min-width: 50px;
+        }
+
+        #table-wrapper .table th:nth-child(2),
+        #table-wrapper .table td:nth-child(2) {
+            width: 70px !important;
+            min-width: 70px;
+        }
+
+        #table-wrapper .table th:nth-child(3),
+        #table-wrapper .table td:nth-child(3) {
+            width: 130px !important;
+            min-width: 130px;
+        }
+
+        #table-wrapper .table th:nth-child(4),
+        #table-wrapper .table td:nth-child(4) {
+            width: 200px !important;
+            min-width: 200px;
+        }
+
+        #table-wrapper .table th:nth-child(5),
+        #table-wrapper .table td:nth-child(5) {
+            width: 130px !important;
+            min-width: 130px;
+        }
+
+        #table-wrapper .table th:nth-child(6),
+        #table-wrapper .table td:nth-child(6) {
+            width: 260px !important;
+            min-width: 260px;
+        }
+
+        #table-wrapper .table th:nth-child(7),
+        #table-wrapper .table td:nth-child(7) {
+            width: 150px !important;
+            min-width: 150px;
+        }
+
+        #table-wrapper .table th:nth-child(8),
+        #table-wrapper .table td:nth-child(8) {
+            width: 220px !important;
+            min-width: 220px;
+            white-space: normal;
+            word-break: normal;
+            overflow-wrap: normal;
+        }
+
+        #table-wrapper .table td:nth-child(8) > div {
+            white-space: nowrap;
+        }
+
+        #table-wrapper .table th:nth-child(9),
+        #table-wrapper .table td:nth-child(9) {
+            width: 130px !important;
+            min-width: 130px;
+        }
+
+        #table-wrapper .table th:nth-child(10),
+        #table-wrapper .table td:nth-child(10) {
+            width: 170px !important;
+            min-width: 170px;
+            white-space: nowrap;
+        }
+
+        #table-wrapper .table td:nth-child(10) .d-flex {
+            flex-wrap: nowrap !important;
+        }
+
+        #table-wrapper .table td:nth-child(10) .btn {
+            flex: 0 0 auto;
+        }
+    </style>
+@endpush
+
 @section('content')
     <div class="page-inner">
         <x-breadcrumb :items="[['label' => $title]]" />
