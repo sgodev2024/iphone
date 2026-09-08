@@ -9,6 +9,125 @@ use Illuminate\Support\Facades\DB;
 
 class PermissionSeeder extends Seeder
 {
+    /**
+     * Explicit business capabilities granted to the canonical Admin Store role.
+     * New permissions are denied by default until they are deliberately added here.
+     */
+    private const ADMIN_STORE_PERMISSION_KEYS = [
+        'account.create',
+        'account.delete',
+        'account.search',
+        'account.update',
+        'account.view',
+        'bank_transaction.create',
+        'bank_transaction.view',
+        'brand.create',
+        'brand.update',
+        'brand.view',
+        'bulk.action',
+        'cash_transaction.create',
+        'cash_transaction.search',
+        'cash_transaction.update',
+        'cash_transaction.view',
+        'category.create',
+        'category.delete',
+        'category.update',
+        'category.view',
+        'client.delete',
+        'client.export',
+        'client.search',
+        'client.update',
+        'client.view',
+        'client_group.view',
+        'company.create',
+        'company.update',
+        'company.view',
+        'config.update',
+        'config.view',
+        'dashboard.view',
+        'debt.beginning.create',
+        'debt.beginning.view',
+        'debt.customer.view',
+        'debt.supplier.view',
+        'debt_client.detail',
+        'debt_client.view',
+        'debt_supplier.detail',
+        'debt_supplier.view',
+        'employee.create',
+        'employee.update',
+        'employee.view',
+        'expense.create',
+        'expense.debt.lookup',
+        'expense.detail',
+        'expense.view',
+        'import_barcode.print',
+        'import_barcode.view',
+        'import_coupon.create',
+        'import_product.barcode.print',
+        'import_product.barcode.view',
+        'import_product.create',
+        'import_product.delete',
+        'import_product.detail',
+        'import_product.import',
+        'import_product.update',
+        'import_product.view',
+        'inventory_check.detail',
+        'inventory_check.filter',
+        'inventory_check.view',
+        'journal_entry.delete',
+        'journal_entry.view',
+        'multiple.delete',
+        'notification.update',
+        'order.detail',
+        'order.view',
+        'product.create',
+        'product.delete',
+        'product.export',
+        'product.imei.delete',
+        'product.imei.global_view',
+        'product.imei.view',
+        'product.import',
+        'product.search_sale',
+        'product.update',
+        'product.view',
+        'receipt.create',
+        'receipt.debt',
+        'receipt.detail',
+        'receipt.view',
+        'report.import.export',
+        'report.import.view',
+        'report.inventory.filter',
+        'report.inventory.low_stock',
+        'report.inventory.view',
+        'report.order.export',
+        'report.order.view',
+        'report.profit.export_pdf',
+        'report.profit.filter',
+        'report.profit.statistics',
+        'report.profit.view',
+        'storage.create',
+        'storage.detail',
+        'storage.products',
+        'storage.update',
+        'storage.view',
+        'supplier.create',
+        'supplier.delete',
+        'supplier.search',
+        'supplier.update',
+        'supplier.view',
+        'support.feedback',
+        'support.view',
+        'transaction.create',
+        'transaction.export_pdf',
+        'transaction.generate_qr',
+        'transaction.payment',
+        'transaction.search',
+        'transaction.view',
+        'user.profile_update',
+        'warehouse_report.print',
+        'warehouse_report.view',
+    ];
+
     public function run(): void
     {
         $permissions = [
@@ -816,33 +935,52 @@ class PermissionSeeder extends Seeder
                 'description' => 'Tạo giao dịch ngân hàng',
             ],
 
-
         ];
 
-        foreach ($permissions as $permission) {
-            Permission::updateOrCreate(
-                [
-                    'permission_key' => $permission['permission_key'],
-                ],
-                $permission
+        DB::transaction(function () use ($permissions): void {
+            foreach ($permissions as $permission) {
+                Permission::updateOrCreate(
+                    ['permission_key' => $permission['permission_key']],
+                    $permission
+                );
+            }
+
+            if (! Roles::query()->whereKey(Roles::ADMIN_STORE_ID)->exists()) {
+                return;
+            }
+
+            $definedPermissionKeys = collect($permissions)->pluck('permission_key');
+            $unknownAllowlistKeys = collect(self::ADMIN_STORE_PERMISSION_KEYS)
+                ->diff($definedPermissionKeys);
+
+            if ($unknownAllowlistKeys->isNotEmpty()) {
+                throw new \LogicException(
+                    'Undefined Admin Store permission keys: '.$unknownAllowlistKeys->implode(', ')
+                );
+            }
+
+            $permissionIds = Permission::query()
+                ->whereIn('permission_key', self::ADMIN_STORE_PERMISSION_KEYS)
+                ->pluck('id');
+
+            DB::table('role_permission')
+                ->where('role_id', Roles::ADMIN_STORE_ID)
+                ->delete();
+
+            if ($permissionIds->isEmpty()) {
+                return;
+            }
+
+            $now = now();
+            DB::table('role_permission')->insert(
+                $permissionIds->map(fn ($permissionId) => [
+                    'guard_name' => 'web',
+                    'role_id' => Roles::ADMIN_STORE_ID,
+                    'permission_id' => (int) $permissionId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all()
             );
-        }
-
-        $now = now();
-        $permissionIds = Permission::query()->pluck('id');
-        $rolePermissions = collect(Roles::adminStoreIds())
-            ->crossJoin($permissionIds)
-            ->map(fn (array $ids) => [
-                'guard_name' => 'web',
-                'role_id' => $ids[0],
-                'permission_id' => $ids[1],
-                'created_at' => $now,
-                'updated_at' => $now,
-            ])
-            ->all();
-
-        if ($rolePermissions !== []) {
-            DB::table('role_permission')->insertOrIgnore($rolePermissions);
-        }
+        });
     }
 }

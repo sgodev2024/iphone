@@ -300,11 +300,12 @@ class SafeEmployeeDeletionTest extends TestCase
         $this->assertStringContainsString(route('admin.employees.destroy', $staff), $html);
         $this->assertStringNotContainsString(route('admin.employees.destroy', $admin), $html);
         $this->assertStringContainsString('table-responsive', $html);
-        $this->assertStringContainsString('min-width: 1550px', $html);
         $this->assertStringContainsString('d-flex flex-nowrap justify-content-center gap-1', $html);
 
         $script = file_get_contents(resource_path('views/admin/employee/index.blade.php'));
 
+        $this->assertStringContainsString('overflow-x: auto;', $script);
+        $this->assertStringContainsString('min-width: 1550px;', $script);
         $this->assertStringContainsString('Bạn có chắc muốn xóa tài khoản này?', $script);
         $this->assertStringContainsString('Chỉ có thể xóa nếu tài khoản chưa được gán chi nhánh và chưa phát sinh nghiệp vụ trong hệ thống.', $script);
         $this->assertStringContainsString("confirmButtonText: 'Xóa tài khoản'", $script);

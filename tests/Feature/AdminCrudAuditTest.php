@@ -200,7 +200,7 @@ class AdminCrudAuditTest extends TestCase
 
     public function test_storage_crud_validation_and_authorization(): void
     {
-        $warehouseUser = $this->createUser(roleId: 4);
+        $warehouseUser = $this->createUser(roleId: 1);
 
         $this->actingAs($warehouseUser)->get('/admin/storage')->assertOk();
 
@@ -241,30 +241,34 @@ class AdminCrudAuditTest extends TestCase
     public function test_storage_index_uses_inventory_storage_scope_with_search_and_pagination(): void
     {
         $manager = $this->createUser('manager-storage@example.com', '0903100001', 1);
-        $warehouseUser = $this->createUser('warehouse-storage@example.com', '0903100002', 4);
+        $warehouseUser = $this->createUser('warehouse-storage@example.com', '0903100002', 2, 1);
 
         $warehouseUser->update(['manager_id' => $manager->id]);
 
         $storageA = Storage::create([
             'user_id' => $manager->id,
+            'branch_id' => 1,
             'name' => 'Kho A',
             'location' => 'Ha Noi',
         ]);
 
         $storageB = Storage::create([
             'user_id' => $manager->id,
+            'branch_id' => 1,
             'name' => 'Kho B',
             'location' => 'Sai Gon',
         ]);
 
         $assignedStorage = Storage::create([
             'user_id' => null,
+            'branch_id' => 1,
             'name' => 'Kho duoc gan',
             'location' => 'Da Nang',
         ]);
 
         Storage::create([
             'user_id' => $manager->id + 999,
+            'branch_id' => 2,
             'name' => 'Kho ngoai pham vi',
             'location' => 'Can Tho',
         ]);
@@ -272,6 +276,7 @@ class AdminCrudAuditTest extends TestCase
         for ($i = 1; $i <= 9; $i++) {
             Storage::create([
                 'user_id' => $manager->id,
+                'branch_id' => 1,
                 'name' => sprintf('Kho phu %02d', $i),
                 'location' => 'Ha Noi',
             ]);

@@ -309,15 +309,15 @@ Route::middleware(['auth'])
         */
 
         Route::get('profile', [AdminController::class, 'profile'])
-            ->middleware('permission:superadmin.profile.view')
+            ->middleware('permission:user.profile_update')
             ->name('profile');
 
         Route::post('profile', [AdminController::class, 'updateProfile'])
-            ->middleware('permission:superadmin.profile.update')
+            ->middleware('permission:user.profile_update')
             ->name('update');
 
         Route::post('/changePassword', [AdminController::class, 'changePassword'])
-            ->middleware('permission:superadmin.profile.update')
+            ->middleware('permission:user.profile_update')
             ->name('changePassword');
 
         /*
@@ -770,6 +770,7 @@ Route::middleware(['auth'])
             */
 
             Route::prefix('roles')
+                ->middleware('role:administrator')
                 ->name('role.')
                 ->group(function () {
 
@@ -826,11 +827,11 @@ Route::middleware(['auth'])
 
         /*
         |--------------------------------------------------------------------------
-        | WAREHOUSE (ROLE 4)
+        | WAREHOUSE OPERATIONS
         |--------------------------------------------------------------------------
         */
 
-        Route::middleware(['role:administrator,admin_store,4'])->group(function () {
+        Route::middleware(['role:administrator,admin_store'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------

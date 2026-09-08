@@ -26,7 +26,7 @@ class User extends Authenticatable
         'tax_code',
         'store_name',
         'storage_id',
-        'img_url'
+        'img_url',
     ];
 
     protected $hidden = [
@@ -84,6 +84,7 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Storage::class);
     }
+
     public function role()
     {
         return $this->belongsTo(Roles::class, 'role_id');
@@ -107,14 +108,17 @@ class User extends Authenticatable
 
         return $this->manager()->first() ?? $this;
     }
+
     public function manager()
     {
         return $this->belongsTo(User::class, 'manager_id');
     }
+
     public function employees()
     {
         return $this->hasMany(User::class, 'manager_id');
     }
+
     public function ownerId(): int
     {
         return $this->owner()->id;
@@ -127,7 +131,7 @@ class User extends Authenticatable
 
     public function hasFullAccess(): bool
     {
-        return $this->role?->grantsAllPermissions() ?? false;
+        return (int) $this->role_id === Roles::ADMINISTRATOR_ID;
     }
 
     public function hasPermission(string $permission): bool
@@ -152,7 +156,10 @@ class User extends Authenticatable
         }
 
         if (ctype_digit($requiredRole)) {
-            return (int) $this->role_id === (int) $requiredRole;
+            $requiredRoleId = (int) $requiredRole;
+
+            return in_array($requiredRoleId, Roles::CANONICAL_IDS, true)
+                && (int) $this->role_id === $requiredRoleId;
         }
 
         $requiredRole = strtolower($requiredRole);
@@ -169,8 +176,9 @@ class User extends Authenticatable
             return $this->isStaff();
         }
 
-        return $this->roleKey() === $requiredRole;
+        return false;
     }
+
     public function transaction()
     {
         return $this->hasMany(Transaction::class, 'user_id');
@@ -178,17 +186,17 @@ class User extends Authenticatable
 
     public function isAdministrator(): bool
     {
-        return $this->role?->isAdministrator() ?? false;
+        return (int) $this->role_id === Roles::ADMINISTRATOR_ID;
     }
 
     public function isAdminStore(): bool
     {
-        return $this->role?->isAdminStore() ?? false;
+        return (int) $this->role_id === Roles::ADMIN_STORE_ID;
     }
 
     public function isStaff(): bool
     {
-        return $this->role?->isStaff() ?? false;
+        return (int) $this->role_id === Roles::STAFF_ID;
     }
 
     /** @deprecated Use isAdminStore() explicitly for the legacy `admin` role. */

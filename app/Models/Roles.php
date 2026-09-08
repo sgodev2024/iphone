@@ -15,6 +15,17 @@ class Roles extends Model
 
     public const STAFF_ID = 3;
 
+    public const CANONICAL_IDS = [
+        self::ADMINISTRATOR_ID,
+        self::ADMIN_STORE_ID,
+        self::STAFF_ID,
+    ];
+
+    public const ASSIGNABLE_PERMISSION_ROLE_IDS = [
+        self::ADMIN_STORE_ID,
+        self::STAFF_ID,
+    ];
+
     public const ADMINISTRATOR = 'administrator';
 
     public const ADMIN_STORE = 'admin_store';
@@ -27,12 +38,11 @@ class Roles extends Model
 
     public const STAFF_NAMES = [self::STAFF];
 
-    /** Compatibility aliases used only while installations are migrated. */
+    /** Compatibility aliases for reading legacy data; never use for authorization. */
     private const LEGACY_ADMINISTRATOR_NAMES = ['store'];
 
     private const LEGACY_ADMIN_STORE_NAMES = ['admin'];
 
-    /** Only the system-wide Administrator may bypass capability checks. */
     public const FULL_ACCESS_ROLE_NAMES = self::ADMINISTRATOR_NAMES;
 
     protected $table = 'roles';
@@ -42,18 +52,20 @@ class Roles extends Model
         'description',
     ];
 
-    /**
-     * Một Role có nhiều bản ghi trong role_permission
-     */
     public function rolePermissions()
     {
         return $this->hasMany(RolePermission::class, 'role_id');
     }
 
-    // Giữ nguyên nếu dự án của bạn đang dùng
+    public function users()
+    {
+        return $this->hasMany(User::class, 'role_id');
+    }
+
+    /** @deprecated Use users(). */
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->users();
     }
 
     public function permissions()
@@ -63,7 +75,7 @@ class Roles extends Model
             'role_permission',
             'role_id',
             'permission_id'
-        );
+        )->wherePivot('guard_name', 'web');
     }
 
     public function normalizedName(): string
@@ -78,47 +90,47 @@ class Roles extends Model
 
     public function isAdministrator(): bool
     {
-        return in_array($this->normalizedName(), static::administratorNames(), true);
+        return (int) $this->getKey() === self::ADMINISTRATOR_ID;
     }
 
     public function isAdminStore(): bool
     {
-        return in_array($this->normalizedName(), static::adminStoreNames(), true);
+        return (int) $this->getKey() === self::ADMIN_STORE_ID;
     }
 
     public function isStaff(): bool
     {
-        return in_array($this->normalizedName(), self::STAFF_NAMES, true);
+        return (int) $this->getKey() === self::STAFF_ID;
     }
 
     public static function administratorIds(): array
     {
-        return static::idsForNames(static::administratorNames());
+        return [self::ADMINISTRATOR_ID];
     }
 
     public static function adminStoreIds(): array
     {
-        return static::idsForNames(static::adminStoreNames());
+        return [self::ADMIN_STORE_ID];
     }
 
     public static function staffIds(): array
     {
-        return static::idsForNames(self::STAFF_NAMES);
+        return [self::STAFF_ID];
     }
 
     public static function administratorId(): int
     {
-        return static::idForNames(static::administratorNames());
+        return self::ADMINISTRATOR_ID;
     }
 
     public static function adminStoreId(): int
     {
-        return static::idForNames(static::adminStoreNames());
+        return self::ADMIN_STORE_ID;
     }
 
     public static function staffId(): int
     {
-        return static::idForNames(self::STAFF_NAMES);
+        return self::STAFF_ID;
     }
 
     public static function administratorNames(): array
@@ -129,28 +141,6 @@ class Roles extends Model
     public static function adminStoreNames(): array
     {
         return [...self::ADMIN_STORE_NAMES, ...self::LEGACY_ADMIN_STORE_NAMES];
-    }
-
-    private static function idForNames(array $names): int
-    {
-        foreach ($names as $name) {
-            $roleId = static::query()->where('name', $name)->value('id');
-
-            if ($roleId !== null) {
-                return (int) $roleId;
-            }
-        }
-
-        return (int) static::query()->whereIn('name', $names)->firstOrFail()->getKey();
-    }
-
-    private static function idsForNames(array $names): array
-    {
-        return static::query()
-            ->whereIn('name', $names)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
     }
 
     public function hasPermission(string $permission): bool

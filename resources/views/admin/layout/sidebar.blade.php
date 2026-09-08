@@ -507,13 +507,13 @@
                                     </li>
                                 @endcan
 
-                                @can('role.view')
+                                @if(auth()->user()?->isAdministrator())
                                     <li class="{{ request()->routeIs('admin.role.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.role.index') }}">
                                             <span class="sub-item">Quản lý vai trò</span>
                                         </a>
                                     </li>
-                                @endcan
+                                @endif
 
                                 @can('config.view')
                                     <li class="{{ request()->routeIs('admin.config.*') ? 'active' : '' }}">

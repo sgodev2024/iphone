@@ -3,124 +3,159 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Permission;
-use App\Models\Roles;
 use App\Models\RolePermission;
+use App\Models\Roles;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class RoleController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $roles = Roles::withCount('rolePermissions')
+        $this->ensureAdministrator($request);
+
+        $roles = Roles::query()
+            ->select('roles.*')
+            ->selectSub(function ($query) {
+                $query->from('role_permission')
+                    ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
+                    ->whereColumn('role_permission.role_id', 'roles.id')
+                    ->where('role_permission.guard_name', 'web')
+                    ->selectRaw('COUNT(DISTINCT permissions.id)');
+            }, 'valid_permissions_count')
+            ->withCount('users')
+            ->whereKey(Roles::CANONICAL_IDS)
+            ->orderBy('id')
             ->paginate(10);
 
         return view('admin.role.index', compact('roles'));
     }
 
-    public function permissions(Roles $role)
+    public function permissions(Request $request, Roles $role)
     {
+        $this->ensureAdministrator($request);
+        $this->ensurePermissionTarget($role);
+
         $permissions = Permission::orderBy('module')
             ->orderBy('permission_key')
             ->get()
             ->groupBy('module');
 
         $selectedPermissions = RolePermission::where('role_id', $role->id)
+            ->where('guard_name', 'web')
+            ->whereIn('permission_id', Permission::query()->select('id'))
+            ->distinct()
             ->pluck('permission_id')
             ->toArray();
 
         return view(
             'admin.role.permissions',
-            compact(
-                'role',
-                'permissions',
-                'selectedPermissions'
-            )
+            compact('role', 'permissions', 'selectedPermissions')
         );
     }
 
     public function savePermissions(Request $request, Roles $role)
     {
-        RolePermission::where('role_id', $role->id)
-            ->delete();
+        $this->ensureAdministrator($request);
+        $this->ensurePermissionTarget($role);
 
-        if ($request->has('permissions')) {
-            foreach ($request->permissions as $permission) {
-                RolePermission::create([
+        // Browsers omit an unchecked checkbox array. The explicit form marker
+        // distinguishes an intentional empty selection from a forged payload.
+        if (! $request->exists('permissions')) {
+            $request->validate([
+                'permissions_submission' => ['required', 'accepted'],
+            ]);
 
-                    'role_id' => $role->id,
-
-                    'permission_id' => $permission,
-
-                    'guard_name' => 'web'
-
-                ]);
-            }
+            $request->merge(['permissions' => []]);
         }
+
+        $validated = $request->validate([
+            'permissions' => ['present', 'array'],
+            'permissions.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('permissions', 'id'),
+            ],
+        ]);
+
+        $permissionIds = collect($validated['permissions'])
+            ->map(fn ($permissionId) => (int) $permissionId)
+            ->values();
+
+        DB::transaction(function () use ($role, $permissionIds): void {
+            RolePermission::where('role_id', $role->getKey())->delete();
+
+            if ($permissionIds->isEmpty()) {
+                return;
+            }
+
+            $now = now();
+
+            DB::table('role_permission')->insert(
+                $permissionIds->map(fn (int $permissionId) => [
+                    'guard_name' => 'web',
+                    'role_id' => (int) $role->getKey(),
+                    'permission_id' => $permissionId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all()
+            );
+        });
 
         return redirect()
             ->route('admin.role.index')
             ->with('success', 'Cập nhật quyền thành công');
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('admin.role.create');
+        $this->ensureAdministrator($request);
+
+        abort(403);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name',
-            'description' => 'nullable|string|max:500',
-        ], [
-            'name.required' => 'Vui lòng nhập tên vai trò.',
-            'name.unique' => 'Tên vai trò đã tồn tại.',
-        ]);
+        $this->ensureAdministrator($request);
 
-        Roles::create([
-            'name' => $request->name,
-            'description' => $request->description,
-        ]);
-
-        return redirect()
-            ->route('admin.role.index')
-            ->with('success', 'Thêm vai trò thành công.');
+        abort(403);
     }
 
-    public function edit(Roles $role)
+    public function edit(Request $request, Roles $role)
     {
-        return view('admin.role.edit', compact('role'));
+        $this->ensureAdministrator($request);
+
+        abort(403);
     }
 
     public function update(Request $request, Roles $role)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
-            'description' => 'nullable|string|max:500',
-        ], [
-            'name.required' => 'Vui lòng nhập tên vai trò.',
-            'name.unique' => 'Tên vai trò đã tồn tại.',
-        ]);
+        $this->ensureAdministrator($request);
 
-        $role->update([
-            'name' => $request->name,
-            'description' => $request->description,
-        ]);
-
-        return redirect()
-            ->route('admin.role.index')
-            ->with('success', 'Cập nhật vai trò thành công.');
+        abort(403);
     }
 
-    public function destroy(Roles $role)
+    public function destroy(Request $request, Roles $role)
     {
-        RolePermission::where('role_id', $role->id)->delete();
+        $this->ensureAdministrator($request);
 
-        $role->delete();
+        // Reject before touching either the role or its permission pivots.
+        abort(403);
+    }
 
-        return redirect()
-            ->route('admin.role.index')
-            ->with('success', 'Xóa vai trò thành công.');
+    private function ensureAdministrator(Request $request): void
+    {
+        abort_unless($request->user()?->isAdministrator(), 403);
+    }
+
+    private function ensurePermissionTarget(Roles $role): void
+    {
+        abort_unless(
+            in_array((int) $role->getKey(), Roles::ASSIGNABLE_PERMISSION_ROLE_IDS, true),
+            403
+        );
     }
 }

@@ -1,218 +1,84 @@
 @extends('admin.layout.index')
 
+@section('title', 'Phân quyền vai trò')
+
 @section('content')
-
 <div class="container">
-
     <div class="card">
-
         <div class="card-header">
-
-            <h3>
-                Phân quyền
-            </h3>
-
-            <strong>
-                Chức vụ :
-                {{ $role->name }}
-            </strong>
-
+            <h3>Phân quyền</h3>
+            <strong>Vai trò: {{ $role->name }}</strong>
         </div>
 
         <div class="card-body">
-
-            <div class="row mb-4">
-
-                <div class="col-md-5">
-
-                    <input
-                        type="text"
-                        id="searchPermission"
-                        class="form-control"
-                        placeholder="🔍 Tìm kiếm quyền...">
-
-                </div>
-
-                <div class="col-md-7 text-end">
-
-                    <div class="form-check form-check-inline">
-
-                        <input
-                            class="form-check-input"
-                            type="checkbox"
-                            id="checkAll" hidden>
-
-                        
-
-                    </div>
-
-                    <button
-                        type="button"
-                        id="btnSelectAll"
-                        class="btn btn-success btn-sm">
-
-                        Chọn tất cả
-
-                    </button>
-
-                    <button
-                        type="button"
-                        id="btnUnSelectAll"
-                        class="btn btn-secondary btn-sm">
-
-                        Bỏ chọn
-
-                    </button>
-
-                </div>
-
+            <div class="alert alert-warning" role="alert">
+                Thay đổi quyền sẽ áp dụng cho tất cả tài khoản thuộc vai trò này.
             </div>
 
-            <form
-                action="#"
-                method="POST">
+            <div class="row mb-4">
+                <div class="col-md-5">
+                    <input type="text" id="searchPermission" class="form-control" placeholder="🔍 Tìm kiếm quyền...">
+                </div>
+                <div class="col-md-7 text-end">
+                    <button type="button" id="btnSelectAll" class="btn btn-success btn-sm">Chọn tất cả</button>
+                    <button type="button" id="btnUnSelectAll" class="btn btn-secondary btn-sm">Bỏ chọn</button>
+                </div>
+            </div>
 
+            <form action="{{ route('admin.role.permissions.save', $role->id) }}" method="POST">
                 @csrf
+                <input type="hidden" name="permissions_submission" value="1">
 
                 <div class="row" id="permissionList">
-
                     @foreach($permissions->flatten() as $permission)
-
-                    <div
-                        class="col-lg-4 col-md-6 mb-2 permission-item">
-
-                        <div class="form-check">
-
-                            <input
-                                class="form-check-input permission-checkbox"
-                                type="checkbox"
-                                name="permissions[]"
-                                value="{{ $permission->id }}"
-                                id="permission{{ $permission->id }}"
-                                {{ in_array($permission->id, $selectedPermissions) ? 'checked' : '' }}>
-
-                            <label
-                                class="form-check-label"
-                                for="permission{{ $permission->id }}">
-
-                                {{ $permission->description }}
-
-                            </label>
-
+                        <div class="col-lg-4 col-md-6 mb-2 permission-item">
+                            <div class="form-check">
+                                <input class="form-check-input permission-checkbox" type="checkbox"
+                                    name="permissions[]" value="{{ $permission->id }}"
+                                    id="permission{{ $permission->id }}"
+                                    {{ in_array($permission->id, $selectedPermissions, true) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="permission{{ $permission->id }}">
+                                    {{ $permission->description ?: $permission->permission_key }}
+                                </label>
+                            </div>
                         </div>
-
-                    </div>
-
                     @endforeach
-
                 </div>
 
                 <div class="text-end mt-4">
-
-                    <button
-                        class="btn btn-primary">
-
-                        Lưu phân quyền
-
-                    </button>
-
+                    <a href="{{ route('admin.role.index') }}" class="btn btn-secondary">Quay lại</a>
+                    <button type="submit" class="btn btn-primary">Lưu phân quyền</button>
                 </div>
-
             </form>
-
         </div>
-
     </div>
-
 </div>
 
 <script>
-
 document.addEventListener('DOMContentLoaded', function () {
-
-    const checkAll = document.getElementById('checkAll');
-
     const checkboxes = document.querySelectorAll('.permission-checkbox');
-
+    const permissionItems = document.querySelectorAll('.permission-item');
     const search = document.getElementById('searchPermission');
 
-    const rows = document.querySelectorAll('.permission-item');
-
-    // =========================
-    // Check All
-    // =========================
-
-    checkAll.addEventListener('change', function () {
-
-        checkboxes.forEach(item => {
-
-            item.checked = this.checked;
-
-        });
-
-    });
-
-    // =========================
-    // Button Select All
-    // =========================
-
     document.getElementById('btnSelectAll').addEventListener('click', function () {
-
-        checkboxes.forEach(item => item.checked = true);
-
-        checkAll.checked = true;
-
+        checkboxes.forEach(function (checkbox) {
+            checkbox.checked = true;
+        });
     });
-
-    // =========================
-    // Button UnSelect
-    // =========================
 
     document.getElementById('btnUnSelectAll').addEventListener('click', function () {
-
-        checkboxes.forEach(item => item.checked = false);
-
-        checkAll.checked = false;
-
-    });
-
-    // =========================
-    // Đồng bộ checkbox
-    // =========================
-
-    checkboxes.forEach(item => {
-
-        item.addEventListener('change', function () {
-
-            checkAll.checked =
-                [...checkboxes].every(cb => cb.checked);
-
+        checkboxes.forEach(function (checkbox) {
+            checkbox.checked = false;
         });
-
     });
-
-    // =========================
-    // Search
-    // =========================
 
     search.addEventListener('keyup', function () {
-
         const keyword = this.value.toLowerCase();
 
-        rows.forEach(function (row) {
-
-            const text = row.innerText.toLowerCase();
-
-            row.style.display = text.includes(keyword)
-                ? ''
-                : 'none';
-
+        permissionItems.forEach(function (item) {
+            item.style.display = item.innerText.toLowerCase().includes(keyword) ? '' : 'none';
         });
-
     });
-
 });
-
 </script>
-
 @endsection

@@ -28,7 +28,7 @@ class ImportProductBulkDeleteTest extends TestCase
 
     public function test_bulk_delete_rolls_back_inventory_and_removes_duplicate_ids(): void
     {
-        $user = $this->createUser(roleId: 4);
+        $user = $this->createUser(roleId: 1);
         $storage = Storage::create(['user_id' => $user->id, 'name' => 'Kho nhập']);
         $product = $this->createProduct(['quantity' => 10]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
@@ -60,7 +60,7 @@ class ImportProductBulkDeleteTest extends TestCase
 
     public function test_bulk_delete_blocks_supplier_debt_and_keeps_inventory_unchanged(): void
     {
-        $user = $this->createUser(roleId: 4);
+        $user = $this->createUser(roleId: 1);
         $storage = Storage::create(['user_id' => $user->id, 'name' => 'Kho nhập']);
         $product = $this->createProduct(['quantity' => 10]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 10]);
@@ -93,7 +93,7 @@ class ImportProductBulkDeleteTest extends TestCase
 
     public function test_bulk_delete_blocks_when_current_stock_is_not_enough_to_rollback(): void
     {
-        $user = $this->createUser(roleId: 4);
+        $user = $this->createUser(roleId: 1);
         $storage = Storage::create(['user_id' => $user->id, 'name' => 'Kho nhập']);
         $product = $this->createProduct(['quantity' => 2]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 2]);
@@ -126,7 +126,7 @@ class ImportProductBulkDeleteTest extends TestCase
 
     public function test_bulk_delete_rolls_back_transaction_when_one_selected_coupon_cannot_be_deleted(): void
     {
-        $user = $this->createUser(roleId: 4);
+        $user = $this->createUser(roleId: 1);
         $storage = Storage::create(['user_id' => $user->id, 'name' => 'Kho nhập']);
         $firstProduct = $this->createProduct(['quantity' => 5]);
         $secondProduct = $this->createProduct(['name' => 'iPhone 16', 'quantity' => 2]);
@@ -175,7 +175,7 @@ class ImportProductBulkDeleteTest extends TestCase
 
     public function test_bulk_delete_validates_ids_as_array(): void
     {
-        $user = $this->createUser(roleId: 4);
+        $user = $this->createUser(roleId: 1);
 
         $response = $this->actingAs($user)->postJson('/admin/importproduct/bulk-delete', [
             'ids' => 1,
@@ -185,7 +185,7 @@ class ImportProductBulkDeleteTest extends TestCase
             ->assertJsonValidationErrors(['ids']);
     }
 
-    public function test_warehouse_user_cannot_delete_another_users_import_coupon(): void
+    public function test_role_four_cannot_access_import_coupon_bulk_delete(): void
     {
         $owner = $this->createUser(roleId: 4, email: 'owner@example.com');
         $otherUser = $this->createUser(roleId: 4, email: 'other@example.com');
@@ -196,10 +196,7 @@ class ImportProductBulkDeleteTest extends TestCase
             'ids' => [$coupon->id],
         ]);
 
-        $response->assertUnprocessable()
-            ->assertJsonFragment([
-                'message' => 'Không tìm thấy phiếu nhập phù hợp hoặc bạn không có quyền xóa.',
-            ]);
+        $response->assertForbidden();
 
         $this->assertDatabaseCount('import_coupon', 1);
     }
