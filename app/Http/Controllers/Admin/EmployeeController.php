@@ -128,14 +128,17 @@ class EmployeeController extends Controller
                     $credentials['storage_id'] = null;
                 } else {
                     $branchId = $this->branchContext->branchId($actor);
-                    $storage = Storage::query()
-                        ->where('branch_id', $branchId)
-                        ->findOrFail($credentials['storage_id']);
+                    $storageId = $credentials['storage_id'] ?? null;
+                    $storage = $storageId === null
+                        ? null
+                        : Storage::query()
+                            ->where('branch_id', $branchId)
+                            ->findOrFail($storageId);
 
                     $credentials['role_id'] = Roles::STAFF_ID;
                     $credentials['manager_id'] = $actor->id;
                     $credentials['branch_id'] = $branchId;
-                    $credentials['storage_id'] = $storage->id;
+                    $credentials['storage_id'] = $storage?->id;
                 }
 
                 return User::create($credentials);
@@ -248,13 +251,16 @@ class EmployeeController extends Controller
 
                 if (! $isManagedAdmin) {
                     $branchId = $this->branchContext->branchId($actor);
-                    $storage = Storage::query()
-                        ->where('branch_id', $branchId)
-                        ->findOrFail($credentials['storage_id']);
+                    $storageId = $credentials['storage_id'] ?? null;
+                    $storage = $storageId === null
+                        ? null
+                        : Storage::query()
+                            ->where('branch_id', $branchId)
+                            ->findOrFail($storageId);
                     $credentials['role_id'] = Roles::STAFF_ID;
                     $credentials['manager_id'] = $actor->id;
                     $credentials['branch_id'] = $branchId;
-                    $credentials['storage_id'] = $storage->id;
+                    $credentials['storage_id'] = $storage?->id;
                 } else {
                     $credentials['manager_id'] = null;
                     $credentials['storage_id'] = null;
@@ -391,7 +397,7 @@ class EmployeeController extends Controller
             $rules['role_id'] = $id === null ? ['exclude'] : ['prohibited'];
             $branchId = $this->branchContext->branchId($actor);
             $rules['storage_id'] = [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('storages', 'id')->where(
                     fn ($query) => $query->where('branch_id', $branchId)

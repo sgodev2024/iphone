@@ -129,20 +129,18 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label for="storage_id" class="form-label mb-1 fw-bold">
-                                            Kho bán hàng *
+                                            Kho bán hàng
                                         </label>
                                         <select name="storage_id"
-                                            class="form-select form-control @error('storage_id') is-invalid @enderror"
-                                            required @disabled($storages->isEmpty())>
-                                            <option value="">
-                                                {{ $storages->isEmpty() ? 'Chưa có kho bán hàng trong chi nhánh' : '-- Chọn kho bán hàng --' }}
-                                            </option>
+                                            class="form-select form-control @error('storage_id') is-invalid @enderror">
+                                            <option value="">-- Chưa gán kho bán hàng --</option>
                                             @foreach ($storages as $storage)
                                                 <option value="{{ $storage->id }}" @selected((string) $selectedStorageId === (string) $storage->id)>
                                                     {{ $storage->name }}
                                                 </option>
                                             @endforeach
                                         </select>
+                                        <div class="form-text">Có thể gán kho sau.</div>
                                         @error('storage_id')
                                             <span
                                                 class="invalid-feedback d-block server-validation-error">{{ $message }}</span>

@@ -325,7 +325,7 @@ class AdminEmployeeCreationTest extends TestCase
         ]);
     }
 
-    public function test_staff_requires_storage_and_administrator_cannot_create_staff(): void
+    public function test_admin_store_can_create_staff_without_storage_and_administrator_cannot_create_staff(): void
     {
         Mail::fake();
         $adminStore = User::create([
@@ -343,8 +343,17 @@ class AdminEmployeeCreationTest extends TestCase
             'email' => 'missing-storage@example.com',
             'phone' => '0901234569',
             'password' => 'secret123',
+            'storage_id' => '',
             'status' => 'active',
-        ])->assertUnprocessable()->assertJsonValidationErrors('storage_id');
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'missing-storage@example.com',
+            'role_id' => 3,
+            'manager_id' => $adminStore->id,
+            'branch_id' => 10,
+            'storage_id' => null,
+        ]);
 
         $admin = $this->createAdmin();
         $this->actingAs($admin)->postJson('/admin/employees', [
@@ -356,7 +365,6 @@ class AdminEmployeeCreationTest extends TestCase
             'status' => 'active',
         ])->assertUnprocessable()->assertJsonValidationErrors('role_id');
 
-        $this->assertDatabaseMissing('users', ['email' => 'missing-storage@example.com']);
         $this->assertDatabaseMissing('users', ['email' => 'forbidden-staff@example.com']);
     }
 
@@ -824,6 +832,9 @@ class AdminEmployeeCreationTest extends TestCase
         $this->assertStringContainsString('data-branch-readonly', $adminStoreHtml);
         $this->assertStringContainsString('Branch Form', $adminStoreHtml);
         $this->assertStringContainsString('name="storage_id"', $adminStoreHtml);
+        $this->assertStringContainsString('-- Chưa gán kho bán hàng --', $adminStoreHtml);
+        $this->assertStringContainsString('Có thể gán kho sau.', $adminStoreHtml);
+        $this->assertStringNotContainsString('Kho bán hàng *', $adminStoreHtml);
     }
 
     public function test_administrator_creates_only_role_one_or_two_unassigned(): void
@@ -1011,6 +1022,52 @@ class AdminEmployeeCreationTest extends TestCase
         $this->assertSame($storageA->id, (int) $staff->fresh()->storage_id);
     }
 
+    public function test_admin_store_can_assign_and_unassign_staff_storage_in_own_branch(): void
+    {
+        $adminStore = User::create([
+            'name' => 'Store assignment',
+            'email' => 'assignment-store@example.com',
+            'phone' => '0907200010',
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => 33,
+            'status' => 'active',
+        ]);
+        $storage = Storage::create(['branch_id' => 33, 'name' => 'Kho gán sau']);
+        $staff = User::create([
+            'name' => 'Staff assignment',
+            'email' => 'assignment-staff@example.com',
+            'phone' => '0907200011',
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => 33,
+            'storage_id' => null,
+            'status' => 'active',
+        ]);
+        $payload = [
+            'name' => $staff->name,
+            'email' => $staff->email,
+            'phone' => $staff->phone,
+            'status' => 'active',
+        ];
+
+        $this->actingAs($adminStore)
+            ->putJson("/admin/employees/{$staff->id}", $payload + ['storage_id' => $storage->id])
+            ->assertOk();
+
+        $staff->refresh();
+        $this->assertSame($storage->id, (int) $staff->storage_id);
+        $this->assertSame(33, (int) $staff->branch_id);
+
+        $this->actingAs($adminStore)
+            ->putJson("/admin/employees/{$staff->id}", $payload + ['storage_id' => ''])
+            ->assertOk();
+
+        $staff->refresh();
+        $this->assertNull($staff->storage_id);
+        $this->assertSame(33, (int) $staff->branch_id);
+    }
+
     public function test_staff_cannot_access_employee_management_endpoints(): void
     {
         $staff = User::create([
@@ -1051,6 +1108,13 @@ class AdminEmployeeCreationTest extends TestCase
             'branch_id' => 41,
             'status' => 'active',
         ]);
+        DB::table('branches')->insert([
+            'id' => 41,
+            'name' => 'Branch danh sách',
+            'admin_store_user_id' => $adminStore->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         User::create([
             'name' => 'Visible Staff A',
             'email' => 'visible-a@example.com',
@@ -1086,6 +1150,8 @@ class AdminEmployeeCreationTest extends TestCase
             ->json('html');
 
         $this->assertStringContainsString('Visible Staff A', $html);
+        $this->assertStringContainsString('Chưa gán kho', $html);
+        $this->assertStringContainsString('Branch danh sách', $html);
         $this->assertStringNotContainsString('Hidden Staff B', $html);
         $this->assertStringNotContainsString('Legacy Staff', $html);
 

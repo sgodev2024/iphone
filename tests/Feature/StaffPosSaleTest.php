@@ -1733,13 +1733,28 @@ class StaffPosSaleTest extends TestCase
         $this->seedAccounts();
         $staff = $this->createStaff(null);
         $product = $this->createProduct(['quantity' => 5, 'price_buy' => 100000]);
+        $message = 'Nhân viên chưa được gán kho bán hàng. Vui lòng liên hệ Admin Store.';
+
+        $posResponse = $this->actingAs($staff)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee($message, false);
+
+        $this->assertMatchesRegularExpression(
+            '/id="productSearch"[^>]*\bdisabled\b/s',
+            $posResponse->getContent()
+        );
+        $this->assertMatchesRegularExpression(
+            '/id="barcodeInput"[^>]*\bdisabled\b/s',
+            $posResponse->getContent()
+        );
 
         $response = $this->actingAs($staff)->postJson('/ban-hang/order', $this->orderPayload([
             ['id' => $product->id, 'qty' => 1],
         ], 100000));
 
         $response->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Nhân viên chưa được gán kho bán hàng.']);
+            ->assertJsonFragment(['message' => $message]);
 
         $this->assertDatabaseCount('orders', 0);
         $this->assertDatabaseCount('order_details', 0);

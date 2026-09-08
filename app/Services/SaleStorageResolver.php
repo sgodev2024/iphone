@@ -14,6 +14,8 @@ class SaleStorageResolver
 
     private const SESSION_KEY_PREFIX = 'sale.storage_id.';
 
+    private const UNASSIGNED_STAFF_STORAGE_MESSAGE = 'Nhân viên chưa được gán kho bán hàng. Vui lòng liên hệ Admin Store.';
+
     public function resolveSaleStorageId(User $user, mixed $requestedStorageId = null): int
     {
         if ($user->isStaff()) {
@@ -21,7 +23,7 @@ class SaleStorageResolver
                 || ! Storage::query()->visibleTo($user)->whereKey($user->storage_id)->exists()
             ) {
                 throw ValidationException::withMessages([
-                    'storage_id' => 'Nhân viên chưa được gán kho bán hàng.',
+                    'storage_id' => self::UNASSIGNED_STAFF_STORAGE_MESSAGE,
                 ]);
             }
 
@@ -94,7 +96,7 @@ class SaleStorageResolver
                 'storages' => $storage ? collect([$storage]) : collect(),
                 'selectedStorage' => $storage,
                 'canSelectStorage' => false,
-                'message' => $storage ? null : 'Nhân viên chưa được gán kho bán hàng.',
+                'message' => $storage ? null : self::UNASSIGNED_STAFF_STORAGE_MESSAGE,
             ];
         }
 

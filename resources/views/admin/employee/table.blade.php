@@ -42,7 +42,7 @@
                         ?? optional($employee->branch)->name
                         ?? 'Chưa được gán chi nhánh';
                 } else {
-                    $workplaceLabel = optional($employee->storage)->name ?? '-';
+                    $workplaceLabel = optional($employee->storage)->name ?? 'Chưa gán kho';
                 }
 
                 $statusAction = match ($employee->status) {
