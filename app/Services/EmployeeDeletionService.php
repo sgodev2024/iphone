@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Roles;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -72,27 +73,61 @@ class EmployeeDeletionService
 
     private function authorizeTarget(User $actor, User $employee): void
     {
-        if ((int) $actor->getKey() === (int) $employee->getKey()) {
-            throw ValidationException::withMessages([
-                'employee' => ['Không thể xóa chính tài khoản đang đăng nhập.'],
-            ]);
-        }
+        if ($actor->isAdministrator()) {
+            abort_unless(
+                in_array((int) $employee->role_id, [
+                    Roles::ADMINISTRATOR_ID,
+                    Roles::ADMIN_STORE_ID,
+                ], true),
+                Response::HTTP_NOT_FOUND
+            );
 
-        if (! $employee->isStaff()) {
-            throw ValidationException::withMessages([
-                'employee' => ['Chỉ có thể xóa tài khoản nhân viên.'],
-            ]);
-        }
+            if ((int) $employee->role_id === Roles::ADMINISTRATOR_ID) {
+                $administratorCount = User::query()
+                    ->where('role_id', Roles::ADMINISTRATOR_ID)
+                    ->lockForUpdate()
+                    ->get(['id'])
+                    ->count();
 
-        if (! $actor->isAdminStore()) {
+                if ($administratorCount <= 1) {
+                    throw ValidationException::withMessages([
+                        'employee' => ['Không thể xóa Administrator cuối cùng của hệ thống.'],
+                    ]);
+                }
+            }
+
+            $this->ensureNotSelfDelete($actor, $employee);
+
+            if ((int) $employee->role_id === Roles::ADMIN_STORE_ID
+                && ($employee->branch_id !== null
+                    || (Schema::hasTable('branches')
+                        && Schema::hasColumn('branches', 'admin_store_user_id')
+                        && DB::table('branches')->where('admin_store_user_id', $employee->id)->exists()))
+            ) {
+                throw new DomainException(
+                    'Không thể xóa Admin Store vì tài khoản đang được gán cho một chi nhánh.'
+                );
+            }
+
             return;
         }
 
+        $this->ensureNotSelfDelete($actor, $employee);
+        abort_unless((int) $employee->role_id === Roles::STAFF_ID, Response::HTTP_NOT_FOUND);
         abort_if($actor->branch_id === null, Response::HTTP_FORBIDDEN);
         abort_if(
             $employee->branch_id === null || (int) $employee->branch_id !== (int) $actor->branch_id,
             Response::HTTP_NOT_FOUND
         );
+    }
+
+    private function ensureNotSelfDelete(User $actor, User $employee): void
+    {
+        if ((int) $actor->getKey() === (int) $employee->getKey()) {
+            throw ValidationException::withMessages([
+                'employee' => ['Không thể xóa chính tài khoản đang đăng nhập.'],
+            ]);
+        }
     }
 
     private function ensureNoBusinessReferences(User $employee): void

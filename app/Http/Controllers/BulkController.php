@@ -21,7 +21,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BulkController extends Controller
 {
-
     private const DELETE_MODELS = [
         'Brand' => Brand::class,
         'Categories' => Categories::class,
@@ -43,9 +42,7 @@ class BulkController extends Controller
     public function __construct(
         private ClientService $clientService,
         private BranchContext $branchContext,
-    )
-    {
-    }
+    ) {}
 
     public function bulk(string $type, Request $request)
     {
@@ -170,53 +167,60 @@ class BulkController extends Controller
             );
         }
 
-        $users = User::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'role_id']);
+        return DB::transaction(function () use ($ids) {
+            $managedIds = $this->managedEmployeeQuery()
+                ->whereIn('id', $ids)
+                ->lockForUpdate()
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
 
-        if ($users->count() !== count($ids)) {
-            return errorResponse('Tài khoản không tồn tại.', Response::HTTP_NOT_FOUND);
-        }
+            if (count($managedIds) !== count($ids)) {
+                return errorResponse(
+                    'Không có quyền thao tác với một hoặc nhiều tài khoản đã chọn.',
+                    Response::HTTP_FORBIDDEN
+                );
+            }
 
-        if ($users->contains(fn (User $user) => $user->isAdministrator())) {
-            return errorResponse(
-                'Không thể ngừng hoạt động tài khoản Admin.',
-                Response::HTTP_UNPROCESSABLE_ENTITY
-            );
-        }
+            $activeAdministratorIds = User::query()
+                ->where('role_id', Roles::ADMINISTRATOR_ID)
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
 
-        if ($users->contains(fn (User $user) => ! $user->isStaff())) {
-            return errorResponse(
-                'Chỉ được ngừng hoạt động tài khoản nhân viên.',
-                Response::HTTP_UNPROCESSABLE_ENTITY
-            );
-        }
+            $deactivatesActiveAdministrator = array_intersect($ids, $activeAdministratorIds) !== [];
+            $remainingActiveAdministrators = array_diff($activeAdministratorIds, $ids);
 
-        $managedIds = $this->managedEmployeeQuery()
-            ->whereIn('id', $ids)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+            if ($deactivatesActiveAdministrator && $remainingActiveAdministrators === []) {
+                return errorResponse(
+                    'Không thể ngừng hoạt động Administrator cuối cùng của hệ thống.',
+                    Response::HTTP_UNPROCESSABLE_ENTITY
+                );
+            }
 
-        if (count($managedIds) !== count($ids)) {
-            return errorResponse(
-                'Không có quyền thao tác với một hoặc nhiều tài khoản đã chọn.',
-                Response::HTTP_FORBIDDEN
-            );
-        }
+            User::query()
+                ->whereIn('id', $ids)
+                ->update(['status' => 'inactive']);
 
-        User::query()
-            ->whereIn('id', $ids)
-            ->update(['status' => 'inactive']);
-
-        return response()->json(['message' => 'Ngừng hoạt động nhân viên thành công!']);
+            return response()->json(['message' => 'Ngừng hoạt động tài khoản thành công!']);
+        }, 3);
     }
 
     private function managedEmployeeQuery(): Builder
     {
-        return $this->branchContext->scope(
-            User::query()->whereIn('role_id', Roles::staffIds()),
-            Auth::user()
-        );
+        $actor = Auth::user();
+
+        if ($actor->isAdministrator()) {
+            return User::query()->whereIn('role_id', [
+                Roles::ADMINISTRATOR_ID,
+                Roles::ADMIN_STORE_ID,
+            ]);
+        }
+
+        return User::query()
+            ->where('role_id', Roles::STAFF_ID)
+            ->where('branch_id', $this->branchContext->branchId($actor));
     }
 }

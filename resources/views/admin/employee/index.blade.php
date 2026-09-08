@@ -78,13 +78,43 @@
                 
             })
 
-            $(document).on('click', '.btn-delete', function() {
-                let id = $(this).data('id');
-                handleDestroy(function() {
-                    fetchUsers(1, searchText)
-                }, 'User', id, {
-                    action: 'deactivate'
-                })
+            $(document).on('click', '.btn-employee-status', function() {
+                const $button = $(this);
+                const originalHtml = $button.html();
+                const originalOpacity = $button.css('opacity');
+                const targetStatus = $button.data('target-status');
+
+                Swal.fire({
+                    title: $button.data('confirm'),
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: targetStatus === 'inactive' ? '#ffc107' : '#198754',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: $button.attr('title'),
+                    cancelButtonText: 'Hủy'
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+
+                    $button.prop('disabled', true).css('opacity', '0.65')
+                        .html('<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>');
+
+                    $.ajax({
+                        url: $button.data('url'),
+                        method: 'PATCH',
+                        data: { status: targetStatus },
+                        success: (res) => {
+                            datgin.success(res.message || 'Cập nhật trạng thái tài khoản thành công.');
+                            fetchUsers(currentPage, searchText);
+                        },
+                        error: (xhr) => {
+                            datgin.error(xhr.responseJSON?.message ||
+                                'Không thể cập nhật trạng thái tài khoản. Vui lòng thử lại sau.');
+                        },
+                        complete: () => {
+                            $button.prop('disabled', false).css('opacity', originalOpacity).html(originalHtml);
+                        }
+                    });
+                });
             });
 
             $(document).on('click', '.btn-delete-employee', function() {
@@ -93,13 +123,13 @@
                 const originalOpacity = $button.css('opacity');
 
                 Swal.fire({
-                    title: 'Bạn có chắc muốn xóa nhân viên này?',
-                    text: 'Chỉ có thể xóa nếu nhân viên chưa phát sinh nghiệp vụ trong hệ thống.',
+                    title: 'Bạn có chắc muốn xóa tài khoản này?',
+                    text: 'Chỉ có thể xóa nếu tài khoản chưa được gán chi nhánh và chưa phát sinh nghiệp vụ trong hệ thống.',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#d33',
                     cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Xóa nhân viên',
+                    confirmButtonText: 'Xóa tài khoản',
                     cancelButtonText: 'Hủy'
                 }).then((result) => {
                     if (!result.isConfirmed) {
@@ -115,15 +145,15 @@
                         url: $button.data('url'),
                         method: 'DELETE',
                         success: (res) => {
-                            datgin.success(res.message || 'Xóa nhân viên thành công.');
+                            datgin.success(res.message || 'Xóa tài khoản thành công.');
                             fetchUsers(currentPage, searchText);
                         },
                         error: (xhr) => {
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Không thể xóa nhân viên',
+                                title: 'Không thể xóa tài khoản',
                                 text: xhr.responseJSON?.message ||
-                                    'Không thể xóa nhân viên. Vui lòng kiểm tra dữ liệu liên quan.'
+                                    'Không thể xóa tài khoản. Vui lòng kiểm tra dữ liệu liên quan.'
                             });
                         },
                         complete: () => {

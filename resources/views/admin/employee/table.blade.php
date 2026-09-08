@@ -1,15 +1,17 @@
 @php
     $employees = $employees ?? ($users ?? collect());
+    $actor = $actor ?? Auth::user();
 @endphp
 
 <div class="table-responsive" style="overflow-x: auto;">
-<table class="table table-hover table-striped table-bordered mt-3" style="min-width: 1450px;">
+<table class="table table-hover table-striped table-bordered mt-3" style="min-width: 1550px;">
     <thead>
         <tr>
             <th style="width: 3%"><input type="checkbox" id="check-all"></th>
             <th style="width: 8%">ID</th>
             <th style="width: 14%">Ngày tạo</th>
             <th style="width: 25%"> Tên</th>
+            <th style="width: 12%">Vai trò</th>
             <th style="width: 20%">Email</th>
             <th style="width: 12%">Điện thoại</th>
             <th style="width: 16%">Nơi làm việc</th>
@@ -21,22 +23,58 @@
 
         @forelse ($employees as $employee)
             @php
-                $isAdminAccount = $employee->isAdministrator();
-                $workplaceLabel = $isAdminAccount
-                    ? ($adminWorkplaceLabel ?? 'Toàn hệ thống')
-                    : optional($employee->storage)->name ?? '-';
-                $adminSaleStorageName = null;
+                $isSelf = (int) optional($actor)->id === (int) $employee->id;
+                $isAdministratorAccount = (int) $employee->role_id === \App\Models\Roles::ADMINISTRATOR_ID;
+                $isAdminStoreAccount = (int) $employee->role_id === \App\Models\Roles::ADMIN_STORE_ID;
+                $isStaffAccount = (int) $employee->role_id === \App\Models\Roles::STAFF_ID;
+                $canActOnAccount = !$isSelf;
+                $roleLabel = $isAdministratorAccount
+                    ? 'Administrator'
+                    : ($isAdminStoreAccount ? 'Admin Store' : 'Nhân viên');
+                $roleBadgeClass = $isAdministratorAccount
+                    ? 'bg-primary'
+                    : ($isAdminStoreAccount ? 'bg-info text-dark' : 'bg-secondary');
 
-                if ($isAdminAccount) {
-                    $workplaceParts = explode(':', (string) $workplaceLabel, 2);
-                    $adminSaleStorageName = isset($workplaceParts[1]) ? trim($workplaceParts[1]) : null;
+                if ($isAdministratorAccount) {
+                    $workplaceLabel = 'Toàn hệ thống';
+                } elseif ($isAdminStoreAccount) {
+                    $workplaceLabel = optional($employee->administeredBranch)->name
+                        ?? optional($employee->branch)->name
+                        ?? 'Chưa được gán chi nhánh';
+                } else {
+                    $workplaceLabel = optional($employee->storage)->name ?? '-';
                 }
+
+                $statusAction = match ($employee->status) {
+                    'active' => [
+                        'label' => 'Ngừng hoạt động',
+                        'icon' => 'fa-user-slash',
+                        'class' => 'btn-warning',
+                        'target' => 'inactive',
+                        'confirm' => 'Bạn có chắc muốn ngừng hoạt động tài khoản này?',
+                    ],
+                    'inactive' => [
+                        'label' => 'Kích hoạt',
+                        'icon' => 'fa-user-check',
+                        'class' => 'btn-success',
+                        'target' => 'active',
+                        'confirm' => 'Bạn có chắc muốn kích hoạt lại tài khoản này?',
+                    ],
+                    'locked' => [
+                        'label' => 'Mở khóa',
+                        'icon' => 'fa-unlock',
+                        'class' => 'btn-info',
+                        'target' => 'active',
+                        'confirm' => 'Bạn có chắc muốn mở khóa tài khoản này?',
+                    ],
+                    default => null,
+                };
             @endphp
             <tr>
                 <td>
-                    @unless ($isAdminAccount)
+                    @if ($canActOnAccount)
                         <input type="checkbox" class="checked-item" value="{{ $employee->id }}">
-                    @endunless
+                    @endif
                 </td>
                 <td>{{ $employee->id }}</td>
                 <td>{{ optional($employee->created_at)->format('d/m/Y') ?? '-' }}</td>
@@ -44,45 +82,33 @@
                     {{-- <img src="{{ showImage($employee->img_url) }}" alt="avatar" class="rounded-circle me-2" width="32"
                         height="32"> --}}
                     {{ $employee->name }}
-                    @if ($isAdminAccount)
-                        <span class="badge bg-primary ms-2">Admin hệ thống</span>
-                    @endif
                 </td>
+                <td><span class="badge {{ $roleBadgeClass }}">{{ $roleLabel }}</span></td>
                 <td>{{ $employee->email }}</td>
                 <td>{{ $employee->phone }}</td>
                 <td>
-                    @if ($isAdminAccount)
-                        <div @if ($adminSaleStorageName) title="Kho bán mặc định: {{ $adminSaleStorageName }}" @endif>
-                            <div class="fw-semibold">Toàn hệ thống</div>
-                            @if ($adminSaleStorageName)
-                                <div class="small text-muted">Kho bán: {{ $adminSaleStorageName }}</div>
-                            @endif
-                        </div>
-                    @else
-                        {{ $workplaceLabel }}
+                    <div class="fw-semibold">{{ $workplaceLabel }}</div>
+                    @if ($isStaffAccount && optional($employee->branch)->name)
+                        <div class="small text-muted">{{ $employee->branch->name }}</div>
                     @endif
                 </td>
                 <td>
-                    @if ($isAdminAccount)
-                        <span class="badge bg-success">Kích hoạt</span>
-                    @else
-                        @switch($employee->status)
-                            @case('active')
-                                <span class="badge bg-success">Kích hoạt</span>
-                            @break
+                    @switch($employee->status)
+                        @case('active')
+                            <span class="badge bg-success">Kích hoạt</span>
+                        @break
 
-                            @case('inactive')
-                                <span class="badge bg-secondary">Không kích hoạt</span>
-                            @break
+                        @case('inactive')
+                            <span class="badge bg-secondary">Không kích hoạt</span>
+                        @break
 
-                            @case('locked')
-                                <span class="badge bg-danger">Bị khóa</span>
-                            @break
+                        @case('locked')
+                            <span class="badge bg-danger">Bị khóa</span>
+                        @break
 
-                            @default
-                                <span class="badge bg-light text-dark">Không xác định</span>
-                        @endswitch
-                    @endif
+                        @default
+                            <span class="badge bg-light text-dark">Không xác định</span>
+                    @endswitch
                 </td>
                 <td class="text-center">
                     <div class="d-flex flex-nowrap justify-content-center gap-1">
@@ -90,26 +116,31 @@
                         title="Sửa">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </a>
-                    @unless ($isAdminAccount)
-                        <button class="btn btn-warning btn-sm btn-delete" data-id="{{ $employee->id }}"
-                            title="Ngừng hoạt động">
-                            <i class="fa-solid fa-user-slash"></i>
-                        </button>
-                        @if ($employee->isStaff())
-                            <button type="button" class="btn btn-danger btn-sm btn-delete-employee"
+                    @if ($canActOnAccount)
+                        @if ($statusAction)
+                            <button type="button" class="btn {{ $statusAction['class'] }} btn-sm btn-employee-status"
                                 data-id="{{ $employee->id }}"
-                                data-url="{{ route('admin.employees.destroy', ['employee' => $employee->id]) }}"
-                                title="Xóa nhân viên">
-                                <i class="fa-solid fa-trash"></i>
+                                data-url="{{ route('admin.employees.status.update', ['id' => $employee->id]) }}"
+                                data-target-status="{{ $statusAction['target'] }}"
+                                data-confirm="{{ $statusAction['confirm'] }}" title="{{ $statusAction['label'] }}"
+                                aria-label="{{ $statusAction['label'] }}">
+                                <i class="fa-solid {{ $statusAction['icon'] }}"></i>
+                                <span class="visually-hidden">{{ $statusAction['label'] }}</span>
                             </button>
                         @endif
-                    @endunless
+                        <button type="button" class="btn btn-danger btn-sm btn-delete-employee"
+                            data-id="{{ $employee->id }}"
+                            data-url="{{ route('admin.employees.destroy', ['employee' => $employee->id]) }}"
+                            title="Xóa tài khoản">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    @endif
                     </div>
                 </td>
             </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="text-center">Không có dữ liệu</td>
+                    <td colspan="10" class="text-center">Không có dữ liệu</td>
                 </tr>
             @endforelse
         </tbody>

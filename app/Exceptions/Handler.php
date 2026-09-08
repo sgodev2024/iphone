@@ -2,10 +2,12 @@
 
 namespace App\Exceptions;
 
-use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -33,6 +35,20 @@ class Handler extends ExceptionHandler
 
     public function render($request, Throwable $exception)
     {
+        if ($exception instanceof PostTooLargeException) {
+            $message = 'Tệp tải lên vượt quá dung lượng cho phép.';
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => $message,
+                ], Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
+            }
+
+            return redirect()->back()->withErrors([
+                'img_url' => $message,
+            ]);
+        }
+
         if ($exception instanceof ValidationException) {
             $error = $exception->errors();
             $firstError = reset($error);
@@ -57,10 +73,14 @@ class Handler extends ExceptionHandler
 
     public function report(Throwable $exception)
     {
+        if ($exception instanceof PostTooLargeException) {
+            return;
+        }
+
         Log::error('>>Exception occurred<<', [
             'message' => $exception->getMessage(),
-            'file'    => $exception->getFile(),
-            'line'    => $exception->getLine(),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
         ]);
 
         parent::report($exception);

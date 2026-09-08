@@ -9,16 +9,27 @@ class Roles extends Model
 {
     use HasFactory;
 
+    public const ADMINISTRATOR_ID = 1;
+
+    public const ADMIN_STORE_ID = 2;
+
+    public const STAFF_ID = 3;
+
     public const ADMINISTRATOR = 'administrator';
+
     public const ADMIN_STORE = 'admin_store';
+
     public const STAFF = 'staff';
 
     public const ADMINISTRATOR_NAMES = [self::ADMINISTRATOR];
+
     public const ADMIN_STORE_NAMES = [self::ADMIN_STORE];
+
     public const STAFF_NAMES = [self::STAFF];
 
     /** Compatibility aliases used only while installations are migrated. */
     private const LEGACY_ADMINISTRATOR_NAMES = ['store'];
+
     private const LEGACY_ADMIN_STORE_NAMES = ['admin'];
 
     /** Only the system-wide Administrator may bypass capability checks. */
@@ -52,7 +63,8 @@ class Roles extends Model
             'role_permission',
             'role_id',
             'permission_id'
-        );}
+        );
+    }
 
     public function normalizedName(): string
     {
@@ -63,7 +75,6 @@ class Roles extends Model
     {
         return $this->isAdministrator();
     }
-
 
     public function isAdministrator(): bool
     {
@@ -110,7 +121,6 @@ class Roles extends Model
         return static::idForNames(self::STAFF_NAMES);
     }
 
-
     public static function administratorNames(): array
     {
         return [...self::ADMINISTRATOR_NAMES, ...self::LEGACY_ADMINISTRATOR_NAMES];
@@ -120,6 +130,7 @@ class Roles extends Model
     {
         return [...self::ADMIN_STORE_NAMES, ...self::LEGACY_ADMIN_STORE_NAMES];
     }
+
     private static function idForNames(array $names): int
     {
         foreach ($names as $name) {

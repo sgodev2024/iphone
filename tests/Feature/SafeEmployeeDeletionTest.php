@@ -24,17 +24,17 @@ class SafeEmployeeDeletionTest extends TestCase
     /**
      * @dataProvider deletableStatuses
      */
-    public function test_administrator_can_hard_delete_empty_staff_regardless_of_status(string $status): void
+    public function test_administrator_can_hard_delete_unassigned_admin_store_regardless_of_status(string $status): void
     {
         $admin = $this->createUser(1);
-        $staff = $this->createUser(3, branchId: 99, status: $status);
+        $adminStore = $this->createUser(2, branchId: null, status: $status);
 
         $this->actingAs($admin)
-            ->deleteJson(route('admin.employees.destroy', $staff))
+            ->deleteJson(route('admin.employees.destroy', $adminStore))
             ->assertOk()
-            ->assertJsonPath('message', 'Xóa nhân viên thành công.');
+            ->assertJsonPath('message', 'Xóa tài khoản thành công.');
 
-        $this->assertDatabaseMissing('users', ['id' => $staff->id]);
+        $this->assertDatabaseMissing('users', ['id' => $adminStore->id]);
     }
 
     public static function deletableStatuses(): array
@@ -92,11 +92,12 @@ class SafeEmployeeDeletionTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $target->id]);
     }
 
-    public function test_self_delete_and_every_non_staff_target_are_rejected(): void
+    public function test_administrator_cannot_self_delete_or_target_roles_outside_one_and_two(): void
     {
         $admin = $this->createUser(1);
         $otherAdmin = $this->createUser(1);
-        $adminStore = $this->createUser(2, branchId: 10);
+        $adminStore = $this->createUser(2, branchId: null);
+        $staff = $this->createUser(3, branchId: 10);
         $warehouse = $this->createUser(4, branchId: 10);
 
         $this->actingAs($admin)
@@ -104,14 +105,62 @@ class SafeEmployeeDeletionTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['employee']);
 
-        foreach ([$otherAdmin, $adminStore, $warehouse] as $target) {
-            $this->actingAs($admin)
-                ->deleteJson(route('admin.employees.destroy', $target))
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors(['employee']);
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.employees.destroy', $otherAdmin))
+            ->assertOk();
 
-            $this->assertDatabaseHas('users', ['id' => $target->id]);
-        }
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.employees.destroy', $adminStore))
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.employees.destroy', $staff))
+            ->assertNotFound();
+
+        $this->actingAs($admin)
+            ->deleteJson(route('admin.employees.destroy', $warehouse))
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('users', ['id' => $otherAdmin->id]);
+        $this->assertDatabaseMissing('users', ['id' => $adminStore->id]);
+        $this->assertDatabaseHas('users', ['id' => $staff->id]);
+        $this->assertDatabaseHas('users', ['id' => $warehouse->id]);
+    }
+
+    public function test_assigned_admin_store_is_blocked_with_specific_message(): void
+    {
+        $administrator = $this->createUser(1);
+        $adminStore = $this->createUser(2, branchId: 10);
+        DB::table('branches')->insert([
+            'user_id' => $administrator->id,
+            'admin_store_user_id' => $adminStore->id,
+        ]);
+
+        $this->actingAs($administrator)
+            ->deleteJson(route('admin.employees.destroy', $adminStore))
+            ->assertConflict()
+            ->assertJsonPath(
+                'message',
+                'Không thể xóa Admin Store vì tài khoản đang được gán cho một chi nhánh.'
+            );
+
+        $this->assertDatabaseHas('users', ['id' => $adminStore->id]);
+    }
+
+    public function test_last_administrator_cannot_be_deleted(): void
+    {
+        $administrator = $this->createUser(1);
+
+        $this->actingAs($administrator)
+            ->deleteJson(route('admin.employees.destroy', $administrator))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('employee')
+            ->assertJsonPath(
+                'errors.employee.0',
+                'Không thể xóa Administrator cuối cùng của hệ thống.'
+            );
+
+        $this->assertDatabaseHas('users', ['id' => $administrator->id]);
     }
 
     public function test_missing_employee_returns_not_found(): void
@@ -131,7 +180,7 @@ class SafeEmployeeDeletionTest extends TestCase
         string $column,
         string $message
     ): void {
-        $admin = $this->createUser(1);
+        $admin = $this->createUser(2, branchId: 10);
         $staff = $this->createUser(3, branchId: 10);
         $referenceId = DB::table($table)->insertGetId([$column => $staff->id]);
 
@@ -182,7 +231,7 @@ class SafeEmployeeDeletionTest extends TestCase
 
     public function test_technical_data_is_deleted_and_manager_assignment_is_detached_atomically(): void
     {
-        $admin = $this->createUser(1);
+        $admin = $this->createUser(2, branchId: 10);
         $staff = $this->createUser(3, branchId: 10);
         $managedUser = $this->createUser(3, branchId: 10, managerId: $staff->id);
 
@@ -216,7 +265,7 @@ class SafeEmployeeDeletionTest extends TestCase
 
     public function test_unexpected_database_rejection_returns_safe_message_and_rolls_back_cleanup(): void
     {
-        $admin = $this->createUser(1);
+        $admin = $this->createUser(2, branchId: 10);
         $staff = $this->createUser(3, branchId: 10);
 
         DB::table('carts')->insert(['user_id' => $staff->id]);
@@ -236,9 +285,9 @@ class SafeEmployeeDeletionTest extends TestCase
         $this->assertDatabaseHas('unexpected_employee_references', ['user_id' => $staff->id]);
     }
 
-    public function test_employee_ui_only_renders_hard_delete_for_staff_and_restores_button_state(): void
+    public function test_employee_ui_renders_hard_delete_only_for_accounts_in_actor_scope_and_restores_button_state(): void
     {
-        $admin = $this->createUser(1);
+        $admin = $this->createUser(2, branchId: 10);
         $staff = $this->createUser(3, branchId: 10);
 
         $html = $this->actingAs($admin)
@@ -251,14 +300,14 @@ class SafeEmployeeDeletionTest extends TestCase
         $this->assertStringContainsString(route('admin.employees.destroy', $staff), $html);
         $this->assertStringNotContainsString(route('admin.employees.destroy', $admin), $html);
         $this->assertStringContainsString('table-responsive', $html);
-        $this->assertStringContainsString('min-width: 1450px', $html);
+        $this->assertStringContainsString('min-width: 1550px', $html);
         $this->assertStringContainsString('d-flex flex-nowrap justify-content-center gap-1', $html);
 
         $script = file_get_contents(resource_path('views/admin/employee/index.blade.php'));
 
-        $this->assertStringContainsString('Bạn có chắc muốn xóa nhân viên này?', $script);
-        $this->assertStringContainsString('Chỉ có thể xóa nếu nhân viên chưa phát sinh nghiệp vụ trong hệ thống.', $script);
-        $this->assertStringContainsString("confirmButtonText: 'Xóa nhân viên'", $script);
+        $this->assertStringContainsString('Bạn có chắc muốn xóa tài khoản này?', $script);
+        $this->assertStringContainsString('Chỉ có thể xóa nếu tài khoản chưa được gán chi nhánh và chưa phát sinh nghiệp vụ trong hệ thống.', $script);
+        $this->assertStringContainsString("confirmButtonText: 'Xóa tài khoản'", $script);
         $this->assertStringContainsString("cancelButtonText: 'Hủy'", $script);
         $this->assertStringContainsString('if (!result.isConfirmed)', $script);
         $this->assertStringContainsString(".prop('disabled', false)", $script);
@@ -266,14 +315,14 @@ class SafeEmployeeDeletionTest extends TestCase
         $this->assertStringContainsString('.html(originalHtml)', $script);
         $this->assertStringContainsString('complete: () =>', $script);
         $this->assertStringContainsString(
-            'Không thể xóa nhân viên. Vui lòng kiểm tra dữ liệu liên quan.',
+            'Không thể xóa tài khoản. Vui lòng kiểm tra dữ liệu liên quan.',
             $script
         );
     }
 
     public function test_generic_bulk_action_remains_deactivation_not_hard_delete(): void
     {
-        $admin = $this->createUser(1);
+        $admin = $this->createUser(2, branchId: 10);
         $staff = $this->createUser(3, branchId: 10);
 
         $this->actingAs($admin)

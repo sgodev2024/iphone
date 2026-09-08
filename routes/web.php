@@ -375,6 +375,10 @@ Route::middleware(['auth'])
                     ->middleware('permission:employee.create')
                     ->name('store');
 
+                Route::patch('{id}/status', 'updateStatus')
+                    ->middleware('permission:employee.update')
+                    ->name('status.update');
+
                 Route::delete('{employee}', 'destroy')
                     ->middleware('permission:employee.update')
                     ->name('destroy');
