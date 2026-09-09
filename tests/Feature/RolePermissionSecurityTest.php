@@ -361,33 +361,39 @@ SQL);
 
     public function test_permission_seeder_uses_admin_store_business_matrix_only(): void
     {
-        $roleOneBefore = $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID);
+        $stalePermission = $this->permission('security.stale-permission');
+        $this->insertPivot(Roles::ADMINISTRATOR_ID, $stalePermission->id);
+        $this->insertPivot(Roles::ADMIN_STORE_ID, $stalePermission->id);
+        $this->insertPivot(Roles::STAFF_ID, $stalePermission->id);
+
         $staffBefore = $this->pivotPermissionIds(Roles::STAFF_ID);
+        $administrator = $this->createUser(Roles::ADMINISTRATOR_ID);
+        $allowlist = (new \ReflectionClass(PermissionSeeder::class))
+            ->getReflectionConstant('ADMIN_STORE_PERMISSION_KEYS');
+
+        $this->assertNotFalse($allowlist);
+        $expectedAdminStoreKeys = collect($allowlist->getValue())
+            ->sort()
+            ->values()
+            ->all();
 
         $this->seed(PermissionSeeder::class);
 
-        $roleTwoKeys = DB::table('role_permission')
-            ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
-            ->where('role_permission.role_id', Roles::ADMIN_STORE_ID)
-            ->pluck('permissions.permission_key');
+        $firstAdminStoreKeys = $this->pivotPermissionKeys(Roles::ADMIN_STORE_ID);
 
-        $this->assertCount(112, $roleTwoKeys);
-        $this->assertContains('dashboard.view', $roleTwoKeys);
-        $this->assertContains('user.profile_update', $roleTwoKeys);
-
-        foreach (['role.', 'superadmin.', 'store.', 'signup.', 'branch.'] as $prefix) {
-            $this->assertFalse(
-                $roleTwoKeys->contains(fn (string $key) => str_starts_with($key, $prefix)),
-                "Admin Store must not receive {$prefix}* permissions."
-            );
-        }
-
-        foreach (['user.view', 'user.create', 'user.search', 'user.update'] as $key) {
-            $this->assertNotContains($key, $roleTwoKeys);
-        }
-
-        $this->assertSame($roleOneBefore, $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID));
+        $this->assertSame([], $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID));
+        $this->assertCount(112, $firstAdminStoreKeys);
+        $this->assertSame($expectedAdminStoreKeys, $firstAdminStoreKeys);
         $this->assertSame($staffBefore, $this->pivotPermissionIds(Roles::STAFF_ID));
+        $this->assertTrue($administrator->hasFullAccess());
+        $this->assertTrue($administrator->hasPermission('permission.not.in.pivot'));
+
+        $this->seed(PermissionSeeder::class);
+
+        $this->assertSame([], $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID));
+        $this->assertSame($firstAdminStoreKeys, $this->pivotPermissionKeys(Roles::ADMIN_STORE_ID));
+        $this->assertSame($staffBefore, $this->pivotPermissionIds(Roles::STAFF_ID));
+        $this->assertTrue($administrator->hasFullAccess());
     }
 
     public function test_role_created_at_null_is_rendered_as_dash(): void
@@ -446,6 +452,16 @@ SQL);
             ->orderBy('permission_id')
             ->pluck('permission_id')
             ->map(fn ($permissionId) => (int) $permissionId)
+            ->all();
+    }
+
+    private function pivotPermissionKeys(int $roleId): array
+    {
+        return DB::table('role_permission')
+            ->join('permissions', 'permissions.id', '=', 'role_permission.permission_id')
+            ->where('role_permission.role_id', $roleId)
+            ->orderBy('permissions.permission_key')
+            ->pluck('permissions.permission_key')
             ->all();
     }
 

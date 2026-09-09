@@ -945,6 +945,10 @@ class PermissionSeeder extends Seeder
                 );
             }
 
+            DB::table('role_permission')
+                ->where('role_id', Roles::ADMINISTRATOR_ID)
+                ->delete();
+
             if (! Roles::query()->whereKey(Roles::ADMIN_STORE_ID)->exists()) {
                 return;
             }
