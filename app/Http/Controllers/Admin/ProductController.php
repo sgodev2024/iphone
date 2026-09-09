@@ -147,13 +147,13 @@ class ProductController extends Controller
 
     public function update(ProductRequest $request, $id)
     {
-        return transaction(function () use ($request, $id) {
-            $productQuery = Product::query();
-            if (! $this->branchContext->isGlobal($request->user())) {
-                $productQuery->where('user_id', Auth::id());
-            }
-            $product = $productQuery->findOrFail($id);
+        $productQuery = Product::query();
+        if (! $this->branchContext->isGlobal($request->user())) {
+            $productQuery->where('user_id', Auth::id());
+        }
+        $product = $productQuery->findOrFail($id);
 
+        return transaction(function () use ($request, $product) {
             $oldThumbnail = $product->thumbnail;
 
             $data = $request->validated();
@@ -402,7 +402,7 @@ class ProductController extends Controller
             200,
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
             ]
         );
 

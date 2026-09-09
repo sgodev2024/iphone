@@ -48,9 +48,14 @@ class ProductRequest extends FormRequest
                 return;
             }
 
-            $product = Product::query()
-                ->where('user_id', $this->user()?->id)
-                ->find($productId);
+            $user = $this->user();
+            $productQuery = Product::query();
+
+            if (! $user?->isAdministrator()) {
+                $productQuery->where('user_id', $user?->id);
+            }
+
+            $product = $productQuery->find($productId);
 
             if (! $product) {
                 return;

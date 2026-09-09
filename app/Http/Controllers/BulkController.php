@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 class BulkController extends Controller
@@ -103,20 +104,38 @@ class BulkController extends Controller
         }
 
         if ($type === 'delete' && $modelClass === Product::class) {
-            $products = Product::query()
-                ->where('user_id', Auth::id())
-                ->whereIn('id', $ids);
+            $user = Auth::user();
+            abort_unless(
+                $user?->hasPermission('product.delete'),
+                Response::HTTP_FORBIDDEN
+            );
 
-            if ((clone $products)->count() !== count($ids)) {
-                abort(Response::HTTP_NOT_FOUND);
-            }
+            return DB::transaction(function () use ($ids, $user) {
+                $products = Product::query()->whereIn('id', $ids);
 
-            if ((clone $products)->whereHas('imeis')->exists()) {
-                return errorResponse(
-                    'Không thể xóa sản phẩm vì sản phẩm đang có dữ liệu IMEI.',
-                    Response::HTTP_UNPROCESSABLE_ENTITY
-                );
-            }
+                if (! $user->isAdministrator()) {
+                    $products->where('user_id', $user->id);
+                }
+
+                $productIds = (clone $products)
+                    ->lockForUpdate()
+                    ->pluck('id');
+
+                if ($productIds->count() !== count($ids)) {
+                    abort(Response::HTTP_NOT_FOUND);
+                }
+
+                if ($message = $this->productDeleteBlockMessage($products)) {
+                    return errorResponse(
+                        $message,
+                        Response::HTTP_UNPROCESSABLE_ENTITY
+                    );
+                }
+
+                $products->delete();
+
+                return response()->json(['message' => 'Xóa thành công!']);
+            }, 3);
         }
 
         return transaction(function () use ($modelClass, $ids, $type) {
@@ -136,6 +155,64 @@ class BulkController extends Controller
                     return errorResponse('Hành động không hợp lệ!', 400);
             }
         });
+    }
+
+    private function productDeleteBlockMessage(Builder $products): ?string
+    {
+        if ((clone $products)
+            ->whereHas('imeis', fn (Builder $query) => $query->withTrashed())
+            ->exists()
+        ) {
+            return 'Không thể xóa sản phẩm vì sản phẩm đang có dữ liệu IMEI.';
+        }
+
+        if ((clone $products)->whereHas('orderDetails')->exists()) {
+            return 'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử bán hàng.';
+        }
+
+        if ((clone $products)->whereHas('importDetails')->exists()) {
+            return 'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử nhập hàng.';
+        }
+
+        if ((clone $products)->whereHas('productStorages')->exists()) {
+            return 'Không thể xóa sản phẩm vì sản phẩm đang có dữ liệu tồn kho.';
+        }
+
+        $productIds = (clone $products)->pluck('id');
+        $references = [
+            [
+                ['order_return_details'],
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử bán hàng.',
+            ],
+            [
+                ['import'],
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử nhập hàng.',
+            ],
+            [
+                ['check_detail', 'warehouse'],
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh dữ liệu kiểm kho.',
+            ],
+            [
+                ['company_product'],
+                'Không thể xóa sản phẩm vì sản phẩm đang có liên kết nhà cung cấp.',
+            ],
+            [
+                ['carts', 'cart_detail'],
+                'Không thể xóa sản phẩm vì sản phẩm đang được sử dụng trong giỏ hàng.',
+            ],
+        ];
+
+        foreach ($references as [$tables, $message]) {
+            foreach ($tables as $table) {
+                if (Schema::hasTable($table)
+                    && DB::table($table)->whereIn('product_id', $productIds)->exists()
+                ) {
+                    return $message;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function modelClassForAction(string $type, ?string $model): ?string

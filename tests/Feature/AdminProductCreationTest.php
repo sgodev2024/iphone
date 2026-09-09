@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Brand;
 use App\Models\Branch;
+use App\Models\Brand;
 use App\Models\Categories;
 use App\Models\Product;
 use App\Models\ProductImei;
@@ -302,6 +302,396 @@ class AdminProductCreationTest extends TestCase
                 unlink($temporaryFile);
             }
         }
+    }
+
+    public function test_administrator_can_edit_product_it_created(): void
+    {
+        $administrator = $this->createAdmin();
+        $product = $this->createProduct($administrator, 'Administrator owned product');
+
+        $this->actingAs($administrator)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertOk();
+    }
+
+    public function test_administrator_can_edit_product_created_by_admin_store(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $product = $this->createProduct($adminStore, 'Admin Store created product');
+
+        $this->actingAs($administrator)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertOk();
+    }
+
+    public function test_administrator_can_update_admin_store_product_without_changing_creator(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $product = $this->createProduct($adminStore, 'Admin Store product before update');
+        $creatorId = $product->user_id;
+
+        $this->actingAs($administrator)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product, [
+                    'name' => 'Admin Store product after update',
+                ])
+            )
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $product->refresh();
+
+        $this->assertSame('Admin Store product after update', $product->name);
+        $this->assertSame($creatorId, $product->user_id);
+    }
+
+    public function test_administrator_cannot_bypass_inventory_tracking_guard_on_admin_store_product(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $product = $this->createProduct(
+            $adminStore,
+            'Admin Store locked product',
+            Product::INVENTORY_TRACKING_IMEI
+        );
+
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => 1,
+            'quantity' => 1,
+        ]);
+
+        $this->actingAs($administrator)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product, [
+                    'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+                ])
+            )
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['inventory_tracking']);
+
+        $this->assertSame(
+            Product::INVENTORY_TRACKING_IMEI,
+            $product->fresh()->inventory_tracking
+        );
+    }
+
+    public function test_administrator_can_delete_admin_store_product_without_business_history(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $product = $this->createProduct($adminStore, 'Deletable global product');
+
+        $this->actingAs($administrator)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$product->id],
+                'model' => 'Product',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Xóa thành công!');
+
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    }
+
+    public function test_product_delete_guards_preserve_all_business_data(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $cases = [
+            [
+                'IMEI protected product',
+                'Không thể xóa sản phẩm vì sản phẩm đang có dữ liệu IMEI.',
+                function (Product $product): array {
+                    $imei = ProductImei::create([
+                        'product_id' => $product->id,
+                        'imei' => str_pad((string) $product->id, 15, '0', STR_PAD_LEFT),
+                        'status' => ProductImei::STATUS_IN_STOCK,
+                    ]);
+
+                    return ['product_imeis', $imei->id];
+                },
+            ],
+            [
+                'Order protected product',
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử bán hàng.',
+                function (Product $product): array {
+                    $id = DB::table('order_details')->insertGetId([
+                        'order_id' => null,
+                        'product_id' => $product->id,
+                        'quantity' => 1,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    return ['order_details', $id];
+                },
+            ],
+            [
+                'Import protected product',
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử nhập hàng.',
+                function (Product $product): array {
+                    $id = DB::table('import_detail')->insertGetId([
+                        'import_id' => null,
+                        'product_id' => $product->id,
+                        'quantity' => 1,
+                        'price' => 18000000,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    return ['import_detail', $id];
+                },
+            ],
+            [
+                'Inventory protected product',
+                'Không thể xóa sản phẩm vì sản phẩm đang có dữ liệu tồn kho.',
+                function (Product $product): array {
+                    $inventory = ProductStorage::create([
+                        'product_id' => $product->id,
+                        'storage_id' => 1,
+                        'quantity' => 0,
+                    ]);
+
+                    return ['product_storage', $inventory->id];
+                },
+            ],
+        ];
+
+        foreach ($cases as [$name, $message, $createBusinessData]) {
+            $product = $this->createProduct($adminStore, $name);
+            [$table, $relatedId] = $createBusinessData($product);
+
+            $this->actingAs($administrator)
+                ->postJson('/admin/bulk/delete', [
+                    'ids' => [$product->id],
+                    'model' => 'Product',
+                ])
+                ->assertUnprocessable()
+                ->assertJsonPath('message', $message);
+
+            $this->assertDatabaseHas('products', ['id' => $product->id]);
+            $this->assertDatabaseHas($table, ['id' => $relatedId]);
+        }
+    }
+
+    public function test_admin_store_product_mutations_remain_creator_scoped(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $administrator = $this->createAdmin();
+        $ownProduct = $this->createProduct($adminStore, 'Own creator product');
+        $foreignProduct = $this->createProduct($administrator, 'Foreign creator product');
+        $this->grantPermissionToRole(2, 'product.delete');
+
+        $this->actingAs($adminStore)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$ownProduct->id],
+                'model' => 'Product',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('products', ['id' => $ownProduct->id]);
+
+        $this->actingAs($adminStore)
+            ->get(route('admin.products.edit', $foreignProduct->id))
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->putJson(
+                route('admin.products.update', $foreignProduct->id),
+                $this->productUpdatePayload($foreignProduct, [
+                    'name' => 'Unauthorized update',
+                ])
+            )
+            ->assertNotFound();
+
+        $this->actingAs($adminStore)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$foreignProduct->id],
+                'model' => 'Product',
+            ])
+            ->assertNotFound();
+
+        $foreignProduct->refresh();
+
+        $this->assertSame('Foreign creator product', $foreignProduct->name);
+        $this->assertSame($administrator->id, $foreignProduct->user_id);
+    }
+
+    public function test_admin_store_product_delete_requires_product_delete_permission(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $product = $this->createProduct($adminStore, 'Permission protected product');
+
+        $this->actingAs($adminStore)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$product->id],
+                'model' => 'Product',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
+    public function test_admin_store_can_edit_and_update_own_product(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $product = $this->createProduct($adminStore, 'Own product before update');
+
+        $this->actingAs($adminStore)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertOk();
+
+        $this->actingAs($adminStore)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product, ['name' => 'Own product after update'])
+            )
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $product->refresh();
+
+        $this->assertSame('Own product after update', $product->name);
+        $this->assertSame($adminStore->id, $product->user_id);
+    }
+
+    public function test_admin_store_cannot_mutate_product_created_by_another_admin_store(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStoreA = $this->createAdminStore($branchA);
+        $adminStoreB = $this->createAdminStore($branchB);
+        $product = $this->createProduct($adminStoreB, 'Other Admin Store product');
+        $this->grantPermissionToRole(2, 'product.delete');
+
+        $this->actingAs($adminStoreA)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertNotFound();
+
+        $this->actingAs($adminStoreA)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product, ['name' => 'Unauthorized update'])
+            )
+            ->assertNotFound();
+
+        $this->actingAs($adminStoreA)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$product->id],
+                'model' => 'Product',
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'name' => 'Other Admin Store product',
+            'user_id' => $adminStoreB->id,
+        ]);
+    }
+
+    public function test_product_mutation_permissions_are_enforced(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $product = $this->createProduct($adminStore, 'Permission scoped product');
+
+        $this->revokePermissionFromRole(2, 'product.update');
+
+        $this->actingAs($adminStore)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertForbidden();
+
+        $this->actingAs($adminStore)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product)
+            )
+            ->assertForbidden();
+
+        $this->grantPermissionToRole(2, 'product.delete');
+        $this->revokePermissionFromRole(2, 'bulk.action');
+
+        $this->actingAs($adminStore)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$product->id],
+                'model' => 'Product',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
+    public function test_product_bulk_delete_is_atomic_when_one_product_is_blocked(): void
+    {
+        $administrator = $this->createAdmin();
+        $deletableProduct = $this->createProduct($administrator, 'Atomic deletable product');
+        $blockedProduct = $this->createProduct($administrator, 'Atomic blocked product');
+
+        DB::table('order_details')->insert([
+            'order_id' => null,
+            'product_id' => $blockedProduct->id,
+            'quantity' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($administrator)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$deletableProduct->id, $blockedProduct->id],
+                'model' => 'Product',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Không thể xóa sản phẩm vì sản phẩm đã phát sinh lịch sử bán hàng.'
+            );
+
+        $this->assertDatabaseHas('products', ['id' => $deletableProduct->id]);
+        $this->assertDatabaseHas('products', ['id' => $blockedProduct->id]);
+    }
+
+    public function test_staff_cannot_administer_product_master(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $administrator = $this->createAdmin();
+        $staff = $this->createStaff($branch);
+        $product = $this->createProduct($administrator, 'Staff protected product');
+
+        $this->actingAs($staff)
+            ->get(route('admin.products.index'))
+            ->assertForbidden();
+
+        $this->actingAs($staff)
+            ->get(route('admin.products.edit', $product->id))
+            ->assertForbidden();
+
+        $this->actingAs($staff)
+            ->putJson(
+                route('admin.products.update', $product->id),
+                $this->productUpdatePayload($product)
+            )
+            ->assertForbidden();
+
+        $this->actingAs($staff)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$product->id],
+                'model' => 'Product',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 
     public function test_admin_can_create_product_without_thumbnail(): void
@@ -627,6 +1017,17 @@ class AdminProductCreationTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('user_info', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
+            $table->string('idnumber')->nullable();
+            $table->string('bank_name')->nullable();
+            $table->string('bank')->nullable();
+            $table->string('branch')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('branches', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
@@ -809,6 +1210,19 @@ class AdminProductCreationTest extends TestCase
         ]);
     }
 
+    private function createStaff(Branch $branch): User
+    {
+        return User::create([
+            'name' => 'Staff '.$branch->id,
+            'email' => 'staff-'.$branch->id.'@example.com',
+            'phone' => '09033333'.str_pad((string) $branch->id, 2, '0', STR_PAD_LEFT),
+            'password' => 'password',
+            'role_id' => 3,
+            'branch_id' => $branch->id,
+            'status' => 'active',
+        ]);
+    }
+
     private function createProduct(
         User $creator,
         string $name,
@@ -828,6 +1242,57 @@ class AdminProductCreationTest extends TestCase
             'inventory_tracking' => $inventoryTracking,
             'status' => 'published',
         ]);
+    }
+
+    private function productUpdatePayload(Product $product, array $overrides = []): array
+    {
+        return array_merge([
+            'name' => $product->name,
+            'price' => $product->price,
+            'price_buy' => $product->price_buy,
+            'product_unit' => $product->product_unit,
+            'category_id' => $product->category_id,
+            'brands_id' => $product->brands_id,
+            'inventory_tracking' => $product->inventory_tracking,
+            'description' => $product->description,
+            'status' => $product->status,
+        ], $overrides);
+    }
+
+    private function grantPermissionToRole(int $roleId, string $permissionKey): void
+    {
+        $permissionId = DB::table('permissions')
+            ->where('permission_key', $permissionKey)
+            ->value('id');
+
+        if ($permissionId === null) {
+            $permissionId = DB::table('permissions')->insertGetId([
+                'module' => 'Product',
+                'permission_key' => $permissionKey,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('role_permission')->insertOrIgnore([
+            'guard_name' => 'web',
+            'role_id' => $roleId,
+            'permission_id' => $permissionId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function revokePermissionFromRole(int $roleId, string $permissionKey): void
+    {
+        DB::table('role_permission')
+            ->where('role_id', $roleId)
+            ->whereIn('permission_id', function ($query) use ($permissionKey) {
+                $query->select('id')
+                    ->from('permissions')
+                    ->where('permission_key', $permissionKey);
+            })
+            ->delete();
     }
 
     private function createAdmin(): User
