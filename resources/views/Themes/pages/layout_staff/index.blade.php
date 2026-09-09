@@ -859,6 +859,24 @@
     @endphp
 
     <div class="container-fluid py-4 sales-page">
+        @if ($canSelectSaleStorage)
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <label for="saleStorageSelect" class="form-label fw-semibold mb-1">
+                        Chọn kho bán hàng
+                    </label>
+                    <select id="saleStorageSelect" class="form-select">
+                        <option value="">-- Chọn kho bán hàng --</option>
+                        @foreach ($saleStorages as $storage)
+                            <option value="{{ $storage->id }}" @selected($saleStorage?->id === $storage->id)>
+                                {{ $storage->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        @endif
+
         @if (!$saleStorage && $saleStorageMessage)
             <div id="saleStorageMessage" class="alert alert-warning py-2 px-3 mb-3">
                 {{ $saleStorageMessage }}
@@ -1383,6 +1401,42 @@
             }
 
             setSaleStorageControlsEnabled(hasSaleStorage);
+
+            const saleStorageSelect = qs('#saleStorageSelect');
+
+            saleStorageSelect?.addEventListener('change', async () => {
+                const storageId = saleStorageSelect.value;
+
+                if (!storageId) {
+                    return;
+                }
+
+                saleStorageSelect.disabled = true;
+
+                try {
+                    const response = await fetch(@json(route('staff.storage.select')), {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        },
+                        body: JSON.stringify({
+                            storage_id: Number(storageId),
+                        }),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(payload.message || 'Không thể chọn kho bán hàng.');
+                    }
+
+                    window.location.reload();
+                } catch (error) {
+                    saleStorageSelect.disabled = false;
+                    showSaleStorageRequired(error.message);
+                }
+            });
 
             function sizeOpenSalesSelect2Dropdown(selectElement) {
                 const select2Container = $(selectElement).next('.select2');

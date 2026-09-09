@@ -1041,7 +1041,7 @@ class StaffPosSaleTest extends TestCase
         $this->assertTransactionIsBalanced($transaction);
     }
 
-    public function test_admin_uses_default_kho_a_and_storage_picker_is_hidden(): void
+    public function test_administrator_uses_default_kho_a_and_can_select_global_storage(): void
     {
         $this->seedAccounts();
         $owner = $this->createManager(1);
@@ -1052,6 +1052,7 @@ class StaffPosSaleTest extends TestCase
         ]);
         $storageB = $this->createStorage([
             'user_id' => $branch->id,
+            'branch_id' => 2,
             'name' => 'Kho B',
         ]);
         $product = $this->createProduct([
@@ -1072,9 +1073,8 @@ class StaffPosSaleTest extends TestCase
         $this->actingAs($owner)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertDontSee('Kho đang bán hàng', false)
-            ->assertDontSee('Chọn kho bán hàng', false)
-            ->assertDontSee('id="saleStorageSelect"', false)
+            ->assertSee('Chọn kho bán hàng', false)
+            ->assertSee('id="saleStorageSelect"', false)
             ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
             ->assertDontSee('disabled placeholder="Nhập hoặc quét barcode"', false);
 
@@ -1108,6 +1108,21 @@ class StaffPosSaleTest extends TestCase
             'storage_id' => $storageB->id,
             'quantity' => 9,
         ]);
+
+        $this->actingAs($owner)
+            ->postJson('/ban-hang/storage/select', [
+                'storage_id' => $storageB->id,
+            ])
+            ->assertOk();
+
+        $this->actingAs($owner)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'available_quantity' => 9,
+                'storage_id' => $storageB->id,
+            ]);
     }
 
     public function test_manager_without_managed_storage_gets_manager_specific_message(): void
@@ -1117,18 +1132,41 @@ class StaffPosSaleTest extends TestCase
         $this->actingAs($manager)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('Chưa có kho bán hàng. Vui lòng tạo hoặc phân quyền kho.', false)
+            ->assertSee('Chi nhánh chưa có kho bán hàng hoạt động.', false)
             ->assertDontSee('Nhân viên chưa được gán kho bán hàng.', false)
             ->assertSee('id="productSearch"', false)
-            ->assertSee('disabled placeholder="Tìm sản phẩm"', false)
-            ->assertSee('id="barcodeInput"', false)
-            ->assertSee('disabled placeholder="Nhập hoặc quét barcode"', false);
+            ->assertSee('id="barcodeInput"', false);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
             ->assertUnprocessable()
             ->assertJsonFragment([
-                'message' => 'Chưa có kho bán hàng. Vui lòng tạo hoặc phân quyền kho.',
+                'message' => 'Chi nhánh chưa có kho bán hàng hoạt động.',
+            ]);
+    }
+
+    public function test_admin_store_without_active_storage_fails_closed_with_branch_message(): void
+    {
+        $manager = $this->createManager();
+        $storage = $this->createStorage([
+            'user_id' => $manager->id,
+            'name' => 'Kho ngừng hoạt động',
+        ]);
+        DB::table('storages')
+            ->where('id', $storage->id)
+            ->update(['status' => false]);
+
+        $this->actingAs($manager)
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('Chi nhánh chưa có kho bán hàng hoạt động.', false)
+            ->assertDontSee('id="saleStorageSelect"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Chi nhánh chưa có kho bán hàng hoạt động.',
             ]);
     }
 
@@ -1186,8 +1224,8 @@ class StaffPosSaleTest extends TestCase
             ->get('/ban-hang')
             ->assertOk()
             ->assertDontSee('Kho đang bán hàng', false)
-            ->assertDontSee('Chọn kho bán hàng', false)
-            ->assertDontSee('id="saleStorageSelect"', false)
+            ->assertSee('Chọn kho bán hàng', false)
+            ->assertSee('id="saleStorageSelect"', false)
             ->assertSee('id="productSearch"', false)
             ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
             ->assertSee('id="barcodeInput"', false)
@@ -1250,6 +1288,79 @@ class StaffPosSaleTest extends TestCase
         ]);
     }
 
+    public function test_admin_store_with_multiple_storages_uses_valid_session_selection(): void
+    {
+        $manager = $this->createManager();
+        $storageA = $this->createStorage([
+            'user_id' => $manager->id,
+            'name' => 'Kho A',
+        ]);
+        $storageB = $this->createStorage([
+            'user_id' => $manager->id,
+            'name' => 'Kho B',
+        ]);
+        $product = $this->createProduct(['user_id' => $manager->id]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 7,
+        ]);
+
+        config(['pos.default_storage_id' => $storageA->id]);
+
+        $this->actingAs($manager)
+            ->withSession(['sale.storage_id.'.$manager->id => $storageB->id])
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('id="saleStorageSelect"', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'storage_id' => $storageB->id,
+                'available_quantity' => 7,
+            ]);
+    }
+
+    public function test_admin_store_ignores_session_storage_from_another_branch(): void
+    {
+        $manager = $this->createManager();
+        $otherManager = $this->createManager();
+        $this->createStorage([
+            'user_id' => $manager->id,
+            'name' => 'Kho B',
+        ]);
+        $this->createStorage([
+            'user_id' => $manager->id,
+            'name' => 'Kho C',
+        ]);
+        $outsideStorage = $this->createStorage([
+            'user_id' => $otherManager->id,
+            'branch_id' => 2,
+            'name' => 'Kho A',
+        ]);
+
+        config(['pos.default_storage_id' => $outsideStorage->id]);
+
+        $this->actingAs($manager)
+            ->withSession(['sale.storage_id.'.$manager->id => $outsideStorage->id])
+            ->get('/ban-hang')
+            ->assertOk()
+            ->assertSee('id="saleStorageSelect"', false)
+            ->assertSee('Vui lòng chọn kho bán hàng.', false);
+
+        $this->actingAs($manager)
+            ->getJson('/ban-hang/product')
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Vui lòng chọn kho bán hàng.',
+            ]);
+
+        $this->assertFalse(session()->has('sale.storage_id.'.$manager->id));
+    }
+
     public function test_manager_cannot_select_storage_outside_management_scope(): void
     {
         $manager = $this->createManager();
@@ -1301,18 +1412,24 @@ class StaffPosSaleTest extends TestCase
             ]);
     }
 
-    public function test_configured_default_storage_id_must_exist_and_be_in_management_scope(): void
+    public function test_admin_store_with_one_storage_ignores_stale_and_cross_branch_default(): void
     {
         $manager = $this->createManager();
         $otherManager = $this->createManager();
-        $this->createStorage([
+        $managedStorage = $this->createStorage([
             'user_id' => $manager->id,
-            'name' => 'Kho A',
+            'name' => 'Kho chi nhánh A',
         ]);
         $outsideStorage = $this->createStorage([
             'user_id' => $otherManager->id,
             'branch_id' => 2,
-            'name' => 'Kho A',
+            'name' => 'Kho chi nhánh B',
+        ]);
+        $product = $this->createProduct(['user_id' => $manager->id]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $managedStorage->id,
+            'quantity' => 3,
         ]);
 
         config(['pos.default_storage_id' => 999999]);
@@ -1320,29 +1437,34 @@ class StaffPosSaleTest extends TestCase
         $this->actingAs($manager)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('Kho bán hàng mặc định không tồn tại.', false)
-            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+            ->assertDontSee('Kho bán hàng mặc định không tồn tại.', false)
+            ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertDontSee('id="saleStorageSelect"', false);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
-            ->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Kho bán hàng mặc định không tồn tại.']);
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'storage_id' => $managedStorage->id,
+                'available_quantity' => 3,
+            ]);
 
         config(['pos.default_storage_id' => $outsideStorage->id]);
-
-        $this->actingAs($manager)
-            ->get('/ban-hang')
-            ->assertOk()
-            ->assertSee('Kho bán hàng mặc định không thuộc quyền quản lý của tài khoản.', false)
-            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+        session()->forget('sale.storage_id.'.$manager->id);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
-            ->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Kho bán hàng mặc định không thuộc quyền quản lý của tài khoản.']);
+            ->assertOk()
+            ->assertJsonFragment([
+                'product_id' => $product->id,
+                'storage_id' => $managedStorage->id,
+                'available_quantity' => 3,
+            ])
+            ->assertJsonMissing(['storage_id' => $outsideStorage->id]);
     }
 
-    public function test_duplicate_kho_a_names_are_not_selected_ambiguously(): void
+    public function test_multiple_storages_without_unique_default_require_selection(): void
     {
         $manager = $this->createManager();
         $this->createStorage([
@@ -1357,18 +1479,18 @@ class StaffPosSaleTest extends TestCase
         $this->actingAs($manager)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('Có nhiều kho tên Kho A trong phạm vi quản lý. Vui lòng cấu hình POS_DEFAULT_STORAGE_ID.', false)
-            ->assertSee('disabled placeholder="Tìm sản phẩm"', false);
+            ->assertSee('Vui lòng chọn kho bán hàng.', false)
+            ->assertSee('id="saleStorageSelect"', false);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
             ->assertUnprocessable()
             ->assertJsonFragment([
-                'message' => 'Có nhiều kho tên Kho A trong phạm vi quản lý. Vui lòng cấu hình POS_DEFAULT_STORAGE_ID.',
+                'message' => 'Vui lòng chọn kho bán hàng.',
             ]);
     }
 
-    public function test_manager_with_storages_but_no_kho_a_gets_default_storage_message(): void
+    public function test_admin_store_with_one_non_default_storage_uses_it_automatically(): void
     {
         $manager = $this->createManager();
         $this->createStorage([
@@ -1379,14 +1501,12 @@ class StaffPosSaleTest extends TestCase
         $this->actingAs($manager)
             ->get('/ban-hang')
             ->assertOk()
-            ->assertSee('Chưa cấu hình kho bán hàng mặc định.', false)
-            ->assertSee('disabled placeholder="Tìm sản phẩm"', false)
+            ->assertDontSee('disabled placeholder="Tìm sản phẩm"', false)
             ->assertDontSee('id="saleStorageSelect"', false);
 
         $this->actingAs($manager)
             ->getJson('/ban-hang/product')
-            ->assertUnprocessable()
-            ->assertJsonFragment(['message' => 'Chưa cấu hình kho bán hàng mặc định.']);
+            ->assertOk();
     }
 
     public function test_staff_cannot_change_assigned_sale_storage(): void
@@ -3005,6 +3125,7 @@ class StaffPosSaleTest extends TestCase
             $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('location')->nullable();
+            $table->boolean('status')->default(true);
             $table->timestamps();
         });
 
