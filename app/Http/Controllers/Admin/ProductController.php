@@ -59,11 +59,6 @@ class ProductController extends Controller
                 ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%$searchText%");
                 });
-            $this->branchContext->scopeThroughStorage(
-                $products,
-                $user,
-                'productStorages.storage'
-            );
             $products = $products
                 ->latest()
                 ->paginate(10)
@@ -357,7 +352,6 @@ class ProductController extends Controller
         $productsQuery = Product::query()
             ->select('products.*')
             ->selectSub($stockQuery, 'visible_stock_quantity');
-        $this->branchContext->scopeThroughStorage($productsQuery, $user, 'productStorages.storage');
         $products = $productsQuery->with(['category', 'brand'])->get();
         // Đặt tiêu đề cột
         $sheet->setCellValue('A1', 'Mã sản phẩm');

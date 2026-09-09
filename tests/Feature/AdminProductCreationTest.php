@@ -3,15 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Brand;
+use App\Models\Branch;
 use App\Models\Categories;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage as StorageModel;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class AdminProductCreationTest extends TestCase
@@ -51,6 +55,253 @@ class AdminProductCreationTest extends TestCase
         $this->assertNotNull($product);
         $this->assertSame('0', (string) $product->quantity);
         $this->assertSame(Product::INVENTORY_TRACKING_IMEI, $product->inventory_tracking);
+    }
+
+    public function test_admin_store_sees_created_product_without_inventory_with_zero_stock(): void
+    {
+        $branch = $this->createBranch('Branch A');
+        $adminStore = $this->createAdminStore($branch);
+        $category = Categories::create(['name' => 'Dien thoai']);
+
+        $this->actingAs($adminStore)->post('/admin/products', [
+            'name' => 'Global product without inventory',
+            'price' => 20000000,
+            'price_buy' => 18000000,
+            'product_unit' => 'chiec',
+            'category_id' => $category->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'description' => null,
+            'status' => 'published',
+        ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $product = Product::where('name', 'Global product without inventory')->firstOrFail();
+
+        $this->assertFalse(
+            ProductStorage::where('product_id', $product->id)->exists()
+        );
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($adminStore),
+            $product->name
+        );
+
+        $this->assertStringContainsString('<td>0</td>', $row);
+    }
+
+    public function test_administrator_sees_global_product_with_global_stock(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $administrator = $this->createAdmin();
+        $storageA = $this->createStorage($branchA, 'Storage A');
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $product = $this->createProduct($adminStore, 'Administrator visible product');
+
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 2,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 5,
+        ]);
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($administrator),
+            $product->name
+        );
+
+        $this->assertStringContainsString('<td>7</td>', $row);
+    }
+
+    public function test_admin_store_sees_catalog_product_but_not_stock_from_another_branch(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $product = $this->createProduct($adminStore, 'Cross branch stock product');
+
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 9,
+        ]);
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($adminStore),
+            $product->name
+        );
+
+        $this->assertStringContainsString('<td>0</td>', $row);
+        $this->assertStringNotContainsString('<td>9</td>', $row);
+    }
+
+    public function test_admin_store_sees_only_own_branch_stock_for_global_product(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $storageA = $this->createStorage($branchA, 'Storage A');
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $product = $this->createProduct($adminStore, 'Own branch stock product');
+
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 3,
+        ]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 9,
+        ]);
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($adminStore),
+            $product->name
+        );
+
+        $this->assertStringContainsString('<td>3</td>', $row);
+        $this->assertStringNotContainsString('<td>12</td>', $row);
+    }
+
+    public function test_admin_store_imei_stock_count_remains_branch_scoped(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $storageA = $this->createStorage($branchA, 'Storage A');
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $product = $this->createProduct(
+            $adminStore,
+            'Branch scoped IMEI product',
+            Product::INVENTORY_TRACKING_IMEI
+        );
+
+        ProductImei::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageA->id,
+            'imei' => '111111111111111',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+        ProductImei::create([
+            'product_id' => $product->id,
+            'storage_id' => $storageB->id,
+            'imei' => '222222222222222',
+            'status' => ProductImei::STATUS_IN_STOCK,
+        ]);
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($adminStore),
+            $product->name
+        );
+
+        $this->assertStringContainsString('<td>1</td>', $row);
+        $this->assertStringNotContainsString('<td>2</td>', $row);
+    }
+
+    public function test_admin_store_latest_import_remains_branch_scoped(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $storageA = $this->createStorage($branchA, 'Storage A');
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $product = $this->createProduct($adminStore, 'Branch scoped latest import');
+        $importA = DB::table('import_coupon')->insertGetId([
+            'storage_id' => $storageA->id,
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+        $importB = DB::table('import_coupon')->insertGetId([
+            'storage_id' => $storageB->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('import_detail')->insert([
+            [
+                'import_id' => $importA,
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => 18000000,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'import_id' => $importB,
+                'product_id' => $product->id,
+                'quantity' => 1,
+                'price' => 18000000,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $row = $this->productRow(
+            $this->ajaxProductHtml($adminStore),
+            $product->name
+        );
+
+        $this->assertStringContainsString(
+            route('admin.importproduct.importCoupon.detail', $importA, false),
+            $row
+        );
+        $this->assertStringNotContainsString(
+            route('admin.importproduct.importCoupon.detail', $importB, false),
+            $row
+        );
+    }
+
+    public function test_admin_store_export_includes_global_catalog_and_only_own_branch_stock(): void
+    {
+        $branchA = $this->createBranch('Branch A');
+        $branchB = $this->createBranch('Branch B');
+        $adminStore = $this->createAdminStore($branchA);
+        $storageA = $this->createStorage($branchA, 'Storage A');
+        $storageB = $this->createStorage($branchB, 'Storage B');
+        $withoutInventory = $this->createProduct($adminStore, 'Export without inventory');
+        $withStock = $this->createProduct($adminStore, 'Export scoped stock');
+
+        ProductStorage::create([
+            'product_id' => $withStock->id,
+            'storage_id' => $storageA->id,
+            'quantity' => 4,
+        ]);
+        ProductStorage::create([
+            'product_id' => $withStock->id,
+            'storage_id' => $storageB->id,
+            'quantity' => 8,
+        ]);
+
+        $response = $this->actingAs($adminStore)->get('/admin/products/export');
+
+        $response->assertOk();
+
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'product-export-');
+        $this->assertNotFalse($temporaryFile);
+
+        try {
+            file_put_contents($temporaryFile, $response->streamedContent());
+            $rows = IOFactory::load($temporaryFile)
+                ->getActiveSheet()
+                ->toArray();
+            $rowsByName = collect(array_slice($rows, 1))
+                ->keyBy(fn (array $row) => $row[1]);
+
+            $this->assertTrue($rowsByName->has($withoutInventory->name));
+            $this->assertSame(0, (int) $rowsByName->get($withoutInventory->name)[2]);
+            $this->assertSame(4, (int) $rowsByName->get($withStock->name)[2]);
+        } finally {
+            if (is_string($temporaryFile) && file_exists($temporaryFile)) {
+                unlink($temporaryFile);
+            }
+        }
     }
 
     public function test_admin_can_create_product_without_thumbnail(): void
@@ -370,7 +621,31 @@ class AdminProductCreationTest extends TestCase
             $table->string('password')->nullable();
             $table->string('status')->default('active');
             $table->unsignedBigInteger('role_id')->default(1);
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('branches', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('admin_store_user_id')->nullable();
+            $table->string('name');
+            $table->string('address')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
+            $table->string('manager_name')->nullable();
+            $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('storages', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->string('name');
+            $table->string('location')->nullable();
             $table->timestamps();
         });
 
@@ -448,6 +723,12 @@ class AdminProductCreationTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('import_coupon', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('storage_id')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('order_details', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('order_id')->nullable();
@@ -459,6 +740,7 @@ class AdminProductCreationTest extends TestCase
         Schema::create('product_imeis', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('storage_id')->nullable();
             $table->string('imei', 50)->unique();
             $table->string('barcode', 50)->nullable()->unique();
             $table->string('status', 30)->default(ProductImei::STATUS_IN_STOCK);
@@ -470,6 +752,82 @@ class AdminProductCreationTest extends TestCase
             $table->string('delete_reason', 500)->nullable();
             $table->softDeletes();
         });
+    }
+
+    private function ajaxProductHtml(User $user): string
+    {
+        $response = $this->actingAs($user)->get('/admin/products', [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true);
+
+        return (string) $response->json('data.html');
+    }
+
+    private function productRow(string $html, string $productName): string
+    {
+        $matched = preg_match(
+            '/<tr>.*?'.preg_quote($productName, '/').'.*?<\/tr>/s',
+            $html,
+            $matches
+        );
+
+        $this->assertSame(1, $matched, "Product row not found for {$productName}.");
+
+        return $matches[0];
+    }
+
+    private function createBranch(string $name): Branch
+    {
+        return Branch::create([
+            'name' => $name,
+            'status' => true,
+        ]);
+    }
+
+    private function createStorage(Branch $branch, string $name): StorageModel
+    {
+        return StorageModel::create([
+            'branch_id' => $branch->id,
+            'name' => $name,
+        ]);
+    }
+
+    private function createAdminStore(Branch $branch): User
+    {
+        return User::create([
+            'name' => "Admin Store {$branch->id}",
+            'email' => "admin-store-{$branch->id}@example.com",
+            'phone' => '09022222'.str_pad((string) $branch->id, 2, '0', STR_PAD_LEFT),
+            'password' => 'password',
+            'role_id' => 2,
+            'branch_id' => $branch->id,
+            'status' => 'active',
+        ]);
+    }
+
+    private function createProduct(
+        User $creator,
+        string $name,
+        string $inventoryTracking = Product::INVENTORY_TRACKING_QUANTITY
+    ): Product {
+        $category = Categories::firstOrCreate(['name' => 'Dien thoai']);
+
+        return Product::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'code' => 'SP'.str_pad((string) (Product::count() + 1), 6, '0', STR_PAD_LEFT),
+            'name' => $name,
+            'price' => 20000000,
+            'price_buy' => 18000000,
+            'product_unit' => 'chiec',
+            'quantity' => 0,
+            'inventory_tracking' => $inventoryTracking,
+            'status' => 'published',
+        ]);
     }
 
     private function createAdmin(): User
