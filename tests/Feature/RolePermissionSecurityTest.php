@@ -382,7 +382,7 @@ SQL);
         $firstAdminStoreKeys = $this->pivotPermissionKeys(Roles::ADMIN_STORE_ID);
 
         $this->assertSame([], $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID));
-        $this->assertCount(112, $firstAdminStoreKeys);
+        $this->assertCount(115, $firstAdminStoreKeys);
         $this->assertSame($expectedAdminStoreKeys, $firstAdminStoreKeys);
         $this->assertSame($staffBefore, $this->pivotPermissionIds(Roles::STAFF_ID));
         $this->assertTrue($administrator->hasFullAccess());

@@ -80,6 +80,9 @@ class PermissionSeeder extends Seeder
         'notification.update',
         'order.detail',
         'order.view',
+        'order_return.create',
+        'order_return.detail',
+        'order_return.view',
         'product.create',
         'product.delete',
         'product.export',
@@ -393,6 +396,23 @@ class PermissionSeeder extends Seeder
                 'module' => 'Order',
                 'permission_key' => 'order.detail',
                 'description' => 'Xem chi tiết đơn hàng',
+            ],
+
+            // Order Return
+            [
+                'module' => 'Order Return',
+                'permission_key' => 'order_return.view',
+                'description' => 'Xem danh sách phiếu đổi / trả hàng',
+            ],
+            [
+                'module' => 'Order Return',
+                'permission_key' => 'order_return.detail',
+                'description' => 'Xem chi tiết phiếu đổi / trả hàng',
+            ],
+            [
+                'module' => 'Order Return',
+                'permission_key' => 'order_return.create',
+                'description' => 'Tạo phiếu đổi / trả hàng',
             ],
 
             // Product

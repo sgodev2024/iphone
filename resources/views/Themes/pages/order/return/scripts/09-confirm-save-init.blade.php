@@ -257,19 +257,19 @@
                             );
 
 
-                            /*
-                             * Reload để:
-                             *
-                             * - cập nhật số đã trả;
-                             * - cập nhật số còn trả;
-                             * - nếu trả hết chuyển
-                             *   sang chế độ chỉ xem.
-                             */
+                            const showUrl =
+                                res.order_return
+                                ?.show_url;
+
+
                             setTimeout(
                                 function() {
                                     window
                                         .location
-                                        .reload();
+                                        .assign(
+                                            showUrl ||
+                                            window.location.href
+                                        );
                                 },
                                 700
                             );

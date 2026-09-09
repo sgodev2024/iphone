@@ -311,6 +311,16 @@
                     <span>Đơn hàng</span>
                 </a>
 
+                @if (auth()->user()->hasPermission('order_return.view'))
+                    <a
+                        href='{{ route('staff.returns.index') }}'
+                        class='staff-header-link'
+                    >
+                        <i class='fa-solid fa-arrow-right-arrow-left'></i>
+                        <span>Đổi / Trả hàng</span>
+                    </a>
+                @endif
+
                 <a
                     href="{{ route('staff.Inventory.get') }}"
                     class="staff-header-link"

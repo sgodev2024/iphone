@@ -14,6 +14,9 @@ use App\Models\OrderReturnDetail;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use App\Models\OrderReturn;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderReturnController extends Controller
@@ -22,6 +25,94 @@ class OrderReturnController extends Controller
         protected OrderReturnService $orderReturnService,
         protected BranchContext $branchContext
     ) {}
+
+    public function index(Request $request)
+    {
+        $searchText = trim((string) $request->query('s', ''));
+        $dateRange = trim((string) $request->query('date_range', ''));
+        $start = null;
+        $end = null;
+
+        if ($dateRange !== '') {
+            $dates = preg_split('/\s*-\s*/', $dateRange);
+
+            if (count($dates) === 2) {
+                try {
+                    $start = Carbon::createFromFormat('d/m/Y', trim($dates[0]))->startOfDay();
+                    $end = Carbon::createFromFormat('d/m/Y', trim($dates[1]))->endOfDay();
+                } catch (\Throwable) {
+                    return response()->json([
+                        'message' => 'Khoảng ngày không hợp lệ.',
+                    ], Response::HTTP_UNPROCESSABLE_ENTITY);
+                }
+            }
+        }
+
+        $query = $this->scopeReturnsForActor(OrderReturn::query(), $request->user())
+            ->with([
+                'originalOrder.client',
+                'exchangeOrder',
+                'client',
+                'branch',
+                'creator',
+            ])
+            ->when($searchText !== '', function (Builder $query) use ($searchText): void {
+                $query->where(function (Builder $searchQuery) use ($searchText): void {
+                    $searchQuery
+                        ->where('code', 'like', '%'.$searchText.'%')
+                        ->orWhereHas('originalOrder', function (Builder $orderQuery) use ($searchText): void {
+                            $orderQuery
+                                ->where('code', 'like', '%'.$searchText.'%')
+                                ->orWhere('name', 'like', '%'.$searchText.'%')
+                                ->orWhere('phone', 'like', '%'.$searchText.'%')
+                                ->orWhereHas('client', function (Builder $clientQuery) use ($searchText): void {
+                                    $clientQuery
+                                        ->where('name', 'like', '%'.$searchText.'%')
+                                        ->orWhere('phone', 'like', '%'.$searchText.'%');
+                                });
+                        });
+                });
+            })
+            ->when($start && $end, fn (Builder $query) => $query->whereBetween('created_at', [$start, $end]))
+            ->latest('created_at');
+
+        $orderReturns = $query
+            ->paginate(10)
+            ->withQueryString();
+
+        if ($request->ajax()) {
+            return response()->json([
+                'html' => view('Themes.pages.order.returns.table', compact('orderReturns'))->render(),
+            ]);
+        }
+
+        $title = 'Lịch sử đổi / trả hàng';
+
+        return view('Themes.pages.order.returns.index', compact('title', 'orderReturns'));
+    }
+
+    public function show(Request $request, OrderReturn $orderReturn): View
+    {
+        $orderReturn = $this->scopeReturnsForActor(OrderReturn::query(), $request->user())
+            ->with([
+                'originalOrder.client',
+                'originalOrder.user',
+                'exchangeOrder',
+                'client',
+                'branch',
+                'creator',
+                'user',
+                'details.product',
+                'details.productImei',
+                'details.storage',
+            ])
+            ->whereKey($orderReturn->id)
+            ->firstOrFail();
+
+        $title = 'Phiếu đổi / trả hàng - '.$orderReturn->code;
+
+        return view('Themes.pages.order.returns.show', compact('title', 'orderReturn'));
+    }
 
     public function create(
         Request $request,
@@ -47,7 +138,7 @@ class OrderReturnController extends Controller
                 'orderDetails.productImei',
             ])
             ->whereKey($order->id);
-        $this->branchContext->scope($orderQuery, $user);
+        $this->scopeOrdersForActor($orderQuery, $user);
 
         $order = $orderQuery
             ->firstOrFail();
@@ -88,7 +179,7 @@ $sourceReturnQuery = OrderReturn::query()
     'status',
     'completed'
 );
-$this->branchContext->scope($sourceReturnQuery, $user);
+$this->scopeReturnsForActor($sourceReturnQuery, $user);
 
 $sourceReturn = $sourceReturnQuery
 ->first();
@@ -450,6 +541,12 @@ $sourceOrderInfo = [
         Order $order
     ): JsonResponse {
         try {
+            $orderQuery = Order::query()->whereKey($order->id);
+            $this->scopeOrdersForActor($orderQuery, $request->user());
+            $order = $orderQuery->first();
+
+            abort_unless($order, Response::HTTP_NOT_FOUND);
+
             $data = $request->validated();
 
             /*
@@ -478,6 +575,8 @@ $sourceOrderInfo = [
                     'id' => (int) $orderReturn->id,
 
                     'code' => $orderReturn->code,
+
+                    'show_url' => route('staff.returns.show', $orderReturn),
 
                     'original_order' => [
                         'id' => (int) $orderReturn->originalOrder->id,
@@ -566,5 +665,30 @@ $sourceOrderInfo = [
                 'message' => 'Không thể thực hiện trả hàng.',
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private function scopeReturnsForActor(Builder $query, User $user): Builder
+    {
+        $this->branchContext->scope($query, $user);
+
+        if ($user->isStaff()) {
+            $query->whereHas(
+                'originalOrder',
+                fn (Builder $orderQuery) => $orderQuery->where('created_by', $user->id)
+            );
+        }
+
+        return $query;
+    }
+
+    private function scopeOrdersForActor(Builder $query, User $user): Builder
+    {
+        $this->branchContext->scope($query, $user);
+
+        if ($user->isStaff()) {
+            $query->where('created_by', $user->id);
+        }
+
+        return $query;
     }
 }

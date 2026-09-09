@@ -43,6 +43,21 @@ class OrderReturn extends Model
         return $this->belongsTo(Order::class, 'exchange_order_id');
     }
 
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class)->withTrashed();
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function details(): HasMany
     {
         return $this->hasMany(OrderReturnDetail::class);

@@ -43,6 +43,10 @@ class OrderReturnService
                 );
             $this->branchContext->scope($originalOrderQuery, $user);
 
+            if ($user->isStaff()) {
+                $originalOrderQuery->where('created_by', $user->id);
+            }
+
             $originalOrder = $originalOrderQuery
                 ->lockForUpdate()
                 ->first();

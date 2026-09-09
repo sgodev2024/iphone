@@ -23,6 +23,27 @@
 
                 <td class="align-middle">
                     {{ $order->code }}
+
+                    @if ($order->returns_count > 0)
+                        <div class='mt-1'>
+                            <span class='badge bg-info text-dark'>
+                                {{ $order->returns_count === 1
+                                    ? 'Đã trả'
+                                    : $order->returns_count.' phiếu trả' }}
+                            </span>
+
+                            @if (auth()->user()->hasPermission('order_return.detail'))
+                                @foreach ($order->returns as $return)
+                                    <a
+                                        class='badge bg-light text-primary border text-decoration-none'
+                                        href='{{ route('staff.returns.show', $return) }}'
+                                    >
+                                        {{ $return->code }}
+                                    </a>
+                                @endforeach
+                            @endif
+                        </div>
+                    @endif
                 </td>
 
                 <td class="align-middle">
@@ -113,7 +134,7 @@
 
                         <ul class="dropdown-menu dropdown-menu-end">
 
-                            @if ($order->status)
+                            @if ($order->status && auth()->user()->hasPermission('order_return.create'))
                                 <li>
                                     <a
                                         class="dropdown-item"

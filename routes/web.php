@@ -1211,14 +1211,22 @@ Route::middleware('role:administrator,admin_store,staff')->prefix('ban-hang')->n
     Route::get('order', [StaffOrderController::class, 'index'])->name('order');
     Route::get('order/fetch', [StaffOrderController::class, 'orderFetch'])->name('orderFetch');
     Route::get('product', [StaffProductController::class, 'product'])->name('product.get');
+    Route::get('returns', [OrderReturnController::class, 'index'])
+        ->middleware('permission:order_return.view')
+        ->name('returns.index');
+    Route::get('returns/{orderReturn}', [OrderReturnController::class, 'show'])
+        ->middleware('permission:order_return.detail')
+        ->name('returns.show');
     Route::post(
         '/orders/{order}/returns',
         [OrderReturnController::class, 'store']
-    )->name('orders.returns.store');
+    )->middleware('permission:order_return.create')
+        ->name('orders.returns.store');
     Route::get(
         '/orders/{order}/returns/create',
         [OrderReturnController::class, 'create']
-    )->name('orders.returns.create');
+    )->middleware('permission:order_return.create')
+        ->name('orders.returns.create');
 
         Route::get('checkInventory', [StaffCheckController::class, 'index'])
             ->name('Inventory.get');

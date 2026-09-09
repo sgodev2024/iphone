@@ -43,7 +43,7 @@ class OrderController extends Controller
             $this->branchContext->scope($ordersQuery, $request->user());
 
             if ($request->user()->isStaff()) {
-                $ordersQuery->where('user_id', Auth::id());
+                $ordersQuery->where('created_by', Auth::id());
             }
 
             $orders = $ordersQuery
@@ -59,7 +59,14 @@ class OrderController extends Controller
                 ->when($start && $end, function ($query) use ($start, $end) {
                     $query->whereBetween('created_at', [$start, $end]);
                 })
-                ->with(['user', 'client'])
+                ->with([
+                    'user',
+                    'client',
+                    'returns' => fn ($query) => $query
+                        ->select(['id', 'original_order_id', 'code', 'status', 'created_at'])
+                        ->latest('created_at'),
+                ])
+                ->withCount('returns')
                 ->orderBy('created_at', 'desc')
                 ->paginate(10);
 
@@ -79,7 +86,7 @@ class OrderController extends Controller
             $this->branchContext->scope($query, $request->user());
 
             if ($request->user()->isStaff()) {
-                $query->where('user_id', Auth::id());
+                $query->where('created_by', Auth::id());
             }
 
             $orders = $query->paginate($page);

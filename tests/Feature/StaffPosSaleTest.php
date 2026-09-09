@@ -413,7 +413,7 @@ class StaffPosSaleTest extends TestCase
                     'quantity' => 1,
                 ]],
             ])
-            ->assertUnprocessable();
+            ->assertNotFound();
 
         $this->assertValidationFailure(fn () => $returnService->createReturn($staffA, [
             'original_order_id' => $orderB->id,

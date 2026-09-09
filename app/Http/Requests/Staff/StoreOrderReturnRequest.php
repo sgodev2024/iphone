@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Staff;
 
+use App\Models\Order;
 use App\Models\Product;
+use App\Support\BranchContext;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -12,6 +14,25 @@ class StoreOrderReturnRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        $user = $this->user();
+        $routeOrder = $this->route('order');
+
+        if (! $user || ! $routeOrder) {
+            return false;
+        }
+
+        $orderId = is_object($routeOrder)
+            ? (int) $routeOrder->getKey()
+            : (int) $routeOrder;
+        $query = Order::query()->whereKey($orderId);
+        app(BranchContext::class)->scope($query, $user);
+
+        if ($user->isStaff()) {
+            $query->where('created_by', $user->id);
+        }
+
+        abort_unless($query->exists(), 404);
+
         return true;
     }
 
