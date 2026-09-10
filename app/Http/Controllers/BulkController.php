@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\Roles;
 use App\Models\Storage;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Services\ClientService;
 use App\Support\BranchContext;
@@ -29,6 +30,7 @@ class BulkController extends Controller
         'Company' => Company::class,
         'Product' => Product::class,
         'Storage' => Storage::class,
+        'Supplier' => Supplier::class,
         'User' => User::class,
     ];
 
@@ -65,9 +67,28 @@ class BulkController extends Controller
             return errorResponse('Vui lòng chọn ít nhất 1 bản ghi!', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        if ($type === 'delete'
+            && in_array($modelClass, [Company::class, Supplier::class], true)
+        ) {
+            abort_unless(
+                $request->user()?->hasPermission('company.delete'),
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
         if (in_array($modelClass, [Client::class, Company::class], true)) {
             $allowed = $this->branchContext
                 ->scope($modelClass::query(), Auth::user())
+                ->whereIn('id', $ids)
+                ->count();
+
+            if ($allowed !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
+        }
+
+        if ($modelClass === Supplier::class) {
+            $allowed = $this->supplierQuery($request->user())
                 ->whereIn('id', $ids)
                 ->count();
 
@@ -110,6 +131,10 @@ class BulkController extends Controller
 
         if ($modelClass === Company::class) {
             return $this->bulkCompanies($ids, $type);
+        }
+
+        if ($modelClass === Supplier::class) {
+            return $this->bulkSuppliers($ids);
         }
 
         if ($type === 'delete' && $modelClass === User::class) {
@@ -221,6 +246,32 @@ class BulkController extends Controller
 
             return successResponse('Cập nhật trạng thái thành công!');
         }, 3);
+    }
+
+    private function bulkSuppliers(array $ids)
+    {
+        return DB::transaction(function () use ($ids) {
+            $suppliers = $this->supplierQuery(Auth::user())
+                ->whereIn('id', $ids)
+                ->lockForUpdate()
+                ->get();
+
+            if ($suppliers->count() !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
+
+            Supplier::query()->whereKey($suppliers->modelKeys())->delete();
+
+            return response()->json(['message' => 'Xóa thành công!']);
+        }, 3);
+    }
+
+    private function supplierQuery(User $user): Builder
+    {
+        $companies = Company::query()->branchOwned();
+        $this->branchContext->scope($companies, $user);
+
+        return Supplier::query()->whereIn('company_id', $companies->select('id'));
     }
 
     private function productDeleteBlockMessage(Builder $products): ?string

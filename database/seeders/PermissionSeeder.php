@@ -40,6 +40,7 @@ class PermissionSeeder extends Seeder
         'client.view',
         'client_group.view',
         'company.create',
+        'company.delete',
         'company.update',
         'company.view',
         'config.update',
@@ -114,7 +115,6 @@ class PermissionSeeder extends Seeder
         'storage.update',
         'storage.view',
         'supplier.create',
-        'supplier.delete',
         'supplier.search',
         'supplier.update',
         'supplier.view',
@@ -213,6 +213,11 @@ class PermissionSeeder extends Seeder
                 'module' => 'Company',
                 'permission_key' => 'company.update',
                 'description' => 'Cập nhật nhà cung cấp',
+            ],
+            [
+                'module' => 'Company',
+                'permission_key' => 'company.delete',
+                'description' => 'Xóa nhà cung cấp và người đại diện',
             ],
 
             // Configuration

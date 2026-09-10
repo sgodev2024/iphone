@@ -93,6 +93,12 @@ class AuthorizationFlowTest extends TestCase
             DB::table('role_permission')->where('role_id', $adminStore->role_id)->count()
         );
         $this->assertTrue(Gate::forUser($adminStore)->allows('dashboard.view'));
+        $this->assertTrue(Gate::forUser($adminStore)->allows('company.delete'));
+        $this->assertFalse(Gate::forUser($adminStore)->allows('supplier.delete'));
+        $this->assertDatabaseHas('permissions', [
+            'module' => 'Company',
+            'permission_key' => 'company.delete',
+        ]);
     }
 
     public function test_store_owner_has_full_access_without_permission_rows(): void

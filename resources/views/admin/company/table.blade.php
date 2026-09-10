@@ -36,10 +36,12 @@
                                 title="Sửa" aria-label="Sửa">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </a>
-                            <button class="btn btn-danger btn-sm btn-delete company-action-btn" data-id="{{ $company->id }}"
-                                title="Xóa" aria-label="Xóa">
-                                <i class="fa-solid fa-trash-can"></i>
-                            </button>
+                            @can('company.delete')
+                                <button class="btn btn-danger btn-sm btn-delete company-action-btn" data-id="{{ $company->id }}"
+                                    title="Xóa" aria-label="Xóa">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            @endcan
                         </div>
                     </td>
                 </tr>

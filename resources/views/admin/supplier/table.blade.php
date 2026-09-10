@@ -23,8 +23,10 @@
                             <a class="btn btn-warning"
                                 href="{{ route('admin.supplier.detail', ['id' => $value->id]) }}"><i
                                     class="fa-solid fa-pen"></i></a>
-                            <button class="btn btn-danger btn-delete" data-id="{{ $value->id }}"><i
-                                    class="fa-solid fa-trash"></i></button>
+                            @can('company.delete')
+                                <button class="btn btn-danger btn-delete" data-id="{{ $value->id }}"><i
+                                        class="fa-solid fa-trash"></i></button>
+                            @endcan
                         </td>
                     </tr>
                 @endif

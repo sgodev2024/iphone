@@ -12,17 +12,20 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center company-toolbar">
                         <div class="d-flex justify-content-between align-items-center gap-2 company-toolbar__controls">
+                            @can('bulk.action')
                             <div class="btn-group company-bulk-actions">
                                 <button type="button" class="btn btn-outline-secondary dropdown-toggle"
                                     data-bs-toggle="dropdown" aria-expanded="false">
                                     Thao tác
                                 </button>
                                 <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="#" id="bulk-delete">
-                                            <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
-                                        </a>
-                                    </li>
+                                    @can('company.delete')
+                                        <li>
+                                            <a class="dropdown-item" href="#" id="bulk-delete">
+                                                <i class="fa-solid fa-trash me-2"></i> Xóa đã chọn
+                                            </a>
+                                        </li>
+                                    @endcan
                                     <li>
                                         <a class="dropdown-item" href="#" id="bulk-status">
                                             <i class="fa-solid fa-toggle-on me-2"></i> Thay đổi trạng thái
@@ -30,6 +33,7 @@
                                     </li>
                                 </ul>
                             </div>
+                            @endcan
 
                             <div class="d-flex justify-content-end align-items-center company-search-row">
                                 <input type="text" name="search" class="form-control me-2 company-search-input" style="width: 300px;"

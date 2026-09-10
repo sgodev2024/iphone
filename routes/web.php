@@ -262,7 +262,7 @@ Route::middleware(['auth'])
                         ->name('update');
 
                     Route::delete('{id}', 'destroy')
-                        ->middleware('permission:bulk.action')
+                        ->middleware('permission:company.delete')
                         ->name('destroy');
                 });
                             /*
@@ -576,7 +576,7 @@ Route::middleware(['auth'])
                     ->name('update');
 
                 Route::delete('delete/{id}', [SupplierController::class, 'delete'])
-                    ->middleware('permission:supplier.delete')
+                    ->middleware('permission:company.delete')
                     ->name('delete');
             });
                         /*

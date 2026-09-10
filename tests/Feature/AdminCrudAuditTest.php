@@ -965,6 +965,205 @@ class AdminCrudAuditTest extends TestCase
         $this->assertDatabaseMissing('companies', ['id' => $deletable->id]);
     }
 
+    public function test_direct_company_and_supplier_delete_require_only_company_delete(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser(
+            'company-delete-direct@example.com',
+            '0908300001',
+            2,
+            401,
+            $administrator->id
+        );
+        $company = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 401,
+            'name' => 'Direct Delete Company',
+            'phone' => '0908300011',
+            'address' => 'Branch 401',
+        ]);
+        $supplierCompany = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 401,
+            'name' => 'Direct Supplier Company',
+            'phone' => '0908300012',
+            'address' => 'Branch 401',
+        ]);
+        $supplier = Supplier::create([
+            'company_id' => $supplierCompany->id,
+            'name' => 'Direct Delete Representative',
+            'email' => 'direct-delete-representative@example.com',
+        ]);
+
+        $this->revokeRolePermission(2, 'bulk.action');
+
+        $this->actingAs($store)
+            ->deleteJson("/admin/company/{$company->id}")
+            ->assertOk();
+        $this->actingAs($store)
+            ->deleteJson("/admin/supplier/delete/{$supplier->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('companies', ['id' => $company->id]);
+        $this->assertDatabaseMissing('suppliers', ['id' => $supplier->id]);
+    }
+
+    public function test_direct_company_and_supplier_delete_are_forbidden_without_company_delete(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser(
+            'company-delete-denied@example.com',
+            '0908300002',
+            2,
+            402,
+            $administrator->id
+        );
+        $company = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 402,
+            'name' => 'Denied Delete Company',
+            'phone' => '0908300021',
+            'address' => 'Branch 402',
+        ]);
+        $supplier = Supplier::create([
+            'company_id' => $company->id,
+            'name' => 'Denied Delete Representative',
+            'email' => 'denied-delete-representative@example.com',
+        ]);
+
+        $this->revokeRolePermission(2, 'company.delete');
+
+        $this->actingAs($store)
+            ->deleteJson("/admin/company/{$company->id}")
+            ->assertForbidden();
+        $this->actingAs($store)
+            ->deleteJson("/admin/supplier/delete/{$supplier->id}")
+            ->assertForbidden();
+
+        $companyTable = $this->actingAs($store)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/company')
+            ->assertOk()
+            ->json('html');
+        $this->assertStringNotContainsString('btn-delete', $companyTable);
+
+        $this->actingAs($store)
+            ->get("/admin/supplier/{$company->id}")
+            ->assertOk()
+            ->assertDontSee('<button class="btn btn-danger btn-delete"', false);
+
+        $this->assertDatabaseHas('companies', ['id' => $company->id]);
+        $this->assertDatabaseHas('suppliers', ['id' => $supplier->id]);
+    }
+
+    public function test_bulk_supplier_delete_requires_bulk_action_and_company_delete(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser(
+            'company-delete-bulk@example.com',
+            '0908300003',
+            2,
+            403,
+            $administrator->id
+        );
+        $company = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 403,
+            'name' => 'Bulk Supplier Company',
+            'phone' => '0908300031',
+            'address' => 'Branch 403',
+        ]);
+        $suppliers = collect([
+            ['name' => 'Bulk Permission Missing', 'email' => 'bulk-company-permission@example.com'],
+            ['name' => 'Bulk Action Missing', 'email' => 'bulk-action-permission@example.com'],
+            ['name' => 'Bulk Allowed', 'email' => 'bulk-allowed@example.com'],
+        ])->map(fn (array $attributes) => Supplier::create([
+            'company_id' => $company->id,
+            ...$attributes,
+        ]));
+
+        $this->revokeRolePermission(2, 'company.delete');
+        $this->actingAs($store)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$suppliers[0]->id],
+                'model' => 'Supplier',
+            ])
+            ->assertForbidden();
+
+        $this->grantRolePermission(2, 'company.delete');
+        $this->revokeRolePermission(2, 'bulk.action');
+        $this->actingAs($store)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$suppliers[1]->id],
+                'model' => 'Supplier',
+            ])
+            ->assertForbidden();
+
+        $this->grantRolePermission(2, 'bulk.action');
+        $this->actingAs($store)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => $suppliers->pluck('id')->all(),
+                'model' => 'Supplier',
+            ])
+            ->assertOk();
+
+        foreach ($suppliers as $supplier) {
+            $this->assertDatabaseMissing('suppliers', ['id' => $supplier->id]);
+        }
+    }
+
+    public function test_supplier_delete_keeps_branch_scope_and_administrator_global_access(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser(
+            'company-delete-scope@example.com',
+            '0908300004',
+            2,
+            404,
+            $administrator->id
+        );
+        $foreignCompany = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 405,
+            'name' => 'Foreign Supplier Company',
+            'phone' => '0908300041',
+            'address' => 'Branch 405',
+        ]);
+        $directSupplier = Supplier::create([
+            'company_id' => $foreignCompany->id,
+            'name' => 'Foreign Direct Representative',
+            'email' => 'foreign-direct-representative@example.com',
+        ]);
+        $bulkSupplier = Supplier::create([
+            'company_id' => $foreignCompany->id,
+            'name' => 'Foreign Bulk Representative',
+            'email' => 'foreign-bulk-representative@example.com',
+        ]);
+
+        $this->actingAs($store)
+            ->deleteJson("/admin/supplier/delete/{$directSupplier->id}")
+            ->assertNotFound();
+        $this->actingAs($store)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$bulkSupplier->id],
+                'model' => 'Supplier',
+            ])
+            ->assertNotFound();
+
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/supplier/delete/{$directSupplier->id}")
+            ->assertOk();
+        $this->actingAs($administrator)
+            ->postJson('/admin/bulk/delete', [
+                'ids' => [$bulkSupplier->id],
+                'model' => 'Supplier',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('suppliers', ['id' => $directSupplier->id]);
+        $this->assertDatabaseMissing('suppliers', ['id' => $bulkSupplier->id]);
+    }
+
     public function test_branch_creation_rolls_back_when_default_storage_fails(): void
     {
         $administrator = $this->createUser(roleId: 1);
@@ -1623,6 +1822,31 @@ class AdminCrudAuditTest extends TestCase
         return DB::table('banks')->insertGetId([
             'name' => 'Test Bank',
             'code' => 'TB',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function revokeRolePermission(int $roleId, string $permissionKey): void
+    {
+        DB::table('role_permission')
+            ->where('role_id', $roleId)
+            ->where('permission_id', DB::table('permissions')
+                ->where('permission_key', $permissionKey)
+                ->value('id'))
+            ->delete();
+    }
+
+    private function grantRolePermission(int $roleId, string $permissionKey): void
+    {
+        $permissionId = DB::table('permissions')
+            ->where('permission_key', $permissionKey)
+            ->value('id');
+
+        DB::table('role_permission')->insertOrIgnore([
+            'guard_name' => 'web',
+            'role_id' => $roleId,
+            'permission_id' => $permissionId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
