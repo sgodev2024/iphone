@@ -19,14 +19,23 @@
                                 @if (auth()->user()->isAdministrator())
                                     <div class="col-md-12">
                                         <label for="branch_id" class="form-label mb-1 fw-bold">Cửa hàng</label>
-                                        <select name="branch_id" class="form-select form-control">
-                                            <option value="">Dữ liệu legacy / chưa gán cửa hàng</option>
+                                        @if (!($canChangeBranch ?? true) && !empty($company))
+                                            <input type="hidden" name="branch_id" value="{{ $company->branch_id }}">
+                                        @endif
+                                        <select name="branch_id" class="form-select form-control" required
+                                            @disabled(!($canChangeBranch ?? true))>
+                                            <option value="">--- Chọn cửa hàng ---</option>
                                             @foreach (($branches ?? collect()) as $branch)
                                                 <option value="{{ $branch->id }}" @selected((string) old('branch_id', optional($company)->branch_id) === (string) $branch->id)>
                                                     {{ $branch->name }}
                                                 </option>
                                             @endforeach
                                         </select>
+                                        @if (!($canChangeBranch ?? true))
+                                            <small class="text-muted d-block mt-2">
+                                                Không thể đổi cửa hàng vì nhà cung cấp đã phát sinh lịch sử.
+                                            </small>
+                                        @endif
                                     </div>
                                 @endif
 

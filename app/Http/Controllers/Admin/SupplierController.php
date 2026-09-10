@@ -193,7 +193,9 @@ class SupplierController extends Controller
 
     private function companyQuery(): Builder
     {
-        return $this->branchContext->scope(Company::query(), Auth::user());
+        $query = Company::query()->branchOwned();
+
+        return $this->branchContext->scope($query, Auth::user());
     }
 
     private function supplierQuery(): Builder

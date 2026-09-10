@@ -55,6 +55,7 @@ class SupplierDebtReportService
         }
 
         $businessScopes = DB::table('companies')
+            ->whereNotNull('branch_id')
             ->select(['user_id as owner_id', 'branch_id'])
             ->distinct()
             ->orderBy('owner_id')

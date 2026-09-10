@@ -28,7 +28,7 @@ class SupplierPaymentController extends Controller
             return response()->json([]);
         }
 
-        $companies = Company::query();
+        $companies = Company::query()->branchOwned();
         if (! Schema::hasColumn('companies', 'branch_id')
             || ! $this->branchContext->isGlobal($request->user())
         ) {

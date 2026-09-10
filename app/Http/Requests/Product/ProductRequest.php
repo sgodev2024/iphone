@@ -76,6 +76,18 @@ class ProductRequest extends FormRequest
         }
         $rules['brands_id'][] = $brandExists;
 
+        if (Schema::hasTable('companies') && Schema::hasColumn('companies', 'branch_id')) {
+            $rules['company_id'] = [
+                'nullable',
+                'integer',
+                Rule::exists('companies', 'id')->where(
+                    fn ($query) => $branchId
+                        ? $query->where('branch_id', (int) $branchId)
+                        : $query->whereRaw('1 = 0')
+                ),
+            ];
+        }
+
         return $rules;
     }
 
@@ -139,6 +151,7 @@ class ProductRequest extends FormRequest
             'status' => 'Trạng thái',
             'thumbnail' => 'Hình ảnh',
             'branch_id' => 'Cửa hàng',
+            'company_id' => 'Nhà cung cấp',
         ];
     }
 }

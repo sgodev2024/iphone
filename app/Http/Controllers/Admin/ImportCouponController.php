@@ -80,7 +80,7 @@ class ImportCouponController extends Controller
         $storageId = (int) $request->validated('storage');
         $actorOwnerId = (int) $user->ownerId();
 
-        $companyQuery = Company::query();
+        $companyQuery = Company::query()->branchOwned();
         $storageQuery = Storage::query();
 
         if ($user->roleKey() === 'warehouse') {

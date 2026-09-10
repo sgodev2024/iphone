@@ -53,9 +53,13 @@ class StoreImportCouponRequest extends FormRequest
     {
         $branchContext = app(BranchContext::class);
         $isWarehouse = $this->user()->roleKey() === 'warehouse';
-        $companyIds = $isWarehouse
-            ? Company::query()->where('user_id', $this->user()->ownerId())->select('id')
-            : $branchContext->scope(Company::query(), $this->user())->select('id');
+        $companyIds = Company::query()->branchOwned();
+        if ($isWarehouse) {
+            $companyIds->where('user_id', $this->user()->ownerId());
+        } else {
+            $branchContext->scope($companyIds, $this->user());
+        }
+        $companyIds->select('id');
         $storageIds = $isWarehouse
             ? Storage::query()->where('user_id', $this->user()->ownerId())->select('id')
             : $branchContext->scopeStorages(Storage::query(), $this->user())->select('id');

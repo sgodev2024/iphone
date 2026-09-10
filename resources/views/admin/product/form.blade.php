@@ -129,6 +129,22 @@
                                 </div>
 
                                 <div class="col-md-12">
+                                    <label for="company_id" class="form-label mb-1 fw-bold">Nhà cung cấp</label>
+                                    <select name="company_id" id="company_id" class="form-control form-select">
+                                        <option value="">-- Chọn nhà cung cấp --</option>
+                                        @foreach (($suppliers ?? collect()) as $supplier)
+                                            <option value="{{ $supplier->id }}" @selected(
+                                                (string) old('company_id', optional(optional($product)->company)->first()?->id)
+                                                    === (string) $supplier->id
+                                            )>
+                                                {{ $supplier->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <small class="text-muted">Chỉ hiển thị nhà cung cấp thuộc cửa hàng của sản phẩm.</small>
+                                </div>
+
+                                <div class="col-md-12">
                                     <label for="description" class="form-label mb-1 fw-bold">Mô tả</label>
                                     <textarea class="form-control" name="description" rows="4">{{ optional($product)->description }}</textarea>
                                 </div>

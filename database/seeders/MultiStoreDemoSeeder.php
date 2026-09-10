@@ -957,14 +957,7 @@ class MultiStoreDemoSeeder extends Seeder
             'phone' => '0970000001', 'address' => 'Hà Nội', 'email' => null,
             'created_at' => now(), 'updated_at' => now(),
         ]);
-        $companyId = DB::table('companies')->insertGetId([
-            'user_id' => $this->users['administrator1'], 'branch_id' => null,
-            'name' => 'LEGACY-DEMO Supplier chưa xác định Branch', 'phone' => '02470000001',
-            'address' => 'Hà Nội', 'email' => 'legacy-company@demo.sgo.test',
-            'tax_number' => '099999999999', 'bank_account' => '0999999999',
-            'bank_id' => (int) (DB::table('banks')->value('id') ?: 1), 'status' => 1,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+
         $this->ledgerTransaction([
             'user_id' => $this->users['administrator1'], 'branch_id' => null,
             'transaction_date' => self::TODAY, 'description' => 'LEGACY-DEMO transaction',
@@ -974,10 +967,7 @@ class MultiStoreDemoSeeder extends Seeder
             [$this->accounts['131'], 1000000, 0, Client::class, $clientId, 'Legacy phải thu'],
             [$this->accounts['5111'], 0, 1000000, null, null, 'Legacy doanh thu'],
         ]);
-        DB::table('suppliers')->insert([
-            'company_id' => $companyId, 'name' => 'Đại diện legacy', 'email' => 'legacy-supplier@demo.sgo.test',
-            'phone' => '0970000002', 'created_at' => now(), 'updated_at' => now(),
-        ]);
+
     }
 
     private function ledgerTransaction(array $attributes, array $entries): Transaction
@@ -1029,6 +1019,18 @@ class MultiStoreDemoSeeder extends Seeder
 
     private function assertInvariants(): void
     {
+        if (DB::table('companies')->whereNull('branch_id')->exists()) {
+            throw new RuntimeException('A demo Supplier is missing Branch ownership.');
+        }
+        $badProductSuppliers = DB::table('company_product as cp')
+            ->join('products as p', 'p.id', '=', 'cp.product_id')
+            ->join('companies as c', 'c.id', '=', 'cp.company_id')
+            ->whereColumn('p.branch_id', '<>', 'c.branch_id')
+            ->exists();
+        if ($badProductSuppliers) {
+            throw new RuntimeException('Product and Supplier Branch mismatch detected.');
+        }
+
         if (DB::table('brands')->whereNull('branch_id')->exists()) {
             throw new RuntimeException('A demo Brand is missing Branch ownership.');
         }

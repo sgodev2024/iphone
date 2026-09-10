@@ -434,7 +434,7 @@ class ImportProductController extends Controller
 
     private function companyOptions(User $user, array $columns = ['*'], ?int $branchId = null)
     {
-        $query = Company::query();
+        $query = Company::query()->branchOwned();
 
         if ($user->roleKey() === 'warehouse') {
             $query->where('user_id', $user->ownerId());

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Company;
 
+use App\Models\Company;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,12 +24,24 @@ class CompanyRequest extends FormRequest
     public function rules(): array
     {
         $id = $this->route('id') ?? null;
+        $company = $id ? Company::query()->find($id) : null;
+        $branchId = $this->user()?->isAdministrator()
+            ? ($this->input('branch_id') ?: $company?->branch_id)
+            : $this->user()?->branch_id;
 
         return [
             'branch_id' => $this->user()?->isAdministrator()
-                ? ['nullable', 'integer', 'exists:branches,id']
+                ? ['required', 'integer', 'exists:branches,id']
                 : ['prohibited'],
-            'name' => 'required|max:255|unique:companies,name,' . $id,
+            'name' => [
+                'required',
+                'max:255',
+                Rule::unique('companies', 'name')
+                    ->where(fn ($query) => $branchId
+                        ? $query->where('branch_id', (int) $branchId)
+                        : $query->whereRaw('1 = 0'))
+                    ->ignore($id),
+            ],
             'phone' => 'required|regex:/^[0-9]{10,11}$/|unique:companies,phone,' . $id,
             'email' => ['nullable', 'email', Rule::unique('companies', 'email')->ignore($id)],
             'address' => 'required|max:255',
@@ -49,6 +62,7 @@ class CompanyRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'branch_id' => 'Cửa hàng',
             'name' => 'Tên nhà cung cấp',
             'phone' => 'Số điện thoại',
             'email' => 'Email',

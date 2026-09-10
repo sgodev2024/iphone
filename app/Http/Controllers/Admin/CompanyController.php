@@ -13,6 +13,7 @@ use App\Support\BranchContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller
 {
@@ -49,7 +50,16 @@ class CompanyController extends Controller
         $branches = Auth::user()->isAdministrator()
             ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
-        return view('admin.company.form', compact('banks', 'cities', 'title', 'company', 'branches'));
+        $canChangeBranch = true;
+
+        return view('admin.company.form', compact(
+            'banks',
+            'cities',
+            'title',
+            'company',
+            'branches',
+            'canChangeBranch'
+        ));
     }
 
     public function store(CompanyRequest $request)
@@ -58,9 +68,10 @@ class CompanyController extends Controller
             $credentials = $request->validated();
 
             $credentials['user_id'] = $request->user()->ownerId();
-            $credentials['branch_id'] = $request->user()->isAdministrator()
-                ? ($credentials['branch_id'] ?? null)
-                : $this->branchContext->branchId($request->user());
+            $credentials['branch_id'] = $this->branchContext->resolveWriteBranch(
+                $request->user(),
+                $request->user()->isAdministrator() ? (int) $credentials['branch_id'] : null
+            );
 
             Company::create($credentials);
 
@@ -77,19 +88,29 @@ class CompanyController extends Controller
         $branches = Auth::user()->isAdministrator()
             ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
-        return view('admin.company.form', compact('banks', 'cities', 'title', 'company', 'branches'));
+        $canChangeBranch = ! $company->hasBranchHistory();
+
+        return view('admin.company.form', compact(
+            'banks',
+            'cities',
+            'title',
+            'company',
+            'branches',
+            'canChangeBranch'
+        ));
     }
 
     public function update(string $id, CompanyRequest $request)
     {
         $company = $this->companyQuery($request->user())->findOrFail($id);
 
-        return transaction(function () use ($request, $company) {
+        return DB::transaction(function () use ($request, $company) {
             $credentials = $request->validated();
 
-            if (! $request->user()->isAdministrator()) {
-                $credentials['branch_id'] = $this->branchContext->branchId($request->user());
-            }
+            $credentials['branch_id'] = $this->branchContext->resolveWriteBranch(
+                $request->user(),
+                $request->user()->isAdministrator() ? (int) $credentials['branch_id'] : null
+            );
 
             $company->update($credentials);
 
@@ -97,8 +118,26 @@ class CompanyController extends Controller
         });
     }
 
+    public function show(Request $request, string $id)
+    {
+        return successResponse(data: $this->companyQuery($request->user())->findOrFail($id));
+    }
+
+    public function destroy(Request $request, string $id)
+    {
+        $company = $this->companyQuery($request->user())->findOrFail($id);
+
+        return transaction(function () use ($company) {
+            $company->delete();
+
+            return successResponse('Xóa nhà cung cấp thành công.');
+        });
+    }
+
     private function companyQuery(User $user): Builder
     {
-        return $this->branchContext->scope(Company::query(), $user);
+        $query = Company::query()->branchOwned();
+
+        return $this->branchContext->scope($query, $user);
     }
 }

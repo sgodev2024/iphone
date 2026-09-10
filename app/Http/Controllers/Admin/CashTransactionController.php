@@ -532,6 +532,7 @@ class CashTransactionController extends Controller
                 }),
             'supplier' => Supplier::query()
                 ->whereHas('company', function ($query) use ($actor, $ownerId, $branchContext): void {
+                    $query->branchOwned();
                     if (! Schema::hasColumn('companies', 'branch_id')
                         || ! $branchContext->isGlobal($actor)
                     ) {
@@ -544,6 +545,7 @@ class CashTransactionController extends Controller
                         ->orWhere('phone', 'like', "%$keyword%");
                 }),
             'company' => Company::query()
+                ->branchOwned()
                 ->where(function ($query) use ($keyword): void {
                     $query->where('name', 'like', "%$keyword%")
                         ->orWhere('phone', 'like', "%$keyword%");

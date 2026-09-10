@@ -108,6 +108,10 @@ class BulkController extends Controller
             }
         }
 
+        if ($modelClass === Company::class) {
+            return $this->bulkCompanies($ids, $type);
+        }
+
         if ($type === 'delete' && $modelClass === User::class) {
             return $this->deactivateUsers($ids);
         }
@@ -190,6 +194,33 @@ class BulkController extends Controller
                     return errorResponse('Hành động không hợp lệ!', 400);
             }
         });
+    }
+
+    private function bulkCompanies(array $ids, string $type)
+    {
+        return DB::transaction(function () use ($ids, $type) {
+            $query = Company::query()
+                ->branchOwned()
+                ->whereIn('id', $ids);
+            $this->branchContext->scope($query, Auth::user());
+
+            $companies = $query->lockForUpdate()->get();
+            if ($companies->count() !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
+
+            if ($type === 'delete') {
+                Company::query()->whereKey($companies->modelKeys())->delete();
+
+                return response()->json(['message' => 'Xóa thành công!']);
+            }
+
+            Company::query()
+                ->whereKey($companies->modelKeys())
+                ->update(['status' => DB::raw('NOT status')]);
+
+            return successResponse('Cập nhật trạng thái thành công!');
+        }, 3);
     }
 
     private function productDeleteBlockMessage(Builder $products): ?string

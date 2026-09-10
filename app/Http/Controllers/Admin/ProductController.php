@@ -7,6 +7,8 @@ use App\Http\Requests\Product\ProductRequest;
 use App\Models\Brand;
 use App\Models\Branch;
 use App\Models\Categories;
+use App\Models\Company;
+use App\Models\CompanyProduct;
 use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
@@ -100,6 +102,8 @@ class ProductController extends Controller
         $user = $request->user();
         $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
         $hasBranchBrands = Schema::hasColumn('brands', 'branch_id');
+        $hasBranchSuppliers = Schema::hasTable('companies')
+            && Schema::hasColumn('companies', 'branch_id');
         $branches = $hasBranchCatalog && $user->isAdministrator()
             ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
@@ -121,6 +125,13 @@ class ProductController extends Controller
             ->latest()
             ->pluck('name', 'id')
             ->toArray();
+        $suppliers = $hasBranchSuppliers && $branchId !== null
+            ? Company::query()
+                ->branchOwned()
+                ->where('branch_id', $branchId)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+            : collect();
         $product = null;
         $canChangeInventoryTracking = true;
         $inventoryTrackingLockedMessage = null;
@@ -129,6 +140,7 @@ class ProductController extends Controller
             'title',
             'categories',
             'brands',
+            'suppliers',
             'product',
             'canChangeInventoryTracking',
             'inventoryTrackingLockedMessage',
@@ -160,7 +172,10 @@ class ProductController extends Controller
             $data['code'] = generateCode('products', 'SP');
             $data['quantity'] = 0;
 
-            Product::create($data);
+            $companyId = isset($data['company_id']) ? (int) $data['company_id'] : null;
+            unset($data['company_id']);
+            $product = Product::create($data);
+            $this->attachSupplier($product, $companyId);
 
             return successResponse('Thêm mới sản phẩm thành công.', code: Response::HTTP_CREATED);
         }, function (\Throwable $e) {
@@ -178,7 +193,12 @@ class ProductController extends Controller
         $user = Auth::user();
         $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
         $hasBranchBrands = Schema::hasColumn('brands', 'branch_id');
+        $hasBranchSuppliers = Schema::hasTable('companies')
+            && Schema::hasColumn('companies', 'branch_id');
         $productQuery = Product::query()->with(['category', 'brand']);
+        if ($hasBranchSuppliers && Schema::hasTable('company_product')) {
+            $productQuery->with('company');
+        }
         if ($hasBranchCatalog) {
             $productQuery->with('branch');
         }
@@ -200,6 +220,13 @@ class ProductController extends Controller
             ->latest()
             ->pluck('name', 'id')
             ->toArray();
+        $suppliers = $hasBranchSuppliers
+            ? Company::query()
+                ->branchOwned()
+                ->where('branch_id', $product->branch_id)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+            : collect();
         $canChangeInventoryTracking = $product->canChangeInventoryTracking();
         $inventoryTrackingLockedMessage = $canChangeInventoryTracking
             ? null
@@ -209,6 +236,7 @@ class ProductController extends Controller
             'title',
             'categories',
             'brands',
+            'suppliers',
             'product',
             'canChangeInventoryTracking',
             'inventoryTrackingLockedMessage',
@@ -231,7 +259,8 @@ class ProductController extends Controller
             $oldThumbnail = $product->thumbnail;
 
             $data = $request->validated();
-            unset($data['branch_id']);
+            $companyId = isset($data['company_id']) ? (int) $data['company_id'] : null;
+            unset($data['branch_id'], $data['company_id']);
 
             if ($request->hasFile('thumbnail')) {
                 $data['thumbnail'] = uploadImages('thumbnail', 'products');
@@ -242,6 +271,7 @@ class ProductController extends Controller
             $data['is_featured'] ??= 0;
 
             $updated = $product->update($data);
+            $this->attachSupplier($product, $companyId);
 
             if ($updated && $request->hasFile('thumbnail')) {
                 deleteImage($oldThumbnail);
@@ -258,6 +288,18 @@ class ProductController extends Controller
             ]);
         });
     }
+    private function attachSupplier(Product $product, ?int $companyId): void
+    {
+        if ($companyId === null || ! Schema::hasTable('company_product')) {
+            return;
+        }
+
+        CompanyProduct::query()->firstOrCreate([
+            'product_id' => $product->id,
+            'company_id' => $companyId,
+        ]);
+    }
+
     public function searchForSale(Request $request)
     {
         /*

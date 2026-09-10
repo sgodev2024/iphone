@@ -360,13 +360,14 @@ class SupplierDebtReportTest extends TestCase
             'phone' => '0900000002',
             'status' => true,
         ]);
-        $legacyCompany = Company::create([
+        $legacyCompanyId = DB::table('companies')->insertGetId([
             'user_id' => $this->otherOwner->id,
             'branch_id' => null,
             'name' => 'Company Legacy',
             'phone' => '0900000003',
             'status' => true,
         ]);
+        $legacyCompany = Company::query()->findOrFail($legacyCompanyId);
 
         $add = function (User $owner, Company $company, ?int $branchId, string $credit): void {
             $transactionId = DB::table('transactions')->insertGetId([
@@ -400,7 +401,6 @@ class SupplierDebtReportTest extends TestCase
         $expected = [
             $this->company->id => '7000000.00',
             $companyB->id => '15000000.00',
-            $legacyCompany->id => '3000000.00',
         ];
 
         $this->assertSame($expected, $first->pluck('ending_credit', 'company_id')->all());

@@ -55,13 +55,14 @@ class ExpenseController extends Controller
 
     public function debt(Request $request){
         $supplier = $request->supplier;
-        $debt = $this->supplierDebtQuery()->where('companies_id', $supplier)->first();
-        return  response()->json(explode(',', $debt->amount)[0]);
+        $debt = $this->supplierDebtQuery()->where('companies_id', $supplier)->firstOrFail();
+
+        return response()->json(explode(',', $debt->amount)[0]);
     }
 
     private function expenseQuery(?User $actor = null): Builder
     {
-        $companies = Company::query();
+        $companies = Company::query()->branchOwned();
         $this->branchContext->scope($companies, $actor ?? request()->user());
 
         return Expense::query()->whereIn('companies_id', $companies->select('id'));
@@ -72,10 +73,12 @@ class ExpenseController extends Controller
         $query = SupplierDebt::query();
 
         if (Schema::hasColumn('supplier_debts', 'branch_id')) {
+            $query->whereNotNull('supplier_debts.branch_id');
+
             return $this->branchContext->scope($query, $actor ?? request()->user());
         }
 
-        $companies = Company::query();
+        $companies = Company::query()->branchOwned();
         $this->branchContext->scope($companies, $actor ?? request()->user());
 
         return $query->whereIn('companies_id', $companies->select('id'));

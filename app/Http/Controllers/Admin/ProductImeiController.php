@@ -101,6 +101,7 @@ class ProductImeiController extends Controller
             ->withQueryString();
 
         $companiesQuery = Company::query()
+            ->branchOwned()
             ->whereHas(
                 'importCoupons.details.imeis.product',
                 function (Builder $productQuery) {

@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Branch;
 use App\Models\Brand;
 use App\Models\Categories;
+use App\Models\Company;
+use App\Models\CompanyProduct;
 use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
@@ -185,6 +187,64 @@ class BranchCatalogIsolationTest extends TestCase
             ->assertOk()
             ->assertSee('Brand B option')
             ->assertDontSee('Brand A option');
+    }
+
+    public function test_product_supplier_invariant_and_form_options_follow_the_product_branch(): void
+    {
+        [$administrator, $storeA, , $branchA, $branchB] = $this->actors();
+        $categoryA = $this->category($branchA, 'Supplier Category A');
+        $supplierA = $this->company($storeA, $branchA, 'Supplier A option');
+        $supplierB = $this->company($administrator, $branchB, 'Supplier B option');
+
+        $this->actingAs($storeA)->get('/admin/products/create')
+            ->assertOk()
+            ->assertSee('Supplier A option')
+            ->assertDontSee('Supplier B option');
+        $this->actingAs($administrator)->get('/admin/products/create?branch_id='.$branchB->id)
+            ->assertOk()
+            ->assertSee('Supplier B option')
+            ->assertDontSee('Supplier A option');
+
+        $payload = [
+            'name' => 'Supplier-scoped product',
+            'price' => 100,
+            'price_buy' => 150,
+            'product_unit' => 'Piece',
+            'category_id' => $categoryA->id,
+            'company_id' => $supplierB->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'status' => 'published',
+        ];
+        $this->actingAs($storeA)->postJson('/admin/products', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['company_id']);
+        $this->assertDatabaseMissing('products', ['name' => 'Supplier-scoped product']);
+
+        $payload['company_id'] = $supplierA->id;
+        $this->actingAs($storeA)->postJson('/admin/products', $payload)->assertCreated();
+        $product = Product::query()->where('name', 'Supplier-scoped product')->firstOrFail();
+        $this->assertDatabaseHas('company_product', [
+            'product_id' => $product->id,
+            'company_id' => $supplierA->id,
+        ]);
+
+        $this->actingAs($storeA)->get('/admin/products/'.$product->id.'/edit')
+            ->assertOk()
+            ->assertSee('Supplier A option')
+            ->assertDontSee('Supplier B option');
+
+        try {
+            CompanyProduct::create([
+                'product_id' => $product->id,
+                'company_id' => $supplierB->id,
+            ]);
+            $this->fail('A cross-Branch Product-Supplier link was accepted.');
+        } catch (ValidationException) {
+            $this->assertDatabaseMissing('company_product', [
+                'product_id' => $product->id,
+                'company_id' => $supplierB->id,
+            ]);
+        }
     }
 
     public function test_branch_delete_is_blocked_while_a_brand_exists(): void
@@ -382,6 +442,18 @@ class BranchCatalogIsolationTest extends TestCase
         ]);
     }
 
+    private function company(User $owner, Branch $branch, string $name): Company
+    {
+        return Company::create([
+            'user_id' => $owner->id,
+            'branch_id' => $branch->id,
+            'name' => $name,
+            'phone' => '09'.str_pad((string) (Company::count() + 1), 8, '0', STR_PAD_LEFT),
+            'address' => $branch->name,
+            'status' => true,
+        ]);
+    }
+
     private function product(
         User $creator,
         Branch $branch,
@@ -452,6 +524,23 @@ class BranchCatalogIsolationTest extends TestCase
             $table->boolean('status')->default(true);
             $table->timestamps();
         });
+        Schema::create('companies', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('branch_id');
+            $table->string('name');
+            $table->string('phone')->unique();
+            $table->string('address');
+            $table->string('email')->nullable()->unique();
+            $table->string('tax_number')->nullable()->unique();
+            $table->string('bank_account')->nullable();
+            $table->unsignedBigInteger('bank_id')->nullable();
+            $table->unsignedBigInteger('city_id')->nullable();
+            $table->text('note')->nullable();
+            $table->boolean('status')->default(true);
+            $table->timestamps();
+            $table->unique(['branch_id', 'name']);
+        });
         Schema::create('categories', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('branch_id');
@@ -492,6 +581,13 @@ class BranchCatalogIsolationTest extends TestCase
             $table->timestamps();
             $table->unique(['branch_id', 'code']);
             $table->unique(['branch_id', 'barcode']);
+        });
+        Schema::create('company_product', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('company_id');
+            $table->timestamps();
+            $table->unique(['product_id', 'company_id']);
         });
         Schema::create('storages', function (Blueprint $table): void {
             $table->id();

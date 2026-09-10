@@ -42,9 +42,12 @@ class CashActivityReadService
             ->pluck('related_party_id')
             ->filter()
             ->unique();
-        $companyNames = $companyIds->isEmpty()
-            ? collect()
-            : Company::query()->whereIn('id', $companyIds)->pluck('name', 'id');
+        $companyNames = collect();
+        if ($companyIds->isNotEmpty()) {
+            $companyQuery = Company::query()->branchOwned()->whereIn('id', $companyIds);
+            $this->branchContext->scope($companyQuery, $actor);
+            $companyNames = $companyQuery->pluck('name', 'id');
+        }
         $posted = $ledgerEntries
             ->map(fn (object $entry): CashActivityItem => $this->postedItem($entry, $companyNames));
 

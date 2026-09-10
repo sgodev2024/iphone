@@ -253,9 +253,17 @@ Route::middleware(['auth'])
                         ->middleware('permission:company.update')
                         ->name('edit');
 
+                    Route::get('{id}', 'show')
+                        ->middleware('permission:company.view')
+                        ->name('show');
+
                     Route::put('{id}', 'update')
                         ->middleware('permission:company.update')
                         ->name('update');
+
+                    Route::delete('{id}', 'destroy')
+                        ->middleware('permission:bulk.action')
+                        ->name('destroy');
                 });
                             /*
             |--------------------------------------------------------------------------

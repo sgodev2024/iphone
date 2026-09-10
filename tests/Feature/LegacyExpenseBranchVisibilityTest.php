@@ -53,7 +53,7 @@ class LegacyExpenseBranchVisibilityTest extends TestCase
         });
     }
 
-    public function test_legacy_expense_reads_are_branch_scoped_and_administrators_are_global(): void
+    public function test_expense_reads_are_branch_scoped_administrators_are_global_and_null_suppliers_fail_closed(): void
     {
         $administratorA = $this->user(1, null, 'admin-a@example.test');
         $administratorB = $this->user(1, null, 'admin-b@example.test');
@@ -76,8 +76,8 @@ class LegacyExpenseBranchVisibilityTest extends TestCase
         $this->assertSame([$debtA], $this->ids('supplierDebtQuery', $adminStoreA));
         $this->assertSame([$debtB], $this->ids('supplierDebtQuery', $adminStoreB));
         foreach ([$administratorA, $administratorB] as $administrator) {
-            $this->assertEqualsCanonicalizing([$expenseA, $expenseB, $expenseLegacy], $this->ids('expenseQuery', $administrator));
-            $this->assertEqualsCanonicalizing([$debtA, $debtB, $debtLegacy], $this->ids('supplierDebtQuery', $administrator));
+            $this->assertEqualsCanonicalizing([$expenseA, $expenseB], $this->ids('expenseQuery', $administrator));
+            $this->assertEqualsCanonicalizing([$debtA, $debtB], $this->ids('supplierDebtQuery', $administrator));
         }
 
         try {

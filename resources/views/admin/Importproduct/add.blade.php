@@ -512,6 +512,7 @@
                                                                 <option value="">--- Chọn nhà cung cấp ---</option>
                                                                 @foreach ($supplier as $value)
                                                                     <option value="{{ $value->id }}"
+                                                                        data-branch-id="{{ $value->branch_id }}"
                                                                         @selected((string) old('supplier') === (string) $value->id)>
                                                                         {{ $value->name }}
                                                                     </option>
@@ -527,6 +528,7 @@
                                                                 <option value="">--- Chọn nhà kho hàng ---</option>
                                                                 @foreach ($storage as $value)
                                                                     <option value="{{ $value->id }}"
+                                                                        data-branch-id="{{ $value->branch_id }}"
                                                                         @selected((string) old('storage') === (string) $value->id)>
                                                                         {{ $value->name }}
                                                                     </option>
@@ -638,7 +640,26 @@
 @push('script')
     <script>
         document.getElementById('import-branch')?.addEventListener('change', function() {
+            const supplier = document.getElementById('supplier')
+            if (supplier) {
+                supplier.value = ''
+            }
             window.location.href = '{{ route('admin.importproduct.add') }}?branch_id=' + encodeURIComponent(this.value)
+        })
+
+        document.getElementById('storage')?.addEventListener('change', function() {
+            const storageBranchId = this.selectedOptions[0]?.dataset.branchId || ''
+            const supplier = document.getElementById('supplier')
+
+            supplier?.querySelectorAll('option[data-branch-id]').forEach(function(option) {
+                const allowed = storageBranchId !== '' && option.dataset.branchId === storageBranchId
+                option.disabled = !allowed
+                option.hidden = !allowed
+            })
+
+            if (supplier?.selectedOptions[0]?.dataset.branchId !== storageBranchId) {
+                supplier.value = ''
+            }
         })
     </script>
         <script>

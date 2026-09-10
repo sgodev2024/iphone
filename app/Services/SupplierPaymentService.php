@@ -192,6 +192,7 @@ class SupplierPaymentService
     public function outstandingImports(User $actor, int $companyId): array
     {
         $companyQuery = Company::query()
+            ->branchOwned()
             ->whereKey($companyId);
         $this->scopeOwner($companyQuery, $actor);
         $this->branchContext->scope($companyQuery, $actor);
@@ -273,6 +274,7 @@ class SupplierPaymentService
     private function validatedLedger(ImportCoupon $importCoupon, int $ownerId, ?int $branchId): array
     {
         $company = Company::query()
+            ->branchOwned()
             ->whereKey((int) $importCoupon->companies_id)
             ->where('user_id', $ownerId)
             ->when(

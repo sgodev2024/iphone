@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class AdminCrudAuditTest extends TestCase
@@ -512,7 +513,12 @@ class AdminCrudAuditTest extends TestCase
     public function test_supplier_create_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
-        $company = $this->createCompany($admin);
+        $branch = Branch::create([
+            'user_id' => $admin->id,
+            'name' => 'Representative Branch',
+            'address' => 'Ha Noi',
+        ]);
+        $company = $this->createCompany($admin, $branch->id);
 
         $this->actingAs($admin)->get("/admin/supplier/add/{$company->id}")->assertOk();
 
@@ -572,31 +578,58 @@ class AdminCrudAuditTest extends TestCase
     public function test_company_create_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
+        $branchA = Branch::create([
+            'user_id' => $admin->id,
+            'name' => 'Supplier Branch A',
+            'address' => 'Ha Noi',
+        ]);
+        $branchB = Branch::create([
+            'user_id' => $admin->id,
+            'name' => 'Supplier Branch B',
+            'address' => 'Sai Gon',
+        ]);
 
         $form = $this->actingAs($admin)->get('/admin/company/create')->assertOk();
-        $form->assertSee('novalidate', false);
-        $form->assertDontSee('required', false);
+        $form->assertSee('name="branch_id"', false);
+        $form->assertSee('required', false);
+        $form->assertDontSee('Dữ liệu legacy / chưa gán cửa hàng');
 
         $this->actingAs($admin)->postJson('/admin/company', [
+            'name' => 'NCC Missing Branch',
+            'phone' => '0905000099',
+            'address' => 'Ha Noi',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['branch_id']);
+        try {
+            Company::create([
+                'user_id' => $admin->id,
+                'branch_id' => null,
+                'name' => 'NCC Legacy Direct',
+                'phone' => '0905000098',
+                'address' => 'Ha Noi',
+            ]);
+            $this->fail('A Supplier without Branch ownership was created through Eloquent.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('branch_id', $exception->errors());
+        }
+
+        $this->actingAs($admin)->postJson('/admin/company', [
+            'branch_id' => $branchA->id,
             'name' => 'NCC Minimal',
             'phone' => '0905000001',
             'address' => 'Ha Noi',
             'status' => '1',
         ])->assertCreated();
 
-        $company = Company::where('name', 'NCC Minimal')->first();
+        $company = Company::where('name', 'NCC Minimal')->firstOrFail();
         $this->assertSame($admin->id, (int) $company->user_id);
+        $this->assertSame($branchA->id, (int) $company->branch_id);
         $this->assertNull($company->email);
         $this->assertNull($company->tax_number);
         $this->assertNull($company->bank_account);
         $this->assertNull($company->bank_id);
 
-        $this->assertDatabaseHas('companies', [
-            'id' => $company->id,
-            'status' => 1,
-        ]);
-
-        $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
+        $this->actingAs($admin)->putJson('/admin/company/'.$company->id, [
+            'branch_id' => $branchA->id,
             'name' => 'NCC Minimal Update',
             'phone' => '0905000002',
             'address' => 'Sai Gon',
@@ -605,44 +638,73 @@ class AdminCrudAuditTest extends TestCase
 
         $this->assertDatabaseHas('companies', [
             'id' => $company->id,
+            'branch_id' => $branchA->id,
             'name' => 'NCC Minimal Update',
             'phone' => '0905000002',
             'user_id' => $admin->id,
             'status' => 0,
         ]);
 
-        $this->actingAs($admin)->putJson("/admin/company/{$company->id}", [
+        Supplier::create([
+            'company_id' => $company->id,
+            'name' => 'History representative',
+            'email' => 'history-representative@example.com',
+        ]);
+        $this->actingAs($admin)->putJson('/admin/company/'.$company->id, [
+            'branch_id' => $branchB->id,
             'name' => 'NCC Minimal Update',
             'phone' => '0905000002',
             'address' => 'Sai Gon',
             'status' => '1',
-        ])->assertOk();
+        ])->assertUnprocessable()->assertJsonValidationErrors(['branch_id']);
+        $this->assertSame($branchA->id, (int) $company->fresh()->branch_id);
 
+        foreach ([[$branchA, '0905000011'], [$branchB, '0905000012']] as [$branch, $phone]) {
+            $this->actingAs($admin)->postJson('/admin/company', [
+                'branch_id' => $branch->id,
+                'name' => 'NCC Trùng Tên',
+                'phone' => $phone,
+                'address' => 'Viet Nam',
+            ])->assertCreated();
+        }
+        $this->assertSame(2, Company::query()->where('name', 'NCC Trùng Tên')->count());
+
+        $adminStore = $this->createUser(
+            'supplier-admin-store@example.com',
+            '0905000013',
+            2,
+            $branchA->id,
+            $admin->id
+        );
+        $this->actingAs($adminStore)->postJson('/admin/company', [
+            'branch_id' => $branchB->id,
+            'name' => 'Spoofed Supplier',
+            'phone' => '0905000014',
+            'address' => 'Viet Nam',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['branch_id']);
+        $this->actingAs($adminStore)->postJson('/admin/company', [
+            'name' => 'Store Supplier',
+            'phone' => '0905000015',
+            'address' => 'Viet Nam',
+        ])->assertCreated();
         $this->assertDatabaseHas('companies', [
-            'id' => $company->id,
-            'status' => 1,
+            'name' => 'Store Supplier',
+            'branch_id' => $branchA->id,
         ]);
 
         $this->actingAs($admin)->postJson('/admin/company', [
+            'branch_id' => $branchA->id,
             'name' => '',
             'phone' => '123',
             'email' => 'invalid-email',
         ])->assertUnprocessable()
             ->assertJsonValidationErrors(['name', 'phone', 'email', 'address']);
 
-        $this->actingAs($admin)->postJson('/admin/company', [
-            'name' => 'NCC Invalid Phone',
-            'phone' => '012345687',
-            'address' => 'Ha Noi',
-        ])->assertUnprocessable()
-            ->assertJsonValidationErrors(['phone']);
-
         $staff = $this->createUser('staff5@example.com', '0905000005', 3);
         $this->actingAs($staff)->postJson('/admin/company', [
             'name' => 'Blocked',
         ])->assertForbidden();
     }
-
     public function test_client_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
@@ -758,6 +820,7 @@ class AdminCrudAuditTest extends TestCase
     {
         $administrator = $this->createUser();
         $storeA = $this->createUser('supplier-store-a@example.com', '0908200001', 2, 301, $administrator->id);
+        $storeB = $this->createUser('supplier-store-b@example.com', '0908200002', 2, 302, $administrator->id);
         $bankId = $this->createBank();
 
         $this->actingAs($storeA)->postJson('/admin/company', [
@@ -785,18 +848,6 @@ class AdminCrudAuditTest extends TestCase
             'bank_id' => $bankId,
             'status' => true,
         ]);
-        $legacy = Company::create([
-            'user_id' => $administrator->id,
-            'branch_id' => null,
-            'name' => 'NCC Legacy',
-            'phone' => '0908200013',
-            'email' => 'ncc-legacy@example.com',
-            'address' => 'Legacy',
-            'tax_number' => 'TAX-LEGACY',
-            'bank_account' => '333',
-            'bank_id' => $bankId,
-            'status' => true,
-        ]);
 
         $html = $this->actingAs($storeA)
             ->withHeader('X-Requested-With', 'XMLHttpRequest')
@@ -805,13 +856,29 @@ class AdminCrudAuditTest extends TestCase
             ->json('html');
         $this->assertStringContainsString($companyA->name, $html);
         $this->assertStringNotContainsString($companyB->name, $html);
-        $this->assertStringNotContainsString($legacy->name, $html);
 
+        $this->actingAs($storeA)->get("/admin/company/{$companyB->id}")->assertNotFound();
         $this->actingAs($storeA)->get("/admin/company/{$companyB->id}/edit")->assertNotFound();
-        $this->actingAs($storeA)->postJson('/admin/bulk/delete', [
-            'ids' => [$companyB->id],
+        $this->actingAs($storeA)->putJson("/admin/company/{$companyB->id}", [
+            'name' => 'Blocked update',
+            'phone' => '0908200099',
+            'address' => 'Blocked',
+        ])->assertNotFound();
+        $this->actingAs($storeA)->deleteJson("/admin/company/{$companyB->id}")->assertNotFound();
+
+        $this->actingAs($storeA)->postJson('/admin/bulk/status', [
+            'ids' => [$companyA->id, $companyB->id],
             'model' => 'Company',
         ])->assertNotFound();
+        $this->assertTrue((bool) $companyA->fresh()->status);
+        $this->assertTrue((bool) $companyB->fresh()->status);
+
+        $this->actingAs($storeA)->postJson('/admin/bulk/delete', [
+            'ids' => [$companyA->id, $companyB->id],
+            'model' => 'Company',
+        ])->assertNotFound();
+        $this->assertDatabaseHas('companies', ['id' => $companyA->id]);
+        $this->assertDatabaseHas('companies', ['id' => $companyB->id]);
 
         $this->actingAs($storeA)->post('/admin/supplier/store', [
             'company_id' => $companyA->id,
@@ -837,6 +904,8 @@ class AdminCrudAuditTest extends TestCase
 
         $this->actingAs($storeA)->get("/admin/supplier/{$companyA->id}")
             ->assertOk()->assertSee('Supplier A')->assertDontSee('Supplier B');
+        $this->actingAs($storeB)->get("/admin/supplier/{$companyB->id}")
+            ->assertOk()->assertSee('Supplier B')->assertDontSee('Supplier A');
         $this->actingAs($storeA)->get("/admin/supplier/{$companyB->id}")->assertNotFound();
         $this->actingAs($storeA)->get("/admin/supplier/detail/{$supplierB->id}")->assertNotFound();
         $this->actingAs($storeA)->delete("/admin/supplier/delete/{$supplierB->id}")->assertNotFound();
@@ -867,11 +936,27 @@ class AdminCrudAuditTest extends TestCase
             ->json('html');
         $this->assertStringContainsString($companyA->name, $globalHtml);
         $this->assertStringContainsString($companyB->name, $globalHtml);
-        $this->assertStringContainsString($legacy->name, $globalHtml);
         $this->actingAs($administrator)->get("/admin/supplier/{$companyB->id}")
             ->assertOk()->assertSee($supplierB->name);
         $this->actingAs($administrator)->get("/admin/supplier/detail/{$supplierA->id}")
             ->assertOk();
+        $this->actingAs($administrator)->getJson("/admin/company/{$companyA->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $companyA->id);
+        $this->actingAs($administrator)->getJson("/admin/company/{$companyB->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $companyB->id);
+
+        $deletable = Company::create([
+            'user_id' => $administrator->id,
+            'branch_id' => 301,
+            'name' => 'NCC Delete A',
+            'phone' => '0908200031',
+            'address' => 'A',
+            'status' => true,
+        ]);
+        $this->actingAs($storeA)->deleteJson("/admin/company/{$deletable->id}")->assertOk();
+        $this->assertDatabaseMissing('companies', ['id' => $deletable->id]);
     }
 
     public function test_branch_creation_rolls_back_when_default_storage_fails(): void
