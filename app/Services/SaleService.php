@@ -61,7 +61,6 @@ class SaleService
             }
             if (! empty($data['customer']['id'])) {
                 $client = Client::query()
-                    ->where('user_id', $ownerId)
                     ->where('branch_id', $branchId)
                     ->find($data['customer']['id']);
 

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Staff;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Client;
-use App\Support\BranchContext;
+use App\Services\SaleStorageResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -14,21 +14,17 @@ use Symfony\Component\HttpFoundation\Response as HttpFoundationResponse;
 
 class ClientController extends Controller
 {
-    public function __construct(private BranchContext $branchContext)
-    {
-    }
+    public function __construct(private readonly SaleStorageResolver $saleStorageResolver) {}
 
     public function addClient(Request $request)
     {
         $user = Auth::user();
         $userId = $user->isStaff() ? $user->manager_id : $user->id;
 
-        $branchId = $user->isAdministrator()
-            ? $request->integer('branch_id')
-            : $this->branchContext->branchId($user);
-        $branchRule = $user->isAdministrator()
-            ? ['required', 'integer', 'exists:branches,id']
-            : ['prohibited'];
+        $branchId = $this->saleStorageResolver->resolveSaleBranchId(
+            $user,
+            'Vui lòng chọn kho bán hàng trước khi thêm khách hàng.'
+        );
 
         $data = Validator::make($request->all(), [
             'name' => ['required', 'max:255'],
@@ -44,7 +40,7 @@ class ClientController extends Controller
             'gender' => ['nullable', 'in:Male,Female'],
             'dob' => ['nullable', 'date'],
             'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],
-            'branch_id' => $branchRule,
+            'branch_id' => ['prohibited'],
         ], __('request.messages'), [
             'name' => 'Tên khách hàng',
             'phone' => 'Số điện thoại',

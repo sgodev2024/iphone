@@ -1013,14 +1013,14 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Khách hàng</h5>
                         <i class="fa-solid fa-circle-plus add-customer-btn" role="button" data-bs-toggle="modal"
-                            data-bs-target="#addCustomerModal"></i>
+                            data-bs-target="#addCustomerModal" aria-disabled="{{ $saleStorage ? 'false' : 'true' }}"></i>
                     </div>
 
                     <div class="card-body">
 
                         <div class="mb-2 position-relative border-bottom pb-3">
-                            <input id="customerSearch" type="text" class="form-control" placeholder="Tìm khách hàng…"
-                                autocomplete="off" />
+                            <input id="customerSearch" type="text" class="form-control" data-sale-storage-control
+                                @disabled(!$saleStorage) placeholder="Tìm khách hàng…" autocomplete="off" />
                             <div id="customerPopup" class="search-popup" style="max-height: 240px;">
                                 <div id="customerList" class="list-group list-group-flush"></div>
                             </div>
@@ -1403,6 +1403,14 @@
             setSaleStorageControlsEnabled(hasSaleStorage);
 
             const saleStorageSelect = qs('#saleStorageSelect');
+            const addCustomerModal = qs('#addCustomerModal');
+
+            addCustomerModal?.addEventListener('show.bs.modal', (event) => {
+                if (!hasSaleStorage) {
+                    event.preventDefault();
+                    showSaleStorageRequired('Vui lòng chọn kho bán hàng trước khi thêm khách hàng.');
+                }
+            });
 
             saleStorageSelect?.addEventListener('change', async () => {
                 const storageId = saleStorageSelect.value;
@@ -2544,6 +2552,10 @@
             }
 
             const fetchClients = (searchText) => {
+                if (!ensureSaleStorageReady()) {
+                    return;
+                }
+
                 $.ajax({
                     url: '/ban-hang/get-clients',
                     method: 'GET',
@@ -2570,6 +2582,11 @@
 
             $('#addCustomerForm').on('submit', function(e) {
                 e.preventDefault();
+
+                if (!hasSaleStorage) {
+                    showSaleStorageRequired('Vui lòng chọn kho bán hàng trước khi thêm khách hàng.');
+                    return;
+                }
 
                 const formData = $(this).serializeArray();
 

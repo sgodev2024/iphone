@@ -758,6 +758,12 @@ class AdminCrudAuditTest extends TestCase
         $administrator = $this->createUser();
         $storeA = $this->createUser('customer-store-a@example.com', '0908100001', 2, 101, $administrator->id);
         $staffA = $this->createUser('customer-staff-a@example.com', '0908100002', 3, 101, $storeA->id);
+        $storageA = Storage::create([
+            'user_id' => $storeA->id,
+            'branch_id' => 101,
+            'name' => 'Customer POS Storage A',
+        ]);
+        $staffA->update(['storage_id' => $storageA->id]);
         $groupId = $this->createClientGroup();
         $clientA = $this->createClient($storeA, $groupId, 'client-a@example.com', '0908100011', 101);
         $clientB = $this->createClient($administrator, $groupId, 'client-b@example.com', '0908100012', 202);

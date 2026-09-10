@@ -22,6 +22,50 @@ class SaleStorageResolver
 
     private const SELECT_STORAGE_MESSAGE = 'Vui lòng chọn kho bán hàng.';
 
+    public function resolveSaleBranchId(
+        User $user,
+        ?string $selectionRequiredMessage = null
+    ): int {
+        try {
+            $storageId = $this->resolveSaleStorageId($user);
+        } catch (ValidationException $exception) {
+            $storageErrors = $exception->errors()['storage_id'] ?? [];
+
+            if ($selectionRequiredMessage !== null
+                && in_array(self::SELECT_STORAGE_MESSAGE, $storageErrors, true)
+            ) {
+                throw ValidationException::withMessages([
+                    'storage_id' => $selectionRequiredMessage,
+                ]);
+            }
+
+            throw $exception;
+        }
+
+        $storage = Storage::query()
+            ->visibleTo($user)
+            ->whereKey($storageId)
+            ->first(['id', 'branch_id']);
+
+        if (! $storage || $storage->branch_id === null) {
+            throw ValidationException::withMessages([
+                'storage_id' => 'Kho bán hàng chưa được gán chi nhánh.',
+            ]);
+        }
+
+        $branchId = (int) $storage->branch_id;
+
+        if (! $user->isAdministrator()
+            && ($user->branch_id === null || (int) $user->branch_id !== $branchId)
+        ) {
+            throw ValidationException::withMessages([
+                'storage_id' => 'Kho bán hàng không thuộc chi nhánh của tài khoản.',
+            ]);
+        }
+
+        return $branchId;
+    }
+
     public function resolveSaleStorageId(User $user, mixed $requestedStorageId = null): int
     {
         if ($user->isStaff()) {

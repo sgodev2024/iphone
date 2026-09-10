@@ -1548,6 +1548,207 @@ class StaffPosSaleTest extends TestCase
             ]);
     }
 
+    public function test_administrator_pos_customer_uses_selected_storage_branch_and_rejects_branch_spoofing(): void
+    {
+        $administrator = $this->createManager(1);
+        $storageA = $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 10,
+            'name' => 'POS Storage A',
+        ]);
+        $storageB = $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 20,
+            'name' => 'POS Storage B',
+        ]);
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/storage/select', ['storage_id' => $storageA->id])
+            ->assertOk();
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Spoofed Customer',
+                'phone' => '0901000000',
+                'branch_id' => 20,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('branch_id');
+
+        $this->assertDatabaseMissing('clients', ['phone' => '0901000000']);
+
+        $responseA = $this->actingAs($administrator)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Customer A',
+                'phone' => '0901000001',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('clients', [
+            'id' => $responseA->json('data.id'),
+            'user_id' => $administrator->id,
+            'branch_id' => 10,
+        ]);
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/storage/select', ['storage_id' => $storageB->id])
+            ->assertOk();
+
+        $responseB = $this->actingAs($administrator)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Customer B',
+                'phone' => '0901000002',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('clients', [
+            'id' => $responseB->json('data.id'),
+            'user_id' => $administrator->id,
+            'branch_id' => 20,
+        ]);
+    }
+
+    public function test_administrator_cannot_add_pos_customer_before_selecting_storage(): void
+    {
+        $administrator = $this->createManager(1);
+        $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 10,
+            'name' => 'POS Storage A',
+        ]);
+        $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 20,
+            'name' => 'POS Storage B',
+        ]);
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Customer Without Storage',
+                'phone' => '0902000000',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Vui lòng chọn kho bán hàng trước khi thêm khách hàng.',
+            ]);
+
+        $this->assertDatabaseMissing('clients', ['phone' => '0902000000']);
+    }
+
+    public function test_administrator_pos_customer_search_follows_selected_storage_branch(): void
+    {
+        $administrator = $this->createManager(1);
+        $storageA = $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 10,
+            'name' => 'POS Storage A',
+        ]);
+        $storageB = $this->createStorage([
+            'user_id' => $administrator->id,
+            'branch_id' => 20,
+            'name' => 'POS Storage B',
+        ]);
+        $clientA = $this->createClient([
+            'user_id' => $administrator->id,
+            'branch_id' => 10,
+            'name' => 'Scoped Customer A',
+            'phone' => '0903000001',
+        ]);
+        $clientB = $this->createClient([
+            'user_id' => $administrator->id,
+            'branch_id' => 20,
+            'name' => 'Scoped Customer B',
+            'phone' => '0903000002',
+        ]);
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/storage/select', ['storage_id' => $storageA->id])
+            ->assertOk();
+
+        $this->actingAs($administrator)
+            ->getJson('/ban-hang/get-clients?searchText=Scoped')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $clientA->id])
+            ->assertJsonMissing(['id' => $clientB->id]);
+
+        $this->actingAs($administrator)
+            ->postJson('/ban-hang/storage/select', ['storage_id' => $storageB->id])
+            ->assertOk();
+
+        $this->actingAs($administrator)
+            ->getJson('/ban-hang/get-clients?searchText=Scoped')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $clientB->id])
+            ->assertJsonMissing(['id' => $clientA->id]);
+    }
+
+    public function test_pos_checkout_rejects_customer_from_another_storage_branch(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff, $manager] = $this->createStaffContext();
+        $product = $this->createProduct(['price' => 100000, 'price_buy' => 70000]);
+        ProductStorage::create([
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+        $foreignClient = $this->createClient([
+            'user_id' => $manager->id,
+            'branch_id' => 2,
+            'name' => 'Foreign Branch Customer',
+            'phone' => '0904000001',
+        ]);
+
+        $this->actingAs($staff)
+            ->postJson('/ban-hang/order', $this->orderPayload([
+                ['id' => $product->id, 'qty' => 1],
+            ], 100000, Order::PAYMENT_METHOD_CASH, $foreignClient->id))
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Khách hàng không tồn tại hoặc đã ngừng hoạt động.',
+            ]);
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseHas('product_storage', [
+            'product_id' => $product->id,
+            'storage_id' => $storage->id,
+            'quantity' => 1,
+        ]);
+    }
+
+    public function test_admin_store_and_staff_create_pos_customers_in_their_sale_branch(): void
+    {
+        $manager = $this->createManager();
+        $storage = $this->createStorage([
+            'user_id' => $manager->id,
+            'branch_id' => 1,
+            'name' => 'Branch One Storage',
+        ]);
+        $staff = $this->createStaff($storage->id, $manager->id);
+
+        $managerResponse = $this->actingAs($manager)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Admin Store Customer',
+                'phone' => '0905000001',
+            ])
+            ->assertCreated();
+
+        $staffResponse = $this->actingAs($staff)
+            ->postJson('/ban-hang/clients/add', [
+                'name' => 'Staff Customer',
+                'phone' => '0905000002',
+            ])
+            ->assertCreated();
+
+        foreach ([$managerResponse, $staffResponse] as $response) {
+            $this->assertDatabaseHas('clients', [
+                'id' => $response->json('data.id'),
+                'user_id' => $manager->id,
+                'branch_id' => 1,
+            ]);
+        }
+    }
+
     public function test_bank_transfer_order_appears_in_bank_transactions_for_manager(): void
     {
         $accounts = $this->seedAccounts();

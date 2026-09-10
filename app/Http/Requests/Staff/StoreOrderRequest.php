@@ -6,7 +6,6 @@ use App\Models\ProductImei;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class StoreOrderRequest extends FormRequest
@@ -56,8 +55,6 @@ class StoreOrderRequest extends FormRequest
 
     public function rules(): array
     {
-        $ownerId = $this->user()?->ownerId();
-
         return [
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['nullable', 'integer', 'exists:products,id'],
@@ -98,13 +95,7 @@ class StoreOrderRequest extends FormRequest
             'customer.id' => [
                 'nullable',
                 'integer',
-                Rule::exists('clients', 'id')->where(function ($query) use ($ownerId): void {
-                    $query->whereNull('deleted_at');
-
-                    if ($ownerId !== null) {
-                        $query->where('user_id', $ownerId);
-                    }
-                }),
+                'min:1',
             ],
             'customer.name' => ['nullable', 'string', 'max:255'],
             'customer.email' => ['nullable', 'email', 'max:255'],
