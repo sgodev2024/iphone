@@ -25,9 +25,8 @@ class DatabaseSeeder extends Seeder
             ConfigSeeder::class,
             AccountingAccountSeeder::class,
             UsersTableSeeder::class,
-            ClientSeeder::class,
-            OrderSeeder::class,
             PermissionSeeder::class,
+            BranchCatalogDemoSeeder::class,
         ]);
         // $this->call(OrderDetailSeeder::class);
         // $this->call([

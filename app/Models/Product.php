@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class Product extends Model
 {
@@ -22,6 +25,7 @@ class Product extends Model
     public const DEFAULT_THUMBNAIL = 'images/default-product.png';
 
     protected $fillable = [
+        'branch_id',
         'user_id',
         'category_id',
         'brands_id',
@@ -43,6 +47,34 @@ class Product extends Model
         'is_featured' => 'boolean',
         'quantity' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product): void {
+            if (! Schema::hasColumn('products', 'branch_id') || ! Schema::hasColumn('categories', 'branch_id')) {
+                return;
+            }
+
+            if ($product->exists && $product->isDirty('branch_id')) {
+                throw ValidationException::withMessages([
+                    'branch_id' => 'Không thể chuyển sản phẩm sang chi nhánh khác.',
+                ]);
+            }
+
+            $categoryBranchId = Categories::query()
+                ->whereKey($product->category_id)
+                ->value('branch_id');
+
+            if ($product->branch_id === null
+                || $categoryBranchId === null
+                || (int) $product->branch_id !== (int) $categoryBranchId
+            ) {
+                throw ValidationException::withMessages([
+                    'category_id' => 'Sản phẩm và danh mục phải thuộc cùng một chi nhánh.',
+                ]);
+            }
+        });
+    }
 
     public function getImagesAttribute()
     {
@@ -67,6 +99,11 @@ class Product extends Model
     public function brand()
     {
         return $this->belongsTo(Brand::class, 'brands_id');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function carts()

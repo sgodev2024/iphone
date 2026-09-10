@@ -16,6 +16,7 @@ use App\Models\Categories;
 use App\Models\CheckDetail;
 use App\Models\warehome;
 use App\Models\Product;
+use App\Models\Storage;
 use App\Services\SaleStorageResolver;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -59,8 +60,10 @@ class CheckInventoryController extends Controller
         $config = Config::with(['bank', 'user'])->first();
         $user = Auth::user();
         $storageId = $this->saleStorageResolver->resolveSaleStorageId($user);
-        $category = Categories::all();
+        $branchId = (int) Storage::query()->whereKey($storageId)->value('branch_id');
+        $category = Categories::query()->where('branch_id', $branchId)->get();
         $product = Product::query()
+            ->where('branch_id', $branchId)
             ->whereHas('productStorages', fn ($query) => $query->where('storage_id', $storageId))
             ->orderBy('name')
             ->get();

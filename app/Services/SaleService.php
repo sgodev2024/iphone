@@ -54,6 +54,11 @@ class SaleService
                 : null;
             $client = null;
             $branchId = $storage->branch_id === null ? null : (int) $storage->branch_id;
+            if ($branchId === null) {
+                throw ValidationException::withMessages([
+                    'storage_id' => 'Kho bán hàng chưa được gán chi nhánh.',
+                ]);
+            }
             if (! empty($data['customer']['id'])) {
                 $client = Client::query()
                     ->where('user_id', $ownerId)
@@ -92,6 +97,7 @@ class SaleService
 
             $products = Product::query()
                 ->whereIn('id', $productIds->all())
+                ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $branchId))
                 ->where(function ($query): void {
                     $query->where('status', true)
                         ->orWhere('status', 1)

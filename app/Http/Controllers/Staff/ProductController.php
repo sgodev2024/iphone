@@ -11,6 +11,7 @@ use App\Models\Config;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Services\ClientGroupService;
 use App\Services\ClientService;
 use App\Services\ProductService;
@@ -18,6 +19,7 @@ use App\Services\SaleStorageResolver;
 use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 class ProductController extends Controller
 {
@@ -125,12 +127,14 @@ class ProductController extends Controller
     public function product(Request $request)
     {
         $storageId = $this->resolveSaleStorageId($request);
+        $storageBranchId = (int) Storage::query()->whereKey($storageId)->value('branch_id');
         $searchText = trim((string) $request->input('searchText', ''));
         if ($searchText === '') {
             $searchText = trim((string) $request->input('search', ''));
         }
 
         $products = Product::query()
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('products.branch_id', $storageBranchId))
             ->select([
                 'products.id',
                 'products.user_id',
@@ -246,7 +250,7 @@ class ProductController extends Controller
                 ->with(['product', 'importDetail.import'])
                 ->where('product_imeis.status', ProductImei::STATUS_IN_STOCK)
                 ->where('product_imeis.storage_id', $storageId)
-                ->whereHas('product', function ($query) {
+                ->whereHas('product', function ($query) use ($storageBranchId) {
                     $query
                         ->where('products.inventory_tracking', Product::INVENTORY_TRACKING_IMEI)
                         ->where(function ($query) {
@@ -255,6 +259,9 @@ class ProductController extends Controller
                                 ->orWhere('products.status', '1')
                                 ->orWhere('products.status', 'published');
                         });
+                    if (Schema::hasColumn('products', 'branch_id')) {
+                        $query->where('products.branch_id', $storageBranchId);
+                    }
                 })
                 ->whereDoesntHave('orderDetails')
                 ->whereExists(function ($query) use ($storageId) {
@@ -342,8 +349,11 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
+        $storageBranchId = (int) Storage::query()->whereKey($storage_id)->value('branch_id');
         $productId = $request->input('product_id');
-        $product = $this->productService->getProductById($productId);
+        $product = Product::query()
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $storageBranchId))
+            ->find($productId);
 
         if (! $product) {
             return response()->json(['error' => 'Product not found.'], 404);
@@ -358,6 +368,9 @@ class ProductController extends Controller
             ['product_id', '=', $productId],
             ['storage_id', '=', $storage_id],
         ])->with('product')->first();
+        if (! $ProductStorage || (int) $ProductStorage->quantity < 1) {
+            return response()->json(['error' => 'Product is not available in this storage.'], 422);
+        }
         if ($existingCartItem) {
             if ($existingCartItem->amount < $ProductStorage->quantity) {
                 $existingCartItem->update(['amount' => $existingCartItem->amount + 1]);
@@ -404,8 +417,11 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
+        $storageBranchId = (int) Storage::query()->whereKey($storage_id)->value('branch_id');
         $productId = $request->input('product_id');
-        $product = $this->productService->getProductById($productId);
+        $product = Product::query()
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $storageBranchId))
+            ->find($productId);
 
         if (! $product) {
             return response()->json(['error' => 'Product not found.'], 404);
@@ -416,6 +432,18 @@ class ProductController extends Controller
             ->where('user_id', $user->id)
             ->first();
         $amount = $request->input('amount');
+
+        if (! $existingCartItem) {
+            return response()->json(['error' => 'Cart item not found.'], 404);
+        }
+
+        $available = ProductStorage::query()
+            ->where('product_id', $productId)
+            ->where('storage_id', $storage_id)
+            ->value('quantity');
+        if ($available === null || (int) $amount < 1 || (int) $amount > (int) $available) {
+            return response()->json(['error' => 'Requested quantity is not available.'], 422);
+        }
 
         $existingCartItem->update(['amount' => $amount]);
 
@@ -452,7 +480,7 @@ class ProductController extends Controller
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
         $cart = $request->input('cart');
-        Cart::find($cart)->delete();
+        Cart::query()->where('user_id', $user->id)->findOrFail($cart)->delete();
         $cartItems = Cart::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -487,13 +515,13 @@ class ProductController extends Controller
         $user = Auth::user();
         $storage_id = $this->resolveSaleStorageId($request);
 
-        $userId = $user->isStaff() ? ($user->manager_id ?? $user->id) : $user->id;
+        $storageBranchId = (int) Storage::query()->whereKey($storage_id)->value('branch_id');
 
         $productStorages = ProductStorage::with('product')
             ->where('storage_id', $storage_id)
             ->where('quantity', '>', 0)
-            ->whereHas('product', function ($query) use ($name, $userId) {
-                $query->where('user_id', $userId)
+            ->whereHas('product', function ($query) use ($name, $storageBranchId) {
+                $query->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $storageBranchId))
                     ->where('inventory_tracking', Product::INVENTORY_TRACKING_QUANTITY)
                     ->where(function ($query) {
                         $query->where('status', true)

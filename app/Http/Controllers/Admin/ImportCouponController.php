@@ -113,6 +113,13 @@ class ImportCouponController extends Controller
             ]);
         }
 
+        $storageBranchId = $storage->branch_id === null ? null : (int) $storage->branch_id;
+        if ($storageBranchId === null) {
+            throw ValidationException::withMessages([
+                'storage' => 'Kho nhập chưa được gán chi nhánh.',
+            ]);
+        }
+
         if (Schema::hasColumn('companies', 'branch_id')
             && Schema::hasColumn('storages', 'branch_id')
             && ($company->branch_id === null
@@ -134,8 +141,10 @@ class ImportCouponController extends Controller
         $imports = Import::query()
             ->with('product')
             ->where('quantity', '>', 0)
-            ->whereHas('product', function ($query) use ($ownerId, $user) {
-                if (! $user->isAdministrator()) {
+            ->whereHas('product', function ($query) use ($storageBranchId, $ownerId, $user) {
+                if (Schema::hasColumn('products', 'branch_id')) {
+                    $query->where('branch_id', $storageBranchId);
+                } elseif (! $user->isAdministrator()) {
                     $query->where('user_id', $ownerId);
                 }
             })
@@ -325,7 +334,14 @@ class ImportCouponController extends Controller
         foreach ($imports as $import) {
             $product = Product::query()
                 ->whereKey($import->product_id)
-                ->when(! $user->isAdministrator(), fn ($query) => $query->where('user_id', $ownerId))
+                ->when(
+                    Schema::hasColumn('products', 'branch_id'),
+                    fn ($query) => $query->where('branch_id', $storageBranchId)
+                )
+                ->when(
+                    ! Schema::hasColumn('products', 'branch_id') && ! $user->isAdministrator(),
+                    fn ($query) => $query->where('user_id', $ownerId)
+                )
                 ->lockForUpdate()
                 ->firstOrFail();
 

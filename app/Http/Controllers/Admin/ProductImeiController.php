@@ -44,11 +44,12 @@ class ProductImeiController extends Controller
         );
 
         $imeiBaseQuery = ProductImei::query()
-            ->whereHas('product', function (Builder $productQuery) {
+            ->whereHas('product', function (Builder $productQuery) use ($request) {
                 $productQuery->where(
                     'inventory_tracking',
                     Product::INVENTORY_TRACKING_IMEI
                 );
+                $this->branchContext->scope($productQuery, $request->user(), 'products.branch_id');
             });
 
         $this->branchContext->scopeThroughStorage($imeiBaseQuery, $request->user());
@@ -76,9 +77,12 @@ class ProductImeiController extends Controller
             - $statistics['in_stock']
             - $statistics['sold'];
 
+        $productColumns = Schema::hasColumn('products', 'branch_id')
+            ? 'product:id,branch_id,code,name,inventory_tracking'
+            : 'product:id,code,name,inventory_tracking';
         $imeis = (clone $imeiBaseQuery)
             ->with([
-                'product:id,code,name,inventory_tracking',
+                $productColumns,
                 'importDetail:id,import_id,price',
                 'importDetail.import:id,companies_id,coupon_code,created_at',
                 'importDetail.import.companyRelation:id,name',
@@ -216,6 +220,12 @@ class ProductImeiController extends Controller
         DB::transaction(function () use ($request, $productImei, $validated) {
             $imeiQuery = ProductImei::query()->with('importDetail.import');
             $this->branchContext->scopeThroughStorage($imeiQuery, $request->user());
+            if (! $request->user()->isAdministrator()) {
+                $imeiQuery->whereHas('product', fn (Builder $query) => $query->where(
+                    'branch_id',
+                    $this->branchContext->branchId($request->user())
+                ));
+            }
 
             $imei = $imeiQuery
                 ->lockForUpdate()
@@ -284,20 +294,26 @@ class ProductImeiController extends Controller
 
     private function ensureProductVisible(Product $product, User $user): void
     {
-        if ($this->branchContext->isGlobal($user)) {
+        if (! Schema::hasColumn('products', 'branch_id')) {
+            if ($this->branchContext->isGlobal($user)) {
+                return;
+            }
+
+            $query = Product::query()->whereKey($product->id);
+            $this->branchContext->scopeThroughStorage(
+                $query,
+                $user,
+                $product->isImeiTracked() ? 'imeis.storage' : 'productStorages.storage'
+            );
+            abort_unless($query->exists(), 404);
+
             return;
         }
 
-        $query = Product::query()->whereKey($product->id);
-        $this->branchContext->scopeThroughStorage(
-            $query,
+        $this->branchContext->authorize(
             $user,
-            $product->isImeiTracked()
-                ? 'imeis.storage'
-                : 'productStorages.storage'
+            $product->branch_id === null ? null : (int) $product->branch_id
         );
-
-        abort_unless($query->exists(), 404);
     }
 
     private function applyGlobalFilters(

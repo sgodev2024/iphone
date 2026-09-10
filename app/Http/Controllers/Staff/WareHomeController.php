@@ -7,6 +7,7 @@ use App\Http\Responses\ApiResponse;
 use App\Models\warehome;
 use App\Models\Product;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Services\CategoryService;
 use App\Services\ProductService;
 use App\Services\SaleStorageResolver;
@@ -106,9 +107,18 @@ class WareHomeController extends Controller
     public function addByCategory(Request $request){
         $list_id = $request->selectedValues;
         $storageId = $this->saleStorageResolver->resolveSaleStorageId($request->user());
+        $branchId = (int) Storage::query()->whereKey($storageId)->value('branch_id');
         $warehome = $this->stagingQuery($request)->get();
+        $allowedCategoryIds = \App\Models\Categories::query()
+            ->where('branch_id', $branchId)
+            ->whereIn('id', (array) $list_id)
+            ->pluck('id');
         foreach($list_id as $item){
+            if (! $allowedCategoryIds->contains((int) $item)) {
+                abort(404);
+            }
             $products = Product::query()
+                ->where('branch_id', $branchId)
                 ->where('category_id', $item)
                 ->whereHas('productStorages', fn ($query) => $query->where('storage_id', $storageId))
                 ->get();

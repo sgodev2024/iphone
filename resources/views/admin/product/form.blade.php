@@ -30,6 +30,23 @@
                         <div class="card-body">
                             <div class="row gy-4">
 
+                                @if ($hasBranchCatalog && auth()->user()->isAdministrator())
+                                    <div class="col-md-12">
+                                        <label for="branch_id" class="form-label mb-1 fw-bold">
+                                            Cửa hàng <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="branch_id" id="branch_id" class="form-select form-control"
+                                            @disabled(!empty($product))>
+                                            <option value="">-- Chọn cửa hàng --</option>
+                                            @foreach ($branches as $branch)
+                                                <option value="{{ $branch->id }}" @selected((int) old('branch_id', $branchId) === (int) $branch->id)>
+                                                    {{ $branch->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+
                                 <div class="col-md-12">
                                     <label for="name" class="form-label mb-1 fw-bold">
                                         Tên sản phẩm <span class="text-danger">*</span>
@@ -206,6 +223,15 @@
             });
 
             const url = '/admin/products' + '{{ !empty($product) ? "/{$product->id}" : '' }}'
+
+            @if ($hasBranchCatalog && auth()->user()->isAdministrator() && empty($product))
+                $('#branch_id').on('change', function() {
+                    const branchId = $(this).val()
+                    window.location.href = branchId
+                        ? '{{ route('admin.products.create') }}?branch_id=' + encodeURIComponent(branchId)
+                        : '{{ route('admin.products.create') }}'
+                })
+            @endif
 
             handleSubmit('#myForm', function(res) {
                 window.location.href = '/admin/products';

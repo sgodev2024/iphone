@@ -186,6 +186,14 @@
                             </div>
 
                             <div class="product-search-group">
+                                @if ($hasBranchCatalog && auth()->user()->isAdministrator())
+                                    <select id="branch-filter" class="form-select" style="min-width: 210px">
+                                        <option value="">Tất cả cửa hàng</option>
+                                        @foreach ($branches as $branch)
+                                            <option value="{{ $branch->id }}" @selected($branchId === (int) $branch->id)>{{ $branch->name }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
                                 <input type="text" name="search" class="form-control product-search-input"
                                     placeholder="Tìm kiếm...">
 
@@ -194,13 +202,13 @@
                             </div>
                         </div>
                         <div class="product-toolbar__actions">
-                            <a href="/admin/company/create" class="btn btn-outline-secondary product-import-btn">
+                            <a href="{{ route('admin.importproduct.add') }}" class="btn btn-outline-secondary product-import-btn">
                                 <i class="fas fa-file-import"></i> Import
                             </a>
-                            <a href="/admin/company/create" class="btn btn-outline-secondary product-export-btn">
+                            <a href="{{ route('admin.products.export', ['branch_id' => $branchId]) }}" class="btn btn-outline-secondary product-export-btn" id="product-export">
                                 <i class="fas fa-file-export"></i> Export
                             </a>
-                            <a href="/admin/products/create" class="btn btn-primary product-add-btn" id="show-modal"><i
+                            <a href="{{ route('admin.products.create', ['branch_id' => $branchId]) }}" class="btn btn-primary product-add-btn" id="show-modal"><i
                                     class="fa-solid fa-plus"></i>
                                 Thêm mới</a>
                         </div>
@@ -225,6 +233,7 @@
             let currentPage = 1;
             let searchText = '';
             let resetCooldown = false
+            let branchId = $('#branch-filter').val() || ''
 
             const initTableTooltips = () => {
                 if (!window.bootstrap || !bootstrap.Tooltip) return
@@ -247,6 +256,14 @@
                 searchText = $(this).val();
                 fetchProducts(1, searchText); // reset về page 1 khi search
             }));
+
+            $('#branch-filter').on('change', function() {
+                branchId = $(this).val() || ''
+                const suffix = branchId ? '?branch_id=' + encodeURIComponent(branchId) : ''
+                $('#product-export').attr('href', '{{ route('admin.products.export') }}' + suffix)
+                $('#show-modal').attr('href', '{{ route('admin.products.create') }}' + suffix)
+                fetchProducts(1, searchText)
+            })
 
             $('#btn-reset').click(function() {
                 if (resetCooldown) return // đang cooldown thì bỏ qua
@@ -284,7 +301,8 @@
                     method: 'GET',
                     data: {
                         page,
-                        s: search
+                        s: search,
+                        branch_id: branchId
                     },
                     success: (res) => {
                         $('#table-wrapper').html(res.data.html)

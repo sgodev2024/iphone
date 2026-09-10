@@ -178,6 +178,14 @@
                             </div>
 
                             <div class="d-flex justify-content-end align-items-center category-search">
+                                @if (auth()->user()->isAdministrator() && $hasBranchCatalog)
+                                    <select id="branch-filter" class="form-select me-2" style="min-width: 210px">
+                                        <option value="">Tất cả cửa hàng</option>
+                                        @foreach ($branches as $branch)
+                                            <option value="{{ $branch->id }}" @selected($branchId === (int) $branch->id)>{{ $branch->name }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
                                 <input type="text" name="search" class="form-control me-2" style="width: 300px;"
                                     placeholder="Tìm kiếm...">
 
@@ -212,6 +220,18 @@
                     <form id="myForm" data-method="POST" data-id="">
 
                         <div class="row g-3">
+
+                            @if (auth()->user()->isAdministrator() && $hasBranchCatalog)
+                                <div class="col-md-12" id="category-branch-field">
+                                    <label class="form-label fw-bold">Cửa hàng</label>
+                                    <select class="form-select" name="branch_id" id="category-branch-id">
+                                        <option value="">-- Chọn cửa hàng --</option>
+                                        @foreach ($branches as $branch)
+                                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
 
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Tên danh mục</label>
@@ -250,6 +270,7 @@
 
             let currentPage = 1
             let searchText = '';
+            let branchId = $('#branch-filter').val() || '';
             const categoryBaseUrl = @json(url('/admin/category'));
 
             $(document).on('click', 'a.page-link', function(e) {
@@ -265,6 +286,11 @@
                 searchText = $(this).val();
                 fetchCategories(1, searchText); // reset về page 1 khi search
             }));
+
+            $('#branch-filter').on('change', function() {
+                branchId = $(this).val() || ''
+                fetchCategories(1, searchText)
+            })
 
             let resetCooldown = false
 
@@ -287,6 +313,8 @@
                     'data-method': 'POST',
                     'data-id': ''
                 })
+                $('#category-branch-field').show()
+                $('#category-branch-id').val(branchId)
             })
 
             $(document).on('click', '.btn-show', function() {
@@ -310,6 +338,7 @@
                         })
                         $('#myForm').attr('data-method', 'PUT')
                         $('#myForm').attr('data-id', id)
+                        $('#category-branch-field').hide()
 
                         $('#categoryModal').modal('show')
                     },
@@ -385,7 +414,8 @@
                     method: 'GET',
                     data: {
                         page,
-                        s: search
+                        s: search,
+                        branch_id: branchId
                     },
                     success: (res) => {
                         $('#table-wrapper').html(res.html)

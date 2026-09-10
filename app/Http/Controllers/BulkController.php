@@ -87,6 +87,22 @@ class BulkController extends Controller
             }
         }
 
+        if (in_array($modelClass, [Product::class, Categories::class], true)) {
+            $permission = $modelClass === Product::class
+                ? ($type === 'delete' ? 'product.delete' : 'product.update')
+                : ($type === 'delete' ? 'category.delete' : 'category.update');
+            abort_unless(Auth::user()?->hasPermission($permission), Response::HTTP_FORBIDDEN);
+
+            $allowedQuery = $modelClass::query();
+            $this->branchContext->scope($allowedQuery, Auth::user(), $modelClass === Product::class
+                ? 'products.branch_id'
+                : 'categories.branch_id');
+
+            if ($allowedQuery->whereIn('id', $ids)->count() !== count($ids)) {
+                abort(Response::HTTP_NOT_FOUND);
+            }
+        }
+
         if ($type === 'delete' && $modelClass === User::class) {
             return $this->deactivateUsers($ids);
         }
@@ -113,7 +129,8 @@ class BulkController extends Controller
             return DB::transaction(function () use ($ids, $user) {
                 $products = Product::query()->whereIn('id', $ids);
 
-                if (! $user->isAdministrator()) {
+                $this->branchContext->scope($products, $user, 'products.branch_id');
+                if (! Schema::hasColumn('products', 'branch_id') && ! $user->isAdministrator()) {
                     $products->where('user_id', $user->id);
                 }
 
@@ -139,15 +156,23 @@ class BulkController extends Controller
         }
 
         return transaction(function () use ($modelClass, $ids, $type) {
+            $query = $modelClass::query()->whereIn('id', $ids);
+            if (in_array($modelClass, [Product::class, Categories::class], true)) {
+                $this->branchContext->scope(
+                    $query,
+                    Auth::user(),
+                    $modelClass === Product::class ? 'products.branch_id' : 'categories.branch_id'
+                );
+            }
+
             switch ($type) {
                 case 'delete':
-                    $modelClass::whereIn('id', $ids)->delete();
+                    $query->delete();
 
                     return response()->json(['message' => 'Xóa thành công!']);
 
                 case 'status':
-                    $modelClass::whereIn('id', $ids)
-                        ->update(['status' => DB::raw('NOT status')]);
+                    $query->update(['status' => DB::raw('NOT status')]);
 
                     return successResponse('Cập nhật trạng thái thành công!');
 

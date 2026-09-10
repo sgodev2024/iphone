@@ -6,6 +6,9 @@
                 <th style="width: 5%"><input type="checkbox" id="check-all"></th>
                 <th style="width: 15%"># | ngày tạo</th>
                 <th>Tên danh mục</th>
+                @if ($hasBranchCatalog && $user->isAdministrator())
+                    <th>Cửa hàng</th>
+                @endif
                 <th>Mô tả</th>
                 <th style="width: 13%">Trạng thái</th>
                 <th class="text-center" style="width: 13%">Hành động</th>
@@ -20,6 +23,9 @@
                         | {{ $category->created_at->format('d/m/Y') }}
                     </td>
                     <td>{{ $category->name }}</td>
+                    @if ($hasBranchCatalog && $user->isAdministrator())
+                        <td>{{ $category->branch?->name }}</td>
+                    @endif
                     <td>{{ $category->description }}</td>
                     <td>
                         {!! $category->status
@@ -39,7 +45,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td class="text-center" colspan="6">Không có danh mục</td>
+                    <td class="text-center" colspan="{{ $hasBranchCatalog && $user->isAdministrator() ? 7 : 6 }}">Không có danh mục</td>
                 </tr>
             @endforelse
         </tbody>

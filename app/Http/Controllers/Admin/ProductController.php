@@ -5,16 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\ProductRequest;
 use App\Models\Brand;
+use App\Models\Branch;
 use App\Models\Categories;
 use App\Models\ImportDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Services\SaleStorageResolver;
 use App\Support\BranchContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,10 +31,22 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
+        $user = $request->user();
+        $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasTable('branches');
+        $branches = $hasBranchCatalog && $user->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $branchId = $hasBranchCatalog && $user->isAdministrator() && $request->filled('branch_id')
+            ? (int) $request->input('branch_id')
+            : ($hasBranchCatalog && $user->branch_id ? (int) $user->branch_id : null);
+
+        if ($user->isAdministrator() && $branchId !== null) {
+            abort_unless(Branch::query()->whereKey($branchId)->exists(), Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         $title = 'Sản phẩm';
         if ($request->ajax()) {
             $searchText = $request->input('s');
-            $user = $request->user();
             $stockQuery = ProductStorage::query()
                 ->selectRaw('COALESCE(SUM(quantity), 0)')
                 ->whereColumn('product_storage.product_id', 'products.id');
@@ -59,23 +74,46 @@ class ProductController extends Controller
                 ->when(! empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%$searchText%");
                 });
+            if ($hasBranchCatalog) {
+                $products->with('branch:id,name');
+            }
+            $this->branchContext->scope($products, $user, 'products.branch_id');
+            if ($user->isAdministrator() && $branchId !== null) {
+                $products->where('products.branch_id', $branchId);
+            }
             $products = $products
                 ->latest()
                 ->paginate(10)
                 ->appends($request->query());
 
-            $html = view('admin.product.table', compact('products'))->render();
+            $html = view('admin.product.table', compact('products', 'user', 'hasBranchCatalog'))->render();
 
             return successResponse(data: ['html' => $html], isToastr: false);
         }
 
-        return view('admin.product.index', compact('title'));
+        return view('admin.product.index', compact('title', 'branches', 'branchId', 'hasBranchCatalog'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $title = 'Thêm sản phẩm';
-        $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
+        $user = $request->user();
+        $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
+        $branches = $hasBranchCatalog && $user->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $branchId = $hasBranchCatalog && $user->isAdministrator()
+            ? ($request->filled('branch_id') ? (int) $request->input('branch_id') : null)
+            : ($hasBranchCatalog ? $this->branchContext->branchId($user) : null);
+        if ($branchId !== null) {
+            abort_unless(Branch::query()->whereKey($branchId)->exists(), Response::HTTP_NOT_FOUND);
+        }
+        $categories = Categories::query()
+            ->when($hasBranchCatalog && $branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($hasBranchCatalog && $branchId === null, fn ($query) => $query->whereRaw('1 = 0'))
+            ->latest()
+            ->pluck('name', 'id')
+            ->toArray();
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
         $product = null;
         $canChangeInventoryTracking = true;
@@ -87,7 +125,10 @@ class ProductController extends Controller
             'brands',
             'product',
             'canChangeInventoryTracking',
-            'inventoryTrackingLockedMessage'
+            'inventoryTrackingLockedMessage',
+            'branches',
+            'branchId',
+            'hasBranchCatalog'
         ));
     }
 
@@ -104,6 +145,12 @@ class ProductController extends Controller
             }
 
             $data['user_id'] = Auth::id();
+            if (Schema::hasColumn('products', 'branch_id')) {
+                $data['branch_id'] = $this->branchContext->resolveWriteBranch(
+                    $request->user(),
+                    $request->user()->isAdministrator() ? (int) $request->input('branch_id') : null
+                );
+            }
             $data['code'] = generateCode('products', 'SP');
             $data['quantity'] = 0;
 
@@ -122,13 +169,25 @@ class ProductController extends Controller
 
     public function edit(string $id)
     {
+        $user = Auth::user();
+        $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
         $productQuery = Product::query()->with(['category', 'brand']);
-        if (! $this->branchContext->isGlobal(Auth::user())) {
-            $productQuery->where('user_id', Auth::id());
+        if ($hasBranchCatalog) {
+            $productQuery->with('branch');
+        }
+        $this->branchContext->scope($productQuery, $user, 'products.branch_id');
+        if (! Schema::hasColumn('products', 'branch_id') && ! $user->isAdministrator()) {
+            $productQuery->where('user_id', $user->id);
         }
         $product = $productQuery->findOrFail($id);
         $title = "Cập nhật sản phẩm - {$product->name}";
-        $categories = Categories::query()->latest()->pluck('name', 'id')->toArray();
+        $categories = Categories::query()
+            ->when($hasBranchCatalog, fn ($query) => $query->where('branch_id', $product->branch_id))
+            ->latest()->pluck('name', 'id')->toArray();
+        $branches = $hasBranchCatalog && $user->isAdministrator()
+            ? Branch::query()->whereKey($product->branch_id)->get(['id', 'name'])
+            : collect();
+        $branchId = $hasBranchCatalog ? (int) $product->branch_id : null;
         $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
         $canChangeInventoryTracking = $product->canChangeInventoryTracking();
         $inventoryTrackingLockedMessage = $canChangeInventoryTracking
@@ -141,15 +200,19 @@ class ProductController extends Controller
             'brands',
             'product',
             'canChangeInventoryTracking',
-            'inventoryTrackingLockedMessage'
+            'inventoryTrackingLockedMessage',
+            'branches',
+            'branchId',
+            'hasBranchCatalog'
         ));
     }
 
     public function update(ProductRequest $request, $id)
     {
         $productQuery = Product::query();
-        if (! $this->branchContext->isGlobal($request->user())) {
-            $productQuery->where('user_id', Auth::id());
+        $this->branchContext->scope($productQuery, $request->user(), 'products.branch_id');
+        if (! Schema::hasColumn('products', 'branch_id') && ! $request->user()->isAdministrator()) {
+            $productQuery->where('user_id', $request->user()->id);
         }
         $product = $productQuery->findOrFail($id);
 
@@ -157,6 +220,7 @@ class ProductController extends Controller
             $oldThumbnail = $product->thumbnail;
 
             $data = $request->validated();
+            unset($data['branch_id']);
 
             if ($request->hasFile('thumbnail')) {
                 $data['thumbnail'] = uploadImages('thumbnail', 'products');
@@ -201,6 +265,9 @@ class ProductController extends Controller
             $user,
             $request->input('storage_id')
         );
+        $storageBranchId = Schema::hasColumn('storages', 'branch_id')
+            ? Storage::query()->whereKey($storageId)->value('branch_id')
+            : null;
 
         $products = Product::query()
             ->select([
@@ -213,6 +280,10 @@ class ProductController extends Controller
                 'products.inventory_tracking',
                 'products.user_id',
             ])
+            ->when(Schema::hasColumn('products', 'branch_id'), function ($query) use ($storageBranchId) {
+                $query->addSelect('products.branch_id')
+                    ->where('products.branch_id', (int) $storageBranchId);
+            })
 
             /*
          * Tính số lượng tồn trong kho.
@@ -339,7 +410,7 @@ class ProductController extends Controller
 
     public function import(Request $request) {}
 
-    public function export()
+    public function export(Request $request)
     {
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
@@ -352,6 +423,12 @@ class ProductController extends Controller
         $productsQuery = Product::query()
             ->select('products.*')
             ->selectSub($stockQuery, 'visible_stock_quantity');
+        $this->branchContext->scope($productsQuery, $user, 'products.branch_id');
+        if ($user->isAdministrator() && $request->filled('branch_id')) {
+            $branchId = (int) $request->input('branch_id');
+            abort_unless(Branch::query()->whereKey($branchId)->exists(), Response::HTTP_UNPROCESSABLE_ENTITY);
+            $productsQuery->where('products.branch_id', $branchId);
+        }
         $products = $productsQuery->with(['category', 'brand'])->get();
         // Đặt tiêu đề cột
         $sheet->setCellValue('A1', 'Mã sản phẩm');

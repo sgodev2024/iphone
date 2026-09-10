@@ -4,87 +4,128 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CategoryRequest;
+use App\Models\Branch;
 use App\Models\Categories;
 use App\Services\CategoryService;
+use App\Support\BranchContext;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 class CategorieController extends Controller
 {
-    //
-    protected $categoryService;
-    public function __construct(CategoryService $categoryService)
-    {
-        $this->categoryService = $categoryService;
-    }
+    public function __construct(
+        protected CategoryService $categoryService,
+        private readonly BranchContext $branchContext
+    ) {}
 
     public function index(Request $request)
     {
         $title = 'Danh mục';
+        $user = $request->user();
+        $hasBranchCatalog = Schema::hasColumn('categories', 'branch_id');
+        $branches = $user->isAdministrator() && Schema::hasTable('branches')
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $branchId = $hasBranchCatalog && $user->isAdministrator() && $request->filled('branch_id')
+            ? (int) $request->input('branch_id')
+            : ($user->branch_id ? (int) $user->branch_id : null);
 
         if ($request->ajax()) {
             $searchTerm = $request->query('s');
-
             $categories = Categories::query()
-                ->when($searchTerm, function ($query, $searchTerm) {
-                    $query->where('name', 'like', '%' . $searchTerm . '%');
-                })
-                ->latest()
-                ->paginate(10);
+                ->when($hasBranchCatalog, fn ($query) => $query->with('branch:id,name'))
+                ->when($searchTerm, fn ($query, $term) => $query->where('name', 'like', '%'.$term.'%'))
+                ->latest();
 
-            $html = view('admin.category.table', compact('categories'))->render();
+            $this->branchContext->scope($categories, $user, 'categories.branch_id');
+            if ($hasBranchCatalog && $user->isAdministrator() && $branchId !== null) {
+                abort_unless(Branch::query()->whereKey($branchId)->exists(), Response::HTTP_UNPROCESSABLE_ENTITY);
+                $categories->where('categories.branch_id', $branchId);
+            }
+
+            $categories = $categories->paginate(10)->appends($request->query());
+            $html = view('admin.category.table', compact('categories', 'user', 'hasBranchCatalog'))->render();
+
             return response()->json(['html' => $html]);
         }
 
-        return view('admin.category.index', compact('title'));
+        return view('admin.category.index', compact('title', 'branches', 'branchId', 'hasBranchCatalog'));
     }
 
     public function store(CategoryRequest $request)
     {
         return transaction(function () use ($request) {
-            $credentials = $request->validated();
+            $data = $request->validated();
 
-            $category = Categories::create($credentials);
+            if (Schema::hasColumn('categories', 'branch_id')) {
+                $data['branch_id'] = $this->branchContext->resolveWriteBranch(
+                    $request->user(),
+                    $request->user()->isAdministrator() ? (int) $request->input('branch_id') : null
+                );
+            }
 
-            return successResponse("Thêm mới danh mục thành công", $category, Response::HTTP_CREATED);
+            $category = Categories::create($data);
+
+            return successResponse('Thêm mới danh mục thành công', $category, Response::HTTP_CREATED);
         });
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
+        $query = Categories::query();
+        $this->branchContext->scope($query, $request->user(), 'categories.branch_id');
+        $category = $query->findOrFail($id);
+
         try {
-            $this->categoryService->deleteCategory($id);
+            $category->delete();
 
-            $categories = Categories::orderByDesc('created_at')->paginate(10);
-            $view = view('admin.category.table', compact('categories'))->render();
+            $categoriesQuery = Categories::query()->orderByDesc('created_at');
+            $this->branchContext->scope($categoriesQuery, $request->user(), 'categories.branch_id');
+            $categories = $categoriesQuery->paginate(10);
+            $user = $request->user();
+            $hasBranchCatalog = Schema::hasColumn('categories', 'branch_id');
+            $view = view('admin.category.table', compact('categories', 'user', 'hasBranchCatalog'))->render();
 
-            return response()->json(['success' => true, 'message' => 'Xoá danh mục thành công!', 'table' => $view]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Xoá danh mục thành công!',
+                'table' => $view,
+            ]);
         } catch (Exception $e) {
-            Log::error('Failed to delete category: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Không thể xóa danh mục']);
+            Log::error('Failed to delete category: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa danh mục đang có sản phẩm.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
     }
 
-    public function delete($id)
+    public function delete(Request $request, $id)
     {
-        return $this->destroy($id);
+        return $this->destroy($request, $id);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-
-        if (!$category = Categories::find($id))  return errorResponse('Không tìm thấy danh mục này trên hệ thông!', 404);
+        $query = Categories::query();
+        $this->branchContext->scope($query, $request->user(), 'categories.branch_id');
+        $category = $query->findOrFail($id);
 
         return successResponse(data: $category);
     }
 
     public function update($id, CategoryRequest $request)
     {
-        if (!$category = Categories::find($id))  return errorResponse('Không tìm thấy danh mục này trên hệ thông!', 404);
-
-        $category->update($request->validated());
+        $query = Categories::query();
+        $this->branchContext->scope($query, $request->user(), 'categories.branch_id');
+        $category = $query->findOrFail($id);
+        $data = $request->validated();
+        unset($data['branch_id']);
+        $category->update($data);
 
         return successResponse('Cập nhật danh mục thành công', $category->fresh(), Response::HTTP_OK);
     }

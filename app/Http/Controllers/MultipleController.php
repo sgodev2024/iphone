@@ -26,9 +26,7 @@ class MultipleController extends Controller
         }
 
         $allowedModels = [
-            'Product' => \App\Models\Product::class,
             'User' => \App\Models\User::class,
-            'Categories' => Categories::class,
             'Brand' => Brand::class,
             'Company' => Company::class,
             'Storage' => Storage::class,

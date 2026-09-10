@@ -5,6 +5,9 @@
             <th style="width: 3%" class="text-center"><input type="checkbox" id="check-all"></th>
             <th style="width: 12%"># | ngày tạo</th>
             <th style="width: 20%">Tên sản phẩm</th>
+            @if ($hasBranchCatalog && $user->isAdministrator())
+                <th style="width: 14%">Cửa hàng</th>
+            @endif
             <th style="width: 10%">Giá nhập</th>
             {{-- <th style="width: 10%">Mã SP</th>
             <th style="width: 12%">Danh mục</th> --}}
@@ -39,6 +42,9 @@
                         </div>
                     </div>
                 </td>
+                @if ($hasBranchCatalog && $user->isAdministrator())
+                    <td>{{ $product->branch?->name }}</td>
+                @endif
                 <td>{{ number_format($product->price, 0, ',', '.') }}</td>
                 {{-- <td>{{ $product->code }}</td> mã sp
                 <td>{{ $product->category?->name }}</td> --}}
@@ -88,7 +94,7 @@
             </tr>
         @empty
             <tr>
-                <td class="text-center" colspan="10">Không có sản phẩm nào</td>
+                <td class="text-center" colspan="{{ $hasBranchCatalog && $user->isAdministrator() ? 9 : 8 }}">Không có sản phẩm nào</td>
             </tr>
         @endforelse
     </tbody>

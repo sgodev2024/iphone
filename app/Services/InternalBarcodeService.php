@@ -133,6 +133,7 @@ class InternalBarcodeService
 
         $duplicateProductExists = Product::query()
             ->whereKeyNot($product->getKey())
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $product->branch_id))
             ->where(function ($query) use ($code): void {
                 $query->where('code', $code);
 
@@ -170,6 +171,7 @@ class InternalBarcodeService
 
         $duplicateProductExists = Product::query()
             ->whereKeyNot($product->getKey())
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $product->branch_id))
             ->where(function ($query) use ($barcode): void {
                 /*
                  * Kiểm tra trùng với mã sản phẩm.

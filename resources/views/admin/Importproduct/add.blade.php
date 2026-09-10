@@ -313,6 +313,19 @@
                                 {{ $productQueryWarning }}
                             </div>
                         @endif
+                        @if ($user->isAdministrator() && $branchId > 0)
+                            <div class="mb-3">
+                                <label for="import-branch" class="form-label fw-bold">Cửa hàng nhập hàng</label>
+                                <select id="import-branch" class="form-select">
+                                    @foreach ($branches as $branch)
+                                        <option value="{{ $branch->id }}" @selected((int) $branchId === (int) $branch->id)>
+                                            {{ $branch->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">Sản phẩm, danh mục, nhà cung cấp và kho bên dưới đều thuộc cửa hàng này.</small>
+                            </div>
+                        @endif
                         <div class="" style="min-height: 400px">
                             <div>
                                 <form action="">
@@ -622,7 +635,12 @@
             </div>
         </div>
     </div>
-    @push('script')
+@push('script')
+    <script>
+        document.getElementById('import-branch')?.addEventListener('change', function() {
+            window.location.href = '{{ route('admin.importproduct.add') }}?branch_id=' + encodeURIComponent(this.value)
+        })
+    </script>
         <script>
             const MAX_IMEI_LENGTH = @json(\App\Models\ProductImei::IMEI_MAX_LENGTH);
             const initialImeiValues = @json(old('imeis', []));

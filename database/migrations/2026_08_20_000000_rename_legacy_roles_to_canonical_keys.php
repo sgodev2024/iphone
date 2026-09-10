@@ -8,6 +8,12 @@ return new class extends Migration
     public function up(): void
     {
         DB::transaction(function (): void {
+            // A fresh database contains no role rows until DatabaseSeeder runs.
+            // Existing installations still receive the strict legacy-name checks below.
+            if (DB::table('roles')->doesntExist()) {
+                return;
+            }
+
             $this->renameRole(1, 'store', 'administrator');
             $this->renameRole(2, 'admin', 'admin_store');
         });
@@ -16,6 +22,10 @@ return new class extends Migration
     public function down(): void
     {
         DB::transaction(function (): void {
+            if (DB::table('roles')->doesntExist()) {
+                return;
+            }
+
             $this->renameRole(1, 'administrator', 'store');
             $this->renameRole(2, 'admin_store', 'admin');
         });

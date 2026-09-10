@@ -7,9 +7,11 @@ use App\Models\OrderDetail;
 use App\Models\Product;
 use App\Models\ProductImei;
 use App\Models\ProductStorage;
+use App\Models\Storage;
 use App\Services\SaleStorageResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 class BarcodeController extends Controller
@@ -33,10 +35,15 @@ class BarcodeController extends Controller
             $request->user(),
             $request->input('storage_id')
         );
+        $storageBranchId = (int) Storage::query()->whereKey($storageId)->value('branch_id');
 
         $imei = ProductImei::query()
             ->with(['product', 'importDetail.import'])
             ->where('storage_id', $storageId)
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->whereHas(
+                'product',
+                fn ($productQuery) => $productQuery->where('branch_id', $storageBranchId)
+            ))
             ->where(function ($query) use ($barcode) {
                 $query
                     ->where('barcode', $barcode)
@@ -57,6 +64,7 @@ class BarcodeController extends Controller
         }
 
         $product = Product::query()
+            ->when(Schema::hasColumn('products', 'branch_id'), fn ($query) => $query->where('branch_id', $storageBranchId))
             ->where('barcode', $barcode)
             ->first();
 

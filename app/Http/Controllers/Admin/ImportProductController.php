@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\Branch;
+use App\Models\Categories;
 use App\Models\Import;
 use App\Models\ImportCoupon;
 use App\Models\Company;
 use App\Models\User;
 use App\Models\Product;
+use App\Models\Storage;
 use App\Services\CategoryService;
 use App\Services\CompanyService;
 use App\Services\ImportProductService;
@@ -162,16 +165,25 @@ class ImportProductController extends Controller
     public function add(Request $request)
     {
         $title = 'Nhập hàng';
-        $ownerIds = $this->inventoryOwnerIds();
+        $user = Auth::user();
+        $branchId = $this->selectImportBranch($request);
+        $hasBranchCatalog = $branchId > 0;
+        $branches = $hasBranchCatalog && $user->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
         $productQueryWarning = null;
         $products = Product::query()
-            ->whereIn('user_id', $ownerIds)
+            ->when($hasBranchCatalog, fn ($query) => $query->where('branch_id', $branchId))
+            ->when(! $hasBranchCatalog, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()))
             ->latest()
             ->get();
-        $category = $this->categoryService->getCategoryAllStaff();
-        $user = Auth::user();
-        $supplier = $this->companyOptions($user);
-        $storage = $this->storageService->getAllStorage($user);
+        $category = $hasBranchCatalog
+            ? Categories::query()->where('branch_id', $branchId)->latest()->get()
+            : $this->categoryService->getCategoryAllStaff();
+        $supplier = $this->companyOptions($user, ['*'], $hasBranchCatalog ? $branchId : null);
+        $storage = $hasBranchCatalog
+            ? Storage::query()->visibleTo($user)->where('branch_id', $branchId)->orderBy('name')->get()
+            : $this->storageService->getAllStorage($user);
         $bankAccounts = collect();
 
         if (Schema::hasTable('accounts')
@@ -190,7 +202,8 @@ class ImportProductController extends Controller
             $this->clearCurrentImportItems();
 
             $preselectedProduct = Product::query()
-                ->whereIn('user_id', $ownerIds)
+                ->when($hasBranchCatalog, fn ($query) => $query->where('branch_id', $branchId))
+                ->when(! $hasBranchCatalog, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()))
                 ->find($request->integer('product_id'));
 
             if ($preselectedProduct) {
@@ -207,7 +220,7 @@ class ImportProductController extends Controller
             }
         }
 
-        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'bankAccounts', 'title', 'productQueryWarning'));
+        return view('admin.Importproduct.add', compact('products', 'user', 'supplier', 'category', 'storage', 'bankAccounts', 'title', 'productQueryWarning', 'branches', 'branchId'));
     }
 
     public function importadd(Request $request)
@@ -216,8 +229,10 @@ class ImportProductController extends Controller
             'product' => ['required', 'integer', 'exists:products,id'],
         ]);
         $productId = (int) $validated['product'];
+        $branchId = $this->catalogBranchId();
         $product = Product::query()
-            ->whereIn('user_id', $this->inventoryOwnerIds())
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($branchId <= 0, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()))
             ->find($productId);
 
         if (! $product) {
@@ -301,7 +316,10 @@ class ImportProductController extends Controller
 
     public function listImport()
     {
-        $category = $this->categoryService->getCategoryAllStaff();
+        $branchId = $this->catalogBranchId();
+        $category = $branchId > 0
+            ? Categories::query()->where('branch_id', $branchId)->latest()->get()
+            : $this->categoryService->getCategoryAllStaff();
         $payload = $this->currentImportPayload();
 
         return response()->json([
@@ -318,9 +336,18 @@ class ImportProductController extends Controller
             'selectedValues.*' => ['required', 'integer', 'exists:categories,id'],
         ]);
         $imports = $this->stagingImportQuery()->get();
+        $branchId = $this->catalogBranchId();
+        $allowedCategoryIds = Categories::query()
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->whereIn('id', $validated['selectedValues'])
+            ->pluck('id');
+        if ($allowedCategoryIds->count() !== count(array_unique($validated['selectedValues']))) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
         $products = Product::query()
-            ->whereIn('user_id', $this->inventoryOwnerIds())
-            ->whereIn('category_id', $validated['selectedValues'])
+            ->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($branchId <= 0, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()))
+            ->whereIn('category_id', $allowedCategoryIds)
             ->get();
 
         foreach ($products as $product) {
@@ -342,7 +369,9 @@ class ImportProductController extends Controller
         return Import::query()
             ->with('product')
             ->whereHas('product', function ($query) {
-                $query->whereIn('user_id', $this->inventoryOwnerIds());
+                $branchId = $this->catalogBranchId();
+                $query->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                    ->when($branchId <= 0, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()));
             })
             ->orderBy('id');
     }
@@ -375,7 +404,9 @@ class ImportProductController extends Controller
             ->where(function ($query) {
                 $query->whereDoesntHave('product')
                     ->orWhereHas('product', function ($productQuery) {
-                        $productQuery->whereIn('user_id', $this->inventoryOwnerIds());
+                        $branchId = $this->catalogBranchId();
+                        $productQuery->when($branchId > 0, fn ($query) => $query->where('branch_id', $branchId))
+                            ->when($branchId <= 0, fn ($query) => $query->whereIn('user_id', $this->inventoryOwnerIds()));
                     });
             })
             ->delete();
@@ -401,7 +432,7 @@ class ImportProductController extends Controller
         return [(int) $user->ownerId()];
     }
 
-    private function companyOptions(User $user, array $columns = ['*'])
+    private function companyOptions(User $user, array $columns = ['*'], ?int $branchId = null)
     {
         $query = Company::query();
 
@@ -411,7 +442,45 @@ class ImportProductController extends Controller
             $this->branchContext->scope($query, $user);
         }
 
+        if ($branchId !== null && Schema::hasColumn('companies', 'branch_id')) {
+            $query->where('branch_id', $branchId);
+        }
+
         return $query->orderBy('name')->get($columns);
+    }
+
+    private function selectImportBranch(Request $request): int
+    {
+        $user = $request->user();
+        if (! Schema::hasTable('branches')
+            || ! Schema::hasColumn('products', 'branch_id')
+            || ! Schema::hasColumn('categories', 'branch_id')
+        ) {
+            return 0;
+        }
+        $branchId = $user->isAdministrator()
+            ? ($request->filled('branch_id')
+                ? (int) $request->input('branch_id')
+                : (int) (session('import_branch_id') ?: Branch::query()->orderBy('id')->value('id')))
+            : $this->branchContext->branchId($user);
+
+        abort_unless($branchId > 0 && Branch::query()->whereKey($branchId)->exists(), Response::HTTP_NOT_FOUND);
+        session(['import_branch_id' => $branchId]);
+
+        return $branchId;
+    }
+
+    private function catalogBranchId(): int
+    {
+        $user = Auth::user();
+
+        if (! Schema::hasTable('branches') || ! Schema::hasColumn('products', 'branch_id')) {
+            return 0;
+        }
+
+        return $user->isAdministrator()
+            ? (int) session('import_branch_id', 0)
+            : $this->branchContext->branchId($user);
     }
 
     private function normalizePaymentStatus(mixed $value): ?string
