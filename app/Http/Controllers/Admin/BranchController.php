@@ -190,6 +190,7 @@ class BranchController extends Controller
         }
 
         $businessReferences = [
+            'brands' => 'Không thể xóa chi nhánh vì đang có thương hiệu.',
             'products' => 'Không thể xóa chi nhánh vì đang có sản phẩm.',
             'categories' => 'Không thể xóa chi nhánh vì đang có danh mục.',
             'orders' => 'Không thể xóa chi nhánh vì đang có đơn hàng.',

@@ -15,6 +15,25 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="row gy-4">
+                                @if ($hasBranchBrands && auth()->user()->isAdministrator())
+                                    <div class="col-md-12">
+                                        <label for="branch_id" class="form-label mb-1 fw-bold">
+                                            Cửa hàng <span class="text-danger">*</span>
+                                        </label>
+                                        <select name="branch_id" id="branch_id" class="form-select form-control"
+                                            @disabled(!empty($brand))>
+                                            <option value="">-- Chọn cửa hàng --</option>
+                                            @foreach ($branches as $branchOption)
+                                                <option value="{{ $branchOption->id }}" @selected((int) old('branch_id', optional($brand)->branch_id) === (int) $branchOption->id)>
+                                                    {{ $branchOption->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @if (!empty($brand))
+                                            <small class="text-muted">Cửa hàng của thương hiệu không thể thay đổi sau khi tạo.</small>
+                                        @endif
+                                    </div>
+                                @endif
                                 <div class="col-md-12">
                                     <label for="name" class="form-label mb-1 fw-bold">Tên thương hiệu</label>
                                     <input type="text" class="form-control" name="name"

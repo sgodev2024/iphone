@@ -31,6 +31,16 @@
                             </div>
 
                             <div class="d-flex justify-content-end align-items-center brand-search-row">
+                                @if ($hasBranchBrands && auth()->user()->isAdministrator())
+                                    <select id="branch-filter" class="form-select" style="min-width: 210px">
+                                        <option value="">Tất cả cửa hàng</option>
+                                        @foreach ($branches as $branch)
+                                            <option value="{{ $branch->id }}" @selected($branchId === (int) $branch->id)>
+                                                {{ $branch->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                @endif
                                 <input type="text" name="search" class="form-control me-2 brand-search-input" style="width: 300px;"
                                     placeholder="Tìm kiếm...">
 
@@ -265,6 +275,7 @@
         $(function() {
             let currentPage = 1;
             let searchText = '';
+            let branchId = $('#branch-filter').val() || '';
             let resetCooldown = false
 
             $(document).on('click', 'a.page-link', function(e) {
@@ -280,6 +291,11 @@
                 searchText = $(this).val();
                 fetchBrands(1, searchText); // reset về page 1 khi search
             }));
+
+            $('#branch-filter').on('change', function() {
+                branchId = $(this).val() || ''
+                fetchBrands(1, searchText)
+            })
 
             $('#btn-reset').click(function() {
                 if (resetCooldown) return // đang cooldown thì bỏ qua
@@ -317,7 +333,8 @@
                     method: 'GET',
                     data: {
                         page,
-                        s: search
+                        s: search,
+                        branch_id: branchId
                     },
                     success: (res) => {
                         $('#table-wrapper').html(res.html)

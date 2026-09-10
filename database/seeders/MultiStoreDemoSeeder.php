@@ -108,7 +108,7 @@ class MultiStoreDemoSeeder extends Seeder
             'product_imeis', 'product_storage',
             'supplier_debts_detail', 'supplier_debts', 'suppliers',
             'company_product', 'companies', 'clients',
-            'products', 'storages', 'branches',
+            'products', 'categories', 'brands', 'storages', 'branches',
             'carts', 'check_inventory', 'user_info', 'user_wallet',
             'sgo_transactions',
         ] as $table) {
@@ -345,23 +345,27 @@ class MultiStoreDemoSeeder extends Seeder
         $brandNames = ['Apple', 'Samsung', 'Xiaomi', 'Anker', 'Spigen'];
         $categories = [];
         $brands = [];
-        foreach ($categoryNames as $name) {
-            $existing = DB::table('categories')->where('name', $name)->first();
-            $categories[$name] = $existing
-                ? (int) $existing->id
-                : (int) DB::table('categories')->insertGetId([
-                    'name' => $name, 'description' => 'Danh mục demo SGO', 'status' => 1,
-                    'created_at' => now(), 'updated_at' => now(),
+        foreach ($this->branches as $branch => $branchId) {
+            foreach ($categoryNames as $name) {
+                $categories[$branch][$name] = (int) DB::table('categories')->insertGetId([
+                    'branch_id' => $branchId,
+                    'name' => $name,
+                    'description' => 'Danh mục demo SGO',
+                    'status' => 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
-        }
-        foreach ($brandNames as $name) {
-            $existing = DB::table('brands')->where('name', $name)->first();
-            $brands[$name] = $existing
-                ? (int) $existing->id
-                : (int) DB::table('brands')->insertGetId([
-                    'name' => $name, 'description' => 'Thương hiệu demo SGO', 'status' => 1,
-                    'created_at' => now(), 'updated_at' => now(),
+            }
+            foreach ($brandNames as $name) {
+                $brands[$branch][$name] = (int) DB::table('brands')->insertGetId([
+                    'branch_id' => $branchId,
+                    'name' => $name,
+                    'description' => 'Thương hiệu demo SGO',
+                    'status' => 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
+            }
         }
 
         $catalog = [
@@ -387,35 +391,39 @@ class MultiStoreDemoSeeder extends Seeder
             ['Cáp sạc Lightning', 'Apple', 'Sạc và cáp', 590000, 270000, 'imei'],
         ];
 
-        foreach ($catalog as $index => [$name, $brand, $category, $price, $buy, $tracking]) {
-            $id = DB::table('products')->insertGetId([
-                'user_id' => $this->users['administrator1'],
-                'name' => $name,
-                'code' => 'SGO-P'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
-                'barcode' => '893'.str_pad((string) (self::SEED + $index), 10, '0', STR_PAD_LEFT),
-                'price' => $price,
-                'price_buy' => $buy,
-                'thumbnail' => 'images/default-product.png',
-                'product_unit' => 'cái',
-                'quantity' => 0,
-                'inventory_tracking' => $tracking,
-                'description' => 'Sản phẩm demo đa chi nhánh SGO.',
-                'is_featured' => $index < 5 ? 1 : 0,
-                'is_new_arrival' => $index < 3 ? 1 : 0,
-                'category_id' => $categories[$category],
-                'brands_id' => $brands[$brand],
-                'supplier_id' => null,
-                'status' => 'published',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            $this->products[] = [
-                'id' => (int) $id,
-                'name' => $name,
-                'price' => $price,
-                'buy' => $buy,
-                'tracking' => $tracking,
-            ];
+        foreach ($this->branches as $branch => $branchId) {
+            foreach ($catalog as $index => [$name, $brand, $category, $price, $buy, $tracking]) {
+                $id = DB::table('products')->insertGetId([
+                    'branch_id' => $branchId,
+                    'user_id' => $this->users[$branch],
+                    'name' => $name,
+                    'code' => 'SGO-P'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
+                    'barcode' => '893'.str_pad((string) (self::SEED + $index), 10, '0', STR_PAD_LEFT),
+                    'price' => $price,
+                    'price_buy' => $buy,
+                    'thumbnail' => 'images/default-product.png',
+                    'product_unit' => 'cái',
+                    'quantity' => 0,
+                    'inventory_tracking' => $tracking,
+                    'description' => 'Sản phẩm demo riêng của Branch '.$branch.'.',
+                    'is_featured' => $index < 5 ? 1 : 0,
+                    'is_new_arrival' => $index < 3 ? 1 : 0,
+                    'category_id' => $categories[$branch][$category],
+                    'brands_id' => $brands[$branch][$brand],
+                    'supplier_id' => null,
+                    'status' => 'published',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $this->products[] = [
+                    'id' => (int) $id,
+                    'branch' => $branch,
+                    'name' => $name,
+                    'price' => $price,
+                    'buy' => $buy,
+                    'tracking' => $tracking,
+                ];
+            }
         }
     }
 
@@ -494,8 +502,11 @@ class MultiStoreDemoSeeder extends Seeder
     private function createInventoryAndImeis(): void
     {
         foreach (['caugiay' => 76, 'mydinh' => 50, 'hadong' => 32] as $branch => $target) {
+            $branchProducts = collect($this->products)
+                ->where('branch', $branch)
+                ->values();
             foreach ($this->storages[$branch] as $storageId) {
-                foreach ($this->products as $product) {
+                foreach ($branchProducts as $product) {
                     DB::table('product_storage')->insert([
                         'product_id' => $product['id'],
                         'storage_id' => $storageId,
@@ -509,7 +520,7 @@ class MultiStoreDemoSeeder extends Seeder
             $availableImeis = $branch === 'caugiay' ? 28 : ($branch === 'mydinh' ? 18 : 12);
             $soldImeis = $branch === 'caugiay' ? 4 : ($branch === 'mydinh' ? 3 : 2);
             $sequence = 0;
-            foreach ($this->products as $product) {
+            foreach ($branchProducts as $product) {
                 if ($product['tracking'] !== Product::INVENTORY_TRACKING_IMEI) {
                     continue;
                 }
@@ -542,11 +553,15 @@ class MultiStoreDemoSeeder extends Seeder
         $counts = ['caugiay' => 9, 'mydinh' => 6, 'hadong' => 5];
         $index = 1;
         foreach ($counts as $branch => $count) {
+            $branchProducts = collect($this->products)
+                ->where('branch', $branch)
+                ->values()
+                ->all();
             foreach (range(1, $count) as $n) {
                 $company = $this->companies[$branch][($n - 1) % count($this->companies[$branch])];
                 $catalogOffset = $branch === 'caugiay' ? 0 : ($branch === 'mydinh' ? 5 : 13);
                 $catalogSize = $branch === 'caugiay' ? 10 : ($branch === 'mydinh' ? 8 : 7);
-                $product = $this->products[$catalogOffset + (($n - 1) % $catalogSize)];
+                $product = $branchProducts[$catalogOffset + (($n - 1) % $catalogSize)];
                 // Hà Đông imports are accessory/device batches rather than
                 // single-item receipts, so every coupon remains in the
                 // realistic 10m–150m range while the Branch stays smaller.
@@ -635,6 +650,10 @@ class MultiStoreDemoSeeder extends Seeder
         $debtCustomers = ['caugiay' => 8, 'mydinh' => 5, 'hadong' => 4];
         foreach ($counts as $branch => $count) {
             $actor = User::query()->findOrFail($this->users[$branch]);
+            $branchProducts = collect($this->products)
+                ->where('branch', $branch)
+                ->values()
+                ->all();
             foreach (range(0, $count - 1) as $index) {
                 $date = $this->orderDate($branch, $index);
                 $clientId = $this->clients[$branch][$index % count($this->clients[$branch])];
@@ -646,7 +665,7 @@ class MultiStoreDemoSeeder extends Seeder
                     // Hà Đông: iPhone 13 leads the smaller store.
                     default => [4, 4, 4, 2, 3, 4, 5, 4, 6, 4][$index % 10],
                 };
-                $main = $this->products[$mainIndex];
+                $main = $branchProducts[$mainIndex];
                 $items = [[
                     'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
                     'product_id' => $main['id'],
@@ -654,7 +673,7 @@ class MultiStoreDemoSeeder extends Seeder
                     'unit_price' => $main['price'],
                 ]];
                 if ($index % 11 === 0) {
-                    $extra = $this->products[10 + ($index % 4)];
+                    $extra = $branchProducts[10 + ($index % 4)];
                     $items[] = [
                         'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
                         'product_id' => $extra['id'],
@@ -773,7 +792,10 @@ class MultiStoreDemoSeeder extends Seeder
             }
 
             $primaryStorage = $this->storages[$branch][0];
-            $imeiProducts = collect($this->products)->filter(fn ($product) => $product['tracking'] === Product::INVENTORY_TRACKING_IMEI)->values();
+            $imeiProducts = collect($this->products)
+                ->where('branch', $branch)
+                ->filter(fn ($product) => $product['tracking'] === Product::INVENTORY_TRACKING_IMEI)
+                ->values();
             $availableImeis = (int) DB::table('product_imeis as pi')
                 ->join('storages as s', 's.id', '=', 'pi.storage_id')
                 ->where('s.branch_id', $this->branches[$branch])
@@ -791,7 +813,10 @@ class MultiStoreDemoSeeder extends Seeder
                 DB::table('product_storage')->where('product_id', $product['id'])->where('storage_id', $primaryStorage)->update(['quantity' => $quantity, 'updated_at' => now()]);
             }
 
-            $quantityProducts = collect($this->products)->filter(fn ($product) => $product['tracking'] === Product::INVENTORY_TRACKING_QUANTITY)->values();
+            $quantityProducts = collect($this->products)
+                ->where('branch', $branch)
+                ->filter(fn ($product) => $product['tracking'] === Product::INVENTORY_TRACKING_QUANTITY)
+                ->values();
             foreach ($quantityProducts as $index => $product) {
                 $quantity = $index === $quantityProducts->count() - 1
                     ? $remaining
@@ -1004,6 +1029,17 @@ class MultiStoreDemoSeeder extends Seeder
 
     private function assertInvariants(): void
     {
+        if (DB::table('brands')->whereNull('branch_id')->exists()) {
+            throw new RuntimeException('A demo Brand is missing Branch ownership.');
+        }
+        $badProductBrands = DB::table('products as p')
+            ->join('brands as b', 'b.id', '=', 'p.brands_id')
+            ->whereColumn('p.branch_id', '<>', 'b.branch_id')
+            ->exists();
+        if ($badProductBrands) {
+            throw new RuntimeException('Product and Brand Branch mismatch detected.');
+        }
+
         foreach (DB::table('users')->where('role_id', 3)->whereIn('email', DB::table('users')->where('role_id', 3)->pluck('email'))->get() as $staff) {
             if ($staff->branch_id === null || $staff->storage_id === null) {
                 throw new RuntimeException('Staff '.$staff->email.' has incomplete Branch/Storage mapping.');
@@ -1065,7 +1101,8 @@ class MultiStoreDemoSeeder extends Seeder
             'counts' => [
                 'users' => DB::table('users')->count(), 'branches' => DB::table('branches')->count(),
                 'storages' => DB::table('storages')->count(), 'clients' => DB::table('clients')->count(),
-                'companies' => DB::table('companies')->count(), 'products' => DB::table('products')->count(),
+                'companies' => DB::table('companies')->count(), 'brands' => DB::table('brands')->count(),
+                'products' => DB::table('products')->count(),
                 'product_imeis' => DB::table('product_imeis')->count(), 'imports' => DB::table('import_coupon')->count(),
                 'orders' => DB::table('orders')->count(), 'returns' => DB::table('order_returns')->count(),
                 'cash_vouchers' => DB::table('cash_vouchers')->count(), 'bank_vouchers' => DB::table('bank_vouchers')->count(),

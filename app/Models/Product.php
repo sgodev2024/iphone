@@ -73,6 +73,20 @@ class Product extends Model
                     'category_id' => 'Sản phẩm và danh mục phải thuộc cùng một chi nhánh.',
                 ]);
             }
+
+            if ($product->brands_id !== null && Schema::hasColumn('brands', 'branch_id')) {
+                $brandBranchId = Brand::query()
+                    ->whereKey($product->brands_id)
+                    ->value('branch_id');
+
+                if ($brandBranchId === null
+                    || (int) $product->branch_id !== (int) $brandBranchId
+                ) {
+                    throw ValidationException::withMessages([
+                        'brands_id' => 'Sản phẩm và thương hiệu phải thuộc cùng một cửa hàng.',
+                    ]);
+                }
+            }
         });
     }
 

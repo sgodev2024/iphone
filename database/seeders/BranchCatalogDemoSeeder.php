@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
+use App\Models\Brand;
 use App\Models\Categories;
 use App\Models\Product;
 use App\Models\ProductImei;
@@ -72,11 +73,17 @@ class BranchCatalogDemoSeeder extends Seeder
                     ['description' => 'Danh mục riêng của cửa hàng', 'status' => true]
                 );
 
+                $brand = Brand::updateOrCreate(
+                    ['branch_id' => $branch->id, 'name' => 'Lux'],
+                    ['description' => 'Thương hiệu riêng của cửa hàng', 'status' => true]
+                );
+
                 $quantityProduct = Product::updateOrCreate(
                     ['branch_id' => $branch->id, 'code' => 'SP-DEMO'],
                     [
                         'user_id' => $storeAdmin->id,
                         'category_id' => $category->id,
+                        'brands_id' => $brand->id,
                         'barcode' => '8930000000001',
                         'name' => 'Phụ kiện mẫu',
                         'price' => 100000,
@@ -99,6 +106,7 @@ class BranchCatalogDemoSeeder extends Seeder
                     [
                         'user_id' => $storeAdmin->id,
                         'category_id' => $category->id,
+                        'brands_id' => $brand->id,
                         'barcode' => '8930000000002',
                         'name' => 'iPhone 15',
                         'price' => 10000000,

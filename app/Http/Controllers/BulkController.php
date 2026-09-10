@@ -87,16 +87,21 @@ class BulkController extends Controller
             }
         }
 
-        if (in_array($modelClass, [Product::class, Categories::class], true)) {
-            $permission = $modelClass === Product::class
-                ? ($type === 'delete' ? 'product.delete' : 'product.update')
-                : ($type === 'delete' ? 'category.delete' : 'category.update');
+        if (in_array($modelClass, [Product::class, Categories::class, Brand::class], true)) {
+            $permission = match ($modelClass) {
+                Product::class => $type === 'delete' ? 'product.delete' : 'product.update',
+                Categories::class => $type === 'delete' ? 'category.delete' : 'category.update',
+                Brand::class => 'brand.update',
+            };
             abort_unless(Auth::user()?->hasPermission($permission), Response::HTTP_FORBIDDEN);
 
             $allowedQuery = $modelClass::query();
-            $this->branchContext->scope($allowedQuery, Auth::user(), $modelClass === Product::class
-                ? 'products.branch_id'
-                : 'categories.branch_id');
+            $branchColumn = match ($modelClass) {
+                Product::class => 'products.branch_id',
+                Categories::class => 'categories.branch_id',
+                Brand::class => 'brands.branch_id',
+            };
+            $this->branchContext->scope($allowedQuery, Auth::user(), $branchColumn);
 
             if ($allowedQuery->whereIn('id', $ids)->count() !== count($ids)) {
                 abort(Response::HTTP_NOT_FOUND);
@@ -157,11 +162,16 @@ class BulkController extends Controller
 
         return transaction(function () use ($modelClass, $ids, $type) {
             $query = $modelClass::query()->whereIn('id', $ids);
-            if (in_array($modelClass, [Product::class, Categories::class], true)) {
+            if (in_array($modelClass, [Product::class, Categories::class, Brand::class], true)) {
+                $branchColumn = match ($modelClass) {
+                    Product::class => 'products.branch_id',
+                    Categories::class => 'categories.branch_id',
+                    Brand::class => 'brands.branch_id',
+                };
                 $this->branchContext->scope(
                     $query,
                     Auth::user(),
-                    $modelClass === Product::class ? 'products.branch_id' : 'categories.branch_id'
+                    $branchColumn
                 );
             }
 

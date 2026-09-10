@@ -9,7 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (DB::table('products')->exists() || DB::table('categories')->exists()) {
+        if (DB::table('products')->exists()
+            || DB::table('categories')->exists()
+            || DB::table('brands')->exists()
+        ) {
             throw new \RuntimeException(
                 'Branch-owned catalog migration requires an empty local/test catalog. '
                 .'Run a controlled local migrate:fresh; legacy branch ownership will not be guessed.'
@@ -23,6 +26,14 @@ return new class extends Migration
                 ->constrained('branches')
                 ->restrictOnDelete();
             $table->unique(['branch_id', 'name'], 'categories_branch_name_unique');
+        });
+
+        Schema::table('brands', function (Blueprint $table): void {
+            $table->foreignId('branch_id')
+                ->after('id')
+                ->constrained('branches')
+                ->restrictOnDelete();
+            $table->unique(['branch_id', 'name'], 'brands_branch_name_unique');
         });
 
         Schema::table('products', function (Blueprint $table): void {
@@ -51,6 +62,11 @@ return new class extends Migration
             $table->dropUnique('products_branch_barcode_unique');
             $table->dropConstrainedForeignId('branch_id');
             $table->unique('barcode', 'products_barcode_unique');
+        });
+
+        Schema::table('brands', function (Blueprint $table): void {
+            $table->dropUnique('brands_branch_name_unique');
+            $table->dropConstrainedForeignId('branch_id');
         });
 
         Schema::table('categories', function (Blueprint $table): void {

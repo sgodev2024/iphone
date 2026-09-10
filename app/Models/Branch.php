@@ -50,4 +50,9 @@ class Branch extends Model
     {
         return $this->hasMany(Categories::class);
     }
+
+    public function brands(): HasMany
+    {
+        return $this->hasMany(Brand::class);
+    }
 }

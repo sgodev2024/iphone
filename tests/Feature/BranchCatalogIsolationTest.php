@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Brand;
 use App\Models\Categories;
 use App\Models\ImportDetail;
 use App\Models\Product;
@@ -23,6 +24,180 @@ class BranchCatalogIsolationTest extends TestCase
     {
         parent::setUp();
         $this->createSchema();
+    }
+
+    public function test_brand_visibility_same_name_crud_and_create_are_branch_isolated(): void
+    {
+        [$administrator, $storeA, $storeB, $branchA, $branchB] = $this->actors();
+        $brandA = $this->brand($branchA, 'Lux', 'Brand A only');
+        $brandB = $this->brand($branchB, 'Lux', 'Brand B only');
+
+        $storeAHtml = $this->actingAs($storeA)->get('/admin/brand', [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()->json('html');
+        $this->assertStringContainsString('Brand A only', $storeAHtml);
+        $this->assertStringNotContainsString('Brand B only', $storeAHtml);
+
+        $storeBHtml = $this->actingAs($storeB)->get('/admin/brand', [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()->json('html');
+        $this->assertStringContainsString('Brand B only', $storeBHtml);
+        $this->assertStringNotContainsString('Brand A only', $storeBHtml);
+
+        $adminHtml = $this->actingAs($administrator)->get('/admin/brand', [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()->json('html');
+        $this->assertStringContainsString('Brand A only', $adminHtml);
+        $this->assertStringContainsString('Brand B only', $adminHtml);
+        $this->assertNotSame($brandA->id, $brandB->id);
+
+        $filteredAdminHtml = $this->actingAs($administrator)->get('/admin/brand?branch_id='.$branchA->id, [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()->json('html');
+        $this->assertStringContainsString('Brand A only', $filteredAdminHtml);
+        $this->assertStringNotContainsString('Brand B only', $filteredAdminHtml);
+
+        $this->actingAs($administrator)->postJson('/admin/brand', [
+            'name' => 'Lux',
+            'status' => 1,
+            'branch_id' => $branchA->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['name']);
+
+        $this->actingAs($storeA)->get('/admin/brand/create')
+            ->assertOk()
+            ->assertDontSee('name="branch_id"', false);
+        $this->actingAs($administrator)->get('/admin/brand/create')
+            ->assertOk()
+            ->assertSee('name="branch_id"', false);
+
+        $this->actingAs($storeA)->get("/admin/brand/{$brandB->id}/edit")->assertNotFound();
+        $this->actingAs($storeA)->putJson("/admin/brand/{$brandB->id}", [
+            'name' => 'Blocked update',
+            'status' => 1,
+        ])->assertNotFound();
+        $this->actingAs($storeA)->deleteJson("/admin/brand/{$brandB->id}")->assertNotFound();
+
+        $this->actingAs($storeA)->putJson("/admin/brand/{$brandA->id}", [
+            'name' => 'Lux A updated',
+            'description' => 'Updated only in A',
+            'status' => 1,
+            'branch_id' => $branchB->id,
+        ])->assertOk();
+        $brandA->refresh();
+        $this->assertSame($branchA->id, $brandA->branch_id);
+        $this->assertSame('Lux A updated', $brandA->name);
+        $this->assertSame('Lux', $brandB->fresh()->name);
+
+        try {
+            $brandA->update(['branch_id' => $branchB->id]);
+            $this->fail('A Brand was moved to another Branch after creation.');
+        } catch (ValidationException) {
+            $this->assertSame($branchA->id, $brandA->fresh()->branch_id);
+        }
+
+        $this->actingAs($storeA)->postJson('/admin/brand', [
+            'name' => 'Store-created',
+            'status' => 1,
+            'branch_id' => $branchB->id,
+        ])->assertCreated();
+        $storeCreated = Brand::query()->where('name', 'Store-created')->firstOrFail();
+        $this->assertSame($branchA->id, $storeCreated->branch_id);
+
+        $this->actingAs($administrator)->postJson('/admin/brand', [
+            'name' => 'Administrator-created',
+            'status' => 1,
+            'branch_id' => $branchB->id,
+        ])->assertCreated();
+        $this->assertDatabaseHas('brands', [
+            'name' => 'Administrator-created',
+            'branch_id' => $branchB->id,
+        ]);
+
+        $this->actingAs($storeA)->deleteJson("/admin/brand/{$storeCreated->id}")->assertOk();
+        $this->assertDatabaseMissing('brands', ['id' => $storeCreated->id]);
+    }
+
+    public function test_brand_bulk_actions_are_branch_scoped_and_atomic(): void
+    {
+        [, $storeA, , $branchA, $branchB] = $this->actors();
+        $brandA = $this->brand($branchA, 'A');
+        $brandB = $this->brand($branchB, 'B');
+
+        $this->actingAs($storeA)->postJson('/admin/bulk/status', [
+            'model' => 'Brand',
+            'ids' => [$brandA->id, $brandB->id],
+        ])->assertNotFound();
+        $this->assertTrue((bool) $brandA->fresh()->status);
+        $this->assertTrue((bool) $brandB->fresh()->status);
+
+        $this->actingAs($storeA)->postJson('/admin/bulk/delete', [
+            'model' => 'Brand',
+            'ids' => [$brandB->id],
+        ])->assertNotFound();
+        $this->assertDatabaseHas('brands', ['id' => $brandB->id]);
+    }
+
+    public function test_product_brand_invariant_and_form_options_follow_the_product_branch(): void
+    {
+        [$administrator, $storeA, , $branchA, $branchB] = $this->actors();
+        $categoryA = $this->category($branchA, 'Category A');
+        $brandA = $this->brand($branchA, 'Brand A option');
+        $brandB = $this->brand($branchB, 'Brand B option');
+        $productA = $this->product($storeA, $branchA, $categoryA, 'Product A', brand: $brandA);
+
+        try {
+            $productA->update(['brands_id' => $brandB->id]);
+            $this->fail('A cross-branch Product-Brand link was accepted.');
+        } catch (ValidationException) {
+            $this->assertSame($brandA->id, $productA->fresh()->brands_id);
+        }
+
+        $payload = [
+            'name' => 'Spoofed brand product',
+            'price' => 100,
+            'price_buy' => 150,
+            'product_unit' => 'Piece',
+            'category_id' => $categoryA->id,
+            'brands_id' => $brandB->id,
+            'inventory_tracking' => Product::INVENTORY_TRACKING_QUANTITY,
+            'status' => 'published',
+        ];
+        $this->actingAs($storeA)->postJson('/admin/products', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['brands_id']);
+        $this->actingAs($storeA)->putJson("/admin/products/{$productA->id}", $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['brands_id']);
+
+        $this->actingAs($storeA)->get('/admin/products/create')
+            ->assertOk()
+            ->assertSee('Brand A option')
+            ->assertDontSee('Brand B option');
+        $this->actingAs($administrator)->get('/admin/products/create?branch_id='.$branchA->id)
+            ->assertOk()
+            ->assertSee('Brand A option')
+            ->assertDontSee('Brand B option');
+        $this->actingAs($administrator)->get('/admin/products/create?branch_id='.$branchB->id)
+            ->assertOk()
+            ->assertSee('Brand B option')
+            ->assertDontSee('Brand A option');
+    }
+
+    public function test_branch_delete_is_blocked_while_a_brand_exists(): void
+    {
+        [$administrator, , , $branchA] = $this->actors();
+        $this->brand($branchA, 'Deletion blocker');
+
+        $this->actingAs($administrator)
+            ->deleteJson("/admin/branches/{$branchA->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['branch']);
+
+        $this->assertDatabaseHas('branches', ['id' => $branchA->id]);
     }
 
     public function test_admin_store_catalog_reads_and_mutations_are_branch_scoped_while_administrator_is_global(): void
@@ -170,6 +345,8 @@ class BranchCatalogIsolationTest extends TestCase
         $branchB = Branch::create(['user_id' => $administrator->id, 'name' => 'B', 'address' => 'B']);
         $storeA->update(['branch_id' => $branchA->id]);
         $storeB->update(['branch_id' => $branchB->id]);
+        $branchA->update(['admin_store_user_id' => $storeA->id]);
+        $branchB->update(['admin_store_user_id' => $storeB->id]);
 
         return [$administrator, $storeA, $storeB, $branchA, $branchB];
     }
@@ -195,18 +372,30 @@ class BranchCatalogIsolationTest extends TestCase
         ]);
     }
 
+    private function brand(Branch $branch, string $name, ?string $description = null): Brand
+    {
+        return Brand::create([
+            'branch_id' => $branch->id,
+            'name' => $name,
+            'description' => $description,
+            'status' => true,
+        ]);
+    }
+
     private function product(
         User $creator,
         Branch $branch,
         Categories $category,
         string $name,
         ?string $code = null,
-        ?string $barcode = null
+        ?string $barcode = null,
+        ?Brand $brand = null
     ): Product {
         return Product::create([
             'branch_id' => $branch->id,
             'user_id' => $creator->id,
             'category_id' => $category->id,
+            'brands_id' => $brand?->id,
             'code' => $code ?? 'SP-'.$branch->id,
             'barcode' => $barcode ?? '893000000000'.$branch->id,
             'name' => $name,
@@ -245,6 +434,12 @@ class BranchCatalogIsolationTest extends TestCase
             $table->unsignedBigInteger('user_id')->nullable();
             $table->timestamps();
         });
+        Schema::create('user_info', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('img_url')->nullable();
+            $table->timestamps();
+        });
         Schema::create('branches', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id');
@@ -268,8 +463,13 @@ class BranchCatalogIsolationTest extends TestCase
         });
         Schema::create('brands', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('branch_id');
             $table->string('name');
+            $table->string('logo')->nullable();
+            $table->text('description')->nullable();
+            $table->boolean('status')->default(true);
             $table->timestamps();
+            $table->unique(['branch_id', 'name']);
         });
         Schema::create('products', function (Blueprint $table): void {
             $table->id();
@@ -342,6 +542,12 @@ class BranchCatalogIsolationTest extends TestCase
         Schema::create('order_details', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('product_id');
+            $table->timestamps();
+        });
+        Schema::create('orders', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->boolean('notification')->default(false);
             $table->timestamps();
         });
     }

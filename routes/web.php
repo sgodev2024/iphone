@@ -488,6 +488,10 @@ Route::middleware(['auth'])
                 Route::put('{id}', 'update')
                     ->middleware('permission:brand.update')
                     ->name('update');
+
+                Route::delete('{id}', 'delete')
+                    ->middleware('permission:brand.update')
+                    ->name('delete');
             });
 
         /*

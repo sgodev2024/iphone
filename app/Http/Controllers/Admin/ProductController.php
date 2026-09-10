@@ -99,6 +99,7 @@ class ProductController extends Controller
         $title = 'Thêm sản phẩm';
         $user = $request->user();
         $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
+        $hasBranchBrands = Schema::hasColumn('brands', 'branch_id');
         $branches = $hasBranchCatalog && $user->isAdministrator()
             ? Branch::query()->orderBy('name')->get(['id', 'name'])
             : collect();
@@ -114,7 +115,12 @@ class ProductController extends Controller
             ->latest()
             ->pluck('name', 'id')
             ->toArray();
-        $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
+        $brands = Brand::query()
+            ->when($hasBranchBrands && $branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($hasBranchBrands && $branchId === null, fn ($query) => $query->whereRaw('1 = 0'))
+            ->latest()
+            ->pluck('name', 'id')
+            ->toArray();
         $product = null;
         $canChangeInventoryTracking = true;
         $inventoryTrackingLockedMessage = null;
@@ -171,6 +177,7 @@ class ProductController extends Controller
     {
         $user = Auth::user();
         $hasBranchCatalog = Schema::hasColumn('products', 'branch_id') && Schema::hasColumn('categories', 'branch_id') && Schema::hasTable('branches');
+        $hasBranchBrands = Schema::hasColumn('brands', 'branch_id');
         $productQuery = Product::query()->with(['category', 'brand']);
         if ($hasBranchCatalog) {
             $productQuery->with('branch');
@@ -188,7 +195,11 @@ class ProductController extends Controller
             ? Branch::query()->whereKey($product->branch_id)->get(['id', 'name'])
             : collect();
         $branchId = $hasBranchCatalog ? (int) $product->branch_id : null;
-        $brands = Brand::query()->latest()->pluck('name', 'id')->toArray();
+        $brands = Brand::query()
+            ->when($hasBranchBrands, fn ($query) => $query->where('branch_id', $product->branch_id))
+            ->latest()
+            ->pluck('name', 'id')
+            ->toArray();
         $canChangeInventoryTracking = $product->canChangeInventoryTracking();
         $inventoryTrackingLockedMessage = $canChangeInventoryTracking
             ? null

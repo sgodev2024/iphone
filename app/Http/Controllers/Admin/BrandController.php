@@ -4,29 +4,36 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
-use App\Services\BrandService;
-use App\Services\CompanyService;
-use App\Services\SupplierService;
-use Exception;
+use App\Models\Branch;
+use App\Support\BranchContext;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class BrandController extends Controller
 {
-    //
-    protected $brandService;
-    protected $supplierService;
-    protected $companyService;
-    public function __construct(BrandService $brandService, SupplierService $supplierService, CompanyService $companyService)
-    {
-        $this->brandService = $brandService;
-        $this->supplierService = $supplierService;
-        $this->companyService = $companyService;
-    }
+    public function __construct(
+        private readonly BranchContext $branchContext
+    ) {}
     public function index(Request $request)
     {
+        $user = $request->user();
+        $hasBranchBrands = $this->hasBranchOwnership();
+        $branches = $hasBranchBrands && $user->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+        $branchId = $hasBranchBrands && $user->isAdministrator() && $request->filled('branch_id')
+            ? (int) $request->input('branch_id')
+            : ($hasBranchBrands && $user->branch_id ? (int) $user->branch_id : null);
+
+        if ($hasBranchBrands && $user->isAdministrator() && $branchId !== null) {
+            abort_unless(
+                Branch::query()->whereKey($branchId)->exists(),
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
         if ($request->ajax()) {
             $searchText = $request->query('s');
 
@@ -34,28 +41,48 @@ class BrandController extends Controller
                 ->when(!empty($searchText), function ($query) use ($searchText) {
                     $query->where('name', 'like', "%{$searchText}%");
                 })
-                ->latest()
-                ->paginate(10);
+                ->when($hasBranchBrands, fn ($query) => $query->with('branch:id,name'))
+                ->latest();
 
-            $html = view('admin.brand.table', compact('brands'))->render();
+            $this->branchContext->scope($brands, $user, 'brands.branch_id');
+            if ($hasBranchBrands && $user->isAdministrator() && $branchId !== null) {
+                $brands->where('brands.branch_id', $branchId);
+            }
+
+            $brands = $brands->paginate(10)->appends($request->query());
+            $html = view('admin.brand.table', compact('brands', 'user', 'hasBranchBrands'))->render();
 
             return response()->json(['html' => $html]);
         }
 
-        return view('admin.brand.index');
+        $title = 'Thương hiệu';
+
+        return view('admin.brand.index', compact('title', 'branches', 'branchId', 'hasBranchBrands'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $title = 'Tạo mới thương hiệu';
         $brand = null;
-        return view('admin.brand.form', compact('title', 'brand'));
+        $hasBranchBrands = $this->hasBranchOwnership();
+        $branches = $hasBranchBrands && $request->user()->isAdministrator()
+            ? Branch::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+
+        return view('admin.brand.form', compact('title', 'brand', 'branches', 'hasBranchBrands'));
     }
 
     public function store(Request $request)
     {
         $credentials = $this->validateRequest($request);
         $uploadedLogo = null;
+
+        if ($this->hasBranchOwnership()) {
+            $credentials['branch_id'] = $this->branchContext->resolveWriteBranch(
+                $request->user(),
+                $request->user()->isAdministrator() ? (int) $request->input('branch_id') : null
+            );
+        }
 
         return transaction(function () use ($request, $credentials, &$uploadedLogo) {
             if ($request->hasFile('logo')) {
@@ -71,20 +98,24 @@ class BrandController extends Controller
         });
     }
 
-    public function edit(string $id)
+    public function edit(Request $request, string $id)
     {
-
-        $brand = Brand::findOrFail($id);
+        $brand = $this->visibleBrandQuery($request)->findOrFail($id);
         $title = "Cập nhật thương hiệu - {$brand->name}";
 
-        return view('admin.brand.form', compact('title', 'brand'));
+        $hasBranchBrands = $this->hasBranchOwnership();
+        $branches = $hasBranchBrands && $request->user()->isAdministrator()
+            ? Branch::query()->whereKey($brand->branch_id)->get(['id', 'name'])
+            : collect();
+
+        return view('admin.brand.form', compact('title', 'brand', 'branches', 'hasBranchBrands'));
     }
 
     public function update(Request $request, string $id)
     {
-        if (!$brand = Brand::query()->find($id)) return errorResponse("Không tìm thấy dữ liệu trên hệ thống!", 404);
-
-        $credentials = $this->validateRequest($request, $id);
+        $brand = $this->visibleBrandQuery($request)->findOrFail($id);
+        $credentials = $this->validateRequest($request, $brand);
+        unset($credentials['branch_id']);
 
         return transaction(function () use ($brand, $credentials, $request) {
 
@@ -104,31 +135,65 @@ class BrandController extends Controller
         });
     }
 
-    public function delete($id)
+    public function delete(Request $request, string $id)
     {
-        try {
-            $this->brandService->deleteBrand($id);
-            $brands = Brand::orderByDesc('created_at')->paginate(10);
-            $view = view('admin.brand.table', compact('brands'))->render();
-            return response()->json(['success' => true, 'message' => 'Xoá thương hiệu thành công!', 'table' => $view]);
-        } catch (Exception $e) {
-            Log::error('Failed to delete brand: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Không thể xóa thương hiệu']);
-        }
+        $brand = $this->visibleBrandQuery($request)->findOrFail($id);
+        $brand->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Xóa thương hiệu thành công!',
+        ]);
     }
 
-    private function validateRequest($request, $id = null)
+    private function validateRequest(Request $request, ?Brand $brand = null): array
     {
-        return $this->validate($request, [
-            'name' => ['required', 'string', 'max:255', Rule::unique('brands', 'name')->ignore($id)],
-            'description' => 'nullable|string',
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'status' => 'required|in:0,1'
-        ], __('request.messages'), [
+        $branchId = $brand?->branch_id;
+        if ($branchId === null && $this->hasBranchOwnership()) {
+            $branchId = $request->user()->isAdministrator()
+                ? $request->input('branch_id')
+                : $request->user()->branch_id;
+        }
+
+        $uniqueName = Rule::unique('brands', 'name')->ignore($brand?->id);
+        if ($this->hasBranchOwnership()) {
+            $uniqueName->where(fn ($query) => $branchId
+                ? $query->where('branch_id', (int) $branchId)
+                : $query->whereRaw('1 = 0'));
+        }
+
+        $rules = [
+            'name' => ['required', 'string', 'max:255', $uniqueName],
+            'description' => ['nullable', 'string'],
+            'logo' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:2048'],
+            'status' => ['required', Rule::in([1, 0, '1', '0'])],
+        ];
+
+        if ($this->hasBranchOwnership()) {
+            $rules['branch_id'] = $request->user()->isAdministrator() && ! $brand
+                ? ['required', 'integer', 'exists:branches,id']
+                : ['nullable'];
+        }
+
+        return $this->validate($request, $rules, __('request.messages'), [
             'name' => 'Tên thương hiệu',
             'description' => 'Mô tả',
             'logo' => 'Logo',
-            'status' => 'Trạng thái'
+            'status' => 'Trạng thái',
+            'branch_id' => 'Cửa hàng',
         ]);
+    }
+
+    private function visibleBrandQuery(Request $request)
+    {
+        $query = Brand::query();
+        $this->branchContext->scope($query, $request->user(), 'brands.branch_id');
+
+        return $query;
+    }
+
+    private function hasBranchOwnership(): bool
+    {
+        return Schema::hasColumn('brands', 'branch_id') && Schema::hasTable('branches');
     }
 }

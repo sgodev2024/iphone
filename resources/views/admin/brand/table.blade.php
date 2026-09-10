@@ -6,6 +6,9 @@
                 <th class="brand-col-date" style="width: 14%"># | Ngày tạo</th>
                 <th class="brand-col-logo" style="width: 10%">Logo</th>
                 <th class="brand-col-info" style="width: 25%">Thông tin</th>
+                @if ($hasBranchBrands && $user->isAdministrator())
+                    <th style="width: 16%">Cửa hàng</th>
+                @endif
                 <th class="brand-col-desc">Mô tả</th>
                 <th class="brand-col-status" style="width: 12%">Trạng thái</th>
                 <th class="text-center brand-col-actions" style="width: 12%">Hành động</th>
@@ -30,6 +33,9 @@
                         {{-- <div class="text-muted small">{{ $brand->email }}</div>
                         <div class="text-muted small">{{ $brand->phone }}</div> --}}
                     </td>
+                    @if ($hasBranchBrands && $user->isAdministrator())
+                        <td>{{ $brand->branch?->name }}</td>
+                    @endif
                     <td class="brand-col-desc">
                         <div class="text-truncate brand-description" style="max-width: 200px;" title="{{ $brand->description }}">
                             {{ $brand->description ?? '-' }}
@@ -55,7 +61,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td class="text-center" colspan="7">Không có thương hiệu</td>
+                    <td class="text-center" colspan="{{ $hasBranchBrands && $user->isAdministrator() ? 8 : 7 }}">Không có thương hiệu</td>
                 </tr>
             @endforelse
         </tbody>

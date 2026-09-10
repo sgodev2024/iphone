@@ -22,7 +22,6 @@ class ProductRequest extends FormRequest
             'price' => ['required', 'numeric', 'min:0'],
             'price_buy' => ['required', 'numeric', 'min:0'],
             'product_unit' => ['required', 'string', 'max:50'],
-            'brands_id' => ['nullable', 'exists:brands,id'],
             'inventory_tracking' => ['required', Rule::in(Product::INVENTORY_TRACKING_OPTIONS)],
             'description' => ['nullable', 'string'],
             'is_featured' => ['nullable', 'in:1'],
@@ -32,6 +31,7 @@ class ProductRequest extends FormRequest
 
         if (! Schema::hasColumn('products', 'branch_id')) {
             $rules['category_id'] = ['required', 'exists:categories,id'];
+            $rules['brands_id'] = ['nullable', 'exists:brands,id'];
 
             return $rules;
         }
@@ -65,6 +65,16 @@ class ProductRequest extends FormRequest
                     : $query->whereRaw('1 = 0')
             ),
         ];
+        $rules['brands_id'] = ['nullable'];
+        $brandExists = Rule::exists('brands', 'id');
+        if (Schema::hasColumn('brands', 'branch_id')) {
+            $brandExists->where(
+                fn ($query) => $branchId
+                    ? $query->where('branch_id', (int) $branchId)
+                    : $query->whereRaw('1 = 0')
+            );
+        }
+        $rules['brands_id'][] = $brandExists;
 
         return $rules;
     }
