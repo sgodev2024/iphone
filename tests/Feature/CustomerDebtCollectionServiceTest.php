@@ -1010,7 +1010,13 @@ class CustomerDebtCollectionServiceTest extends TestCase
         Schema::table('transactions', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
         Schema::table('customer_debt_collections', fn (Blueprint $table) => $table->unsignedBigInteger('branch_id')->nullable());
 
-        $this->client->update(['branch_id' => 101, 'name' => 'Customer Branch A']);
+        // Simulate historical backfill through the query builder; runtime model updates
+        // intentionally keep Client.branch_id immutable after creation.
+        DB::table('clients')->where('id', $this->client->id)->update([
+            'branch_id' => 101,
+            'name' => 'Customer Branch A',
+        ]);
+        $this->client->refresh();
         $clientB = Client::create([
             'user_id' => $this->otherOwner->id,
             'branch_id' => 202,

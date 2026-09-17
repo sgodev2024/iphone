@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use LogicException;
 
 class Client extends Model
 {
@@ -30,6 +31,12 @@ class Client extends Model
         static::creating(function ($model) {
             $model->code = generateCode('clients', 'KH');
         });
+
+        static::updating(function ($model): void {
+            if ($model->isDirty('branch_id')) {
+                throw new LogicException('Cửa hàng của khách hàng không thể thay đổi sau khi tạo.');
+            }
+        });
     }
 
     public function customerDebtCollections()
@@ -40,5 +47,10 @@ class Client extends Model
     public function branch()
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
     }
 }

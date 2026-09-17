@@ -40,7 +40,7 @@
                                         </div>
                                     </div>
                                     <div class="col-sm-12 col-md-6">
-                                        <form action="{{ route('admin.client.filter') }}" method="GET">
+                                        <form action="{{ route('admin.company.index') }}" method="GET">
                                             <div class="dataTables_filter">
                                                 <label>Tìm kiếm</label>
                                                 <input type="text" name="phone" class="form-control form-control-sm"

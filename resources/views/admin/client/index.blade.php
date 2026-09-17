@@ -1,488 +1,219 @@
 @extends('admin.layout.index')
+
 @section('content')
     <style>
-        /* Client list only: keep responsive fixes isolated from other admin pages. */
-        .client-page,
-        .client-page .page-inner,
-        .client-page #table-wrapper {
-            min-width: 0;
-            max-width: 100%;
-        }
-
-        .client-page .client-pagination-mobile-label,
-        .client-page .pagination-arrow-mobile {
-            display: none;
-        }
-
-        .client-page .client-table-hint {
-            display: none;
-        }
-
-        .client-page .client-table-scroll {
-            width: 100%;
-            max-width: 100%;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-        }
-
+        .client-page, .client-page #table-wrapper { min-width: 0; max-width: 100%; }
+        .client-table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .client-table { min-width: 980px; }
+        .client-row-actions { white-space: nowrap; }
         @media (max-width: 767.98px) {
-            .client-page {
-                width: 100%;
-                max-width: 100%;
-                min-width: 0;
-                padding-left: 0 !important;
-                padding-right: 0 !important;
-                overflow-x: visible;
-            }
-
-            .client-page > .breadcrumb,
-            .client-page > nav {
-                width: 100%;
-                max-width: 100%;
-                min-width: 0;
-            }
-
-            .client-page > .row {
-                margin-left: 0;
-                margin-right: 0;
-            }
-
-            .client-page > .row > .col-md-12 {
-                padding-left: 0;
-                padding-right: 0;
-                min-width: 0;
-            }
-
-            .client-page .card,
-            .client-page .card-body,
-            .client-page .card-header {
-                width: 100%;
-                max-width: 100%;
-                min-width: 0;
-            }
-
-            .client-page .client-toolbar {
-                display: grid !important;
-                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-                gap: 8px;
-                align-items: stretch;
-                justify-content: normal !important;
-                padding: 12px;
-            }
-
-            .client-page .client-toolbar__main {
-                display: contents !important;
-                min-width: 0;
-            }
-
-            .client-page .client-toolbar__search {
-                display: flex !important;
-                grid-column: 1 / -1;
-                grid-row: 1;
-                width: 100%;
-                min-width: 0;
-                gap: 8px;
-                align-items: stretch !important;
-                justify-content: normal !important;
-            }
-
-            .client-page .client-toolbar__search input {
-                flex: 1 1 auto;
-                width: 100% !important;
-                min-width: 0;
-                max-width: none;
-                margin-right: 0 !important;
-            }
-
-            .client-page .client-toolbar__actions {
-                display: flex !important;
-                grid-column: 1;
-                grid-row: 2;
-                width: 100%;
-                min-width: 0;
-                max-width: none;
-            }
-
-            .client-page .client-toolbar__actions > .dropdown-toggle,
-            .client-page .client-export-btn,
-            .client-page #btn-reset {
-                height: 40px;
-                min-height: 40px;
-                white-space: nowrap;
-            }
-
-            .client-page .client-toolbar__actions > .dropdown-toggle {
-                flex: 1 1 auto;
-                width: 100%;
-                min-width: 0;
-                overflow: visible;
-                text-overflow: clip;
-            }
-
-            .client-page .client-export-btn {
-                display: inline-flex !important;
-                grid-column: 2;
-                grid-row: 2;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-                width: 100%;
-                min-width: 0;
-                max-width: none;
-                margin-left: 0 !important;
-                padding-left: 10px;
-                padding-right: 10px;
-                overflow: visible;
-                text-overflow: clip;
-            }
-
-            .client-page #btn-reset {
-                flex: 0 0 42px;
-                width: 42px;
-                min-width: 42px;
-                max-width: 42px;
-                padding: 0;
-                display: inline-flex !important;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .client-page #table-wrapper {
-                width: 100%;
-                max-width: 100%;
-                min-width: 0;
-            }
-
-            .client-page .client-table-hint {
-                display: block;
-                margin: 0 0 6px;
-                color: #6c757d;
-                font-size: 12px;
-                line-height: 18px;
-            }
-
-            .client-page .client-table-scroll {
-                width: 100%;
-                max-width: 100%;
-                min-width: 0;
-                overflow-x: auto;
-                overflow-y: hidden;
-                -webkit-overflow-scrolling: touch;
-            }
-
-            .client-page .client-table-scroll > .client-table {
-                width: 100%;
-                min-width: 1140px;
-                table-layout: fixed;
-                margin-top: 0 !important;
-            }
-
-            .client-page .client-table th,
-            .client-page .client-table td {
-                vertical-align: middle;
-                padding: 10px 12px;
-            }
-
-            .client-page .client-table th:nth-child(1),
-            .client-page .client-table td:nth-child(1) {
-                width: 52px;
-            }
-
-            .client-page .client-table th:nth-child(2),
-            .client-page .client-table td:nth-child(2) {
-                width: 150px;
-                white-space: nowrap;
-            }
-
-            .client-page .client-table th:nth-child(3),
-            .client-page .client-table td:nth-child(3) {
-                width: 190px;
-                min-width: 190px;
-            }
-
-            .client-page .client-table th:nth-child(4),
-            .client-page .client-table td:nth-child(4) {
-                width: 150px;
-                white-space: nowrap;
-            }
-
-            .client-page .client-table th:nth-child(5),
-            .client-page .client-table td:nth-child(5) {
-                width: 220px;
-                white-space: normal;
-                word-break: break-word;
-                overflow-wrap: anywhere;
-            }
-
-            .client-page .client-table th:nth-child(6),
-            .client-page .client-table td:nth-child(6) {
-                width: 260px;
-                min-width: 260px;
-                white-space: normal;
-                word-break: normal;
-                overflow-wrap: break-word;
-            }
-
-            .client-page .client-table th:nth-child(7),
-            .client-page .client-table td:nth-child(7) {
-                width: 120px;
-                white-space: nowrap;
-            }
-
-            .client-page .client-row-actions {
-                display: inline-flex;
-                flex-wrap: nowrap;
-                align-items: center;
-                justify-content: center;
-                gap: 5px;
-                white-space: nowrap;
-            }
-
-            .client-page .client-row-actions .btn {
-                width: 36px;
-                height: 36px;
-                min-width: 36px;
-                padding: 0;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            .client-page #table-wrapper #pagination .pagination {
-                flex-wrap: nowrap;
-                gap: 6px !important;
-                margin-bottom: 0;
-            }
-
-            .client-page #table-wrapper #pagination .client-pagination-page,
-            .client-page #table-wrapper #pagination .client-pagination-ellipsis {
-                display: none;
-            }
-
-            .client-page #table-wrapper #pagination .client-pagination-mobile-label {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 38px;
-                padding: 0 4px;
-                color: #495057;
-                font-size: 14px;
-                white-space: nowrap;
-            }
-
-            .client-page #table-wrapper #pagination .pagination-arrow-desktop {
-                display: none;
-            }
-
-            .client-page #table-wrapper #pagination .pagination-arrow-mobile {
-                display: inline;
-            }
-        }
-
-        @media (max-width: 575.98px) {
-            .client-page {
-                padding-left: 10px !important;
-                padding-right: 10px !important;
-            }
+            .client-toolbar { align-items: stretch !important; }
+            .client-toolbar > * { width: 100%; }
+            .client-table-hint { display: block !important; }
         }
     </style>
 
     <div class="page-inner client-page">
-
         <x-breadcrumb :items="[['label' => 'Khách hàng']]" />
 
-        <div class="row client-page__row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center client-toolbar">
-                        <div class="d-flex justify-content-between align-items-center gap-2 client-toolbar__main">
-                            <div class="btn-group client-toolbar__actions">
-                                <button type="button" class="btn btn-outline-secondary dropdown-toggle"
-                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                    Thao tác
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="#" id="bulk-delete">
-                                            <i class="fa-solid fa-ban me-2"></i> Ngừng hoạt động đã chọn
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex flex-wrap gap-2 justify-content-between client-toolbar">
+                    <div class="d-flex flex-wrap gap-2 flex-grow-1">
+                        <input type="search" name="search" class="form-control" style="max-width: 320px"
+                            placeholder="Tìm theo tên, số điện thoại, email">
 
-                            <div class="d-flex justify-content-end align-items-center client-toolbar__search">
-                                <input type="text" name="search" class="form-control me-2" style="width: 300px;"
-                                    placeholder="Tìm kiếm...">
+                        @if (auth()->user()->isAdministrator())
+                            <select id="branch-filter" class="form-select" style="max-width: 260px">
+                                <option value="">Tất cả cửa hàng</option>
+                                @foreach ($branches as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        @endif
 
-                                <button type="button" class="btn" id="btn-reset" title="Làm mới" aria-label="Làm mới"> <i
-                                        class="fa-solid fa-rotate"></i></button>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-primary client-export-btn" id="btn-export">
-                            <i class="fa-solid fa-file-excel"></i> Export Excel
+                        <button type="button" class="btn btn-outline-secondary" id="btn-reset" title="Làm mới">
+                            <i class="fa-solid fa-rotate"></i>
                         </button>
-
-
                     </div>
-                    <div class="card-body">
 
-                        <div id="table-wrapper">
-
-                        </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @can('client.create')
+                            <a href="{{ route('admin.client.create') }}" class="btn btn-primary">
+                                <i class="fa-solid fa-plus me-1"></i> Thêm khách hàng
+                            </a>
+                        @endcan
+                        @can('client.import')
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+                                data-bs-target="#client-import-modal">
+                                <i class="fa-solid fa-file-import me-1"></i> Import Excel
+                            </button>
+                        @endcan
+                        @can('client.export')
+                            <button type="button" class="btn btn-outline-success" id="btn-export">
+                                <i class="fa-solid fa-file-excel me-1"></i> Xuất Excel
+                            </button>
+                        @endcan
                     </div>
                 </div>
             </div>
+            <div class="card-body">
+                <div id="table-wrapper">
+                    <div class="text-center py-4 text-muted">Đang tải danh sách khách hàng...</div>
+                </div>
+            </div>
         </div>
+        @can('client.import')
+            <div class="modal fade" id="client-import-modal" tabindex="-1" aria-labelledby="client-import-title"
+                aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form action="{{ route('admin.client.import') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="client-import-title">Import khách hàng</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                            </div>
+                            <div class="modal-body">
+                                @if ($errors->any())
+                                    <div class="alert alert-danger">
+                                        @foreach ($errors->all() as $error)
+                                            <div>{{ $error }}</div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                @if (auth()->user()->isAdministrator())
+                                    <div class="mb-3">
+                                        <label for="import-branch-id" class="form-label">Cửa hàng đích <span class="text-danger">*</span></label>
+                                        <select id="import-branch-id" name="branch_id" class="form-select" required>
+                                            <option value="">-- Chọn cửa hàng --</option>
+                                            @foreach ($branches as $branch)
+                                                <option value="{{ $branch->id }}" @selected((string) old('branch_id') === (string) $branch->id)>
+                                                    {{ $branch->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+                                <div class="mb-3">
+                                    <label for="client-import-file" class="form-label">File Excel (.xlsx, .xls)</label>
+                                    <input type="file" id="client-import-file" name="file" class="form-control"
+                                        accept=".xlsx,.xls" required>
+                                </div>
+                                <a href="{{ route('admin.client.import.template') }}">
+                                    <i class="fa-solid fa-download me-1"></i> Tải file mẫu
+                                </a>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+                                <button type="submit" class="btn btn-primary">Import Excel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endcan
     </div>
 @endsection
 
 @push('script')
     <script>
         $(function() {
+            @if ($errors->has('file') || $errors->has('branch_id'))
+                new bootstrap.Modal(document.getElementById('client-import-modal')).show();
+            @endif
             const clientIndexUrl = @json(route('admin.client.index'));
             const clientExportUrl = @json(route('admin.client.export'));
-
             const $tableWrapper = $('#table-wrapper');
             const $searchInput = $('input[name="search"]');
-
-            let searchText = '';
+            const $branchFilter = $('#branch-filter');
             let currentRequest = null;
+            let debounceTimer = null;
 
-            function debounce(callback, delay = 500) {
-                let timer;
-
-                return function(...args) {
-                    clearTimeout(timer);
-
-                    timer = setTimeout(() => {
-                        callback.apply(this, args);
-                    }, delay);
+            function currentFilters() {
+                return {
+                    s: $searchInput.val().trim(),
+                    branch_id: $branchFilter.length ? $branchFilter.val() : ''
                 };
             }
 
             function fetchClients(page = 1) {
-                if (currentRequest) {
-                    currentRequest.abort();
-                }
+                if (currentRequest) currentRequest.abort();
 
-                $tableWrapper.css({
-                    opacity: 0.55,
-                    pointerEvents: 'none'
-                });
-
+                $tableWrapper.css({ opacity: 0.55, pointerEvents: 'none' });
                 currentRequest = $.ajax({
                     url: clientIndexUrl,
                     method: 'GET',
                     dataType: 'json',
-                    data: {
-                        page: page,
-                        s: searchText
-                    },
-
+                    data: { ...currentFilters(), page },
                     success: function(response) {
-                        if (!response || typeof response.html === 'undefined') {
-                            $tableWrapper.html(
-                                '<div class="alert alert-warning mb-0">' +
-                                'Máy chủ không trả về dữ liệu bảng.' +
-                                '</div>'
-                            );
-
-                            return;
-                        }
-
-                        $tableWrapper.html(response.html);
+                        $tableWrapper.html(response.html ?? '<div class="alert alert-warning mb-0">Không có dữ liệu.</div>');
                     },
-
                     error: function(xhr, textStatus) {
-                        if (textStatus === 'abort') {
-                            return;
-                        }
-
-                        const message =
-                            xhr.responseJSON?.message ??
-                            'Không thể tải danh sách khách hàng.';
-
-                        $tableWrapper.html(
-                            '<div class="alert alert-danger mb-0">' +
-                            message +
-                            '</div>'
-                        );
-
-                        console.error(xhr.responseText);
+                        if (textStatus === 'abort') return;
+                        const message = xhr.responseJSON?.message ?? 'Không thể tải danh sách khách hàng.';
+                        $tableWrapper.html('<div class="alert alert-danger mb-0">' + message + '</div>');
                     },
-
                     complete: function() {
                         currentRequest = null;
-
-                        $tableWrapper.css({
-                            opacity: 1,
-                            pointerEvents: 'auto'
-                        });
+                        $tableWrapper.css({ opacity: 1, pointerEvents: 'auto' });
                     }
                 });
             }
 
-            $searchInput.on('input', debounce(function() {
-                searchText = $(this).val().trim();
-                fetchClients(1);
-            }));
+            function debounceFetch() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => fetchClients(1), 400);
+            }
 
-            $(document).on(
-                'click',
-                '#table-wrapper .pagination a.page-link',
-                function(event) {
-                    event.preventDefault();
-
-                    const href = $(this).attr('href');
-
-                    if (!href) {
-                        return;
-                    }
-
-                    const url = new URL(href, window.location.origin);
-                    const page = Number(url.searchParams.get('page')) || 1;
-
-                    fetchClients(page);
-                }
-            );
+            $searchInput.on('input', debounceFetch);
+            $branchFilter.on('change', () => fetchClients(1));
 
             $('#btn-reset').on('click', function() {
-                searchText = '';
                 $searchInput.val('');
+                $branchFilter.val('');
                 fetchClients(1);
             });
 
-            $(document).on('click', '.btn-delete', function() {
-                const id = $(this).data('id');
-
-                handleDestroy(function() {
-                    fetchClients(1);
-                }, 'Client', id);
+            $(document).on('click', '#table-wrapper .pagination a.page-link', function(event) {
+                event.preventDefault();
+                const href = $(this).attr('href');
+                if (! href) return;
+                fetchClients(Number(new URL(href, window.location.origin).searchParams.get('page')) || 1);
             });
 
-            $('#bulk-delete').on('click', function(event) {
-                event.preventDefault();
-
-                handleDestroy(function() {
-                    fetchClients(1);
-                }, 'Client');
+            $(document).on('click', '.btn-delete-client', function() {
+                const url = $(this).data('url');
+                Swal.fire({
+                    title: 'Xác nhận ngừng hoạt động?',
+                    text: 'Khách hàng sẽ không còn xuất hiện trong giao dịch mới; lịch sử cũ vẫn được giữ nguyên.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Xác nhận',
+                    cancelButtonText: 'Hủy'
+                }).then((result) => {
+                    if (! result.isConfirmed) return;
+                    $.ajax({
+                        url,
+                        method: 'DELETE',
+                        success: (response) => {
+                            datgin.success(response.message);
+                            fetchClients(1);
+                        },
+                        error: (xhr) => datgin.error(xhr.responseJSON?.message ?? 'Không thể xóa khách hàng.')
+                    });
+                });
             });
 
             $('#btn-export').on('click', function() {
-                const exportUrl = new URL(
-                    clientExportUrl,
-                    window.location.origin
-                );
-
-                if (searchText) {
-                    exportUrl.searchParams.set('s', searchText);
-                }
-
-                window.location.href = exportUrl.toString();
+                const url = new URL(clientExportUrl, window.location.origin);
+                Object.entries(currentFilters()).forEach(([key, value]) => {
+                    if (value) url.searchParams.set(key, value);
+                });
+                window.location.href = url.toString();
             });
 
-            fetchClients(1);
+            fetchClients();
         });
     </script>
 @endpush

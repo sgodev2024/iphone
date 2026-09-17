@@ -1548,6 +1548,25 @@ class StaffPosSaleTest extends TestCase
             ]);
     }
 
+    public function test_pos_customer_dob_uses_the_same_age_rule(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-16 12:00:00'));
+        [, , $staff] = $this->createStaffContext();
+
+        $this->actingAs($staff)->postJson('/ban-hang/clients/add', [
+            'name' => 'Underage Customer',
+            'phone' => '0906150011',
+            'dob' => '2016-09-17',
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.dob.0', 'Khách hàng phải từ đủ 10 tuổi trở lên.');
+
+        $this->actingAs($staff)->postJson('/ban-hang/clients/add', [
+            'name' => 'Adult Customer',
+            'phone' => '0906150012',
+            'dob' => '2016-09-16',
+        ])->assertCreated();
+    }
+
     public function test_administrator_pos_customer_uses_selected_storage_branch_and_rejects_branch_spoofing(): void
     {
         $administrator = $this->createManager(1);
@@ -2756,10 +2775,7 @@ class StaffPosSaleTest extends TestCase
         ];
 
         $this->actingAs($staff)
-            ->postJson('/admin/bulk/delete', [
-                'ids' => [$client->id],
-                'model' => 'Client',
-            ])
+            ->deleteJson("/admin/clients/{$client->id}")
             ->assertOk()
             ->assertJson([
                 'message' => 'Ngừng hoạt động khách hàng thành công!',
@@ -2842,10 +2858,7 @@ class StaffPosSaleTest extends TestCase
         ]);
 
         $this->actingAs($staff)
-            ->postJson('/admin/bulk/delete', [
-                'ids' => [$client->id],
-                'model' => 'Client',
-            ])
+            ->deleteJson("/admin/clients/{$client->id}")
             ->assertUnprocessable()
             ->assertJsonFragment([
                 'message' => 'Không thể ngừng hoạt động khách hàng đang có công nợ: Khách còn nợ',
@@ -3420,6 +3433,7 @@ class StaffPosSaleTest extends TestCase
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
+            $table->date('dob')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });

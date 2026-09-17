@@ -25,7 +25,7 @@
                         <td>{{ $value->address ?? '' }}</td>
                         <td style="text-align:center">
                             <a class="btn btn-warning"
-                                href="{{ route('admin.client.detail', ['id' => $value->id]) }}"><i class="fa-solid fa-pen"></i></a>
+                                href="{{ route('admin.client.edit', $value) }}"><i class="fa-solid fa-pen"></i></a>
                             <button class="btn btn-danger btn-delete" data-id="{{ $value->id }}"><i class="fa-solid fa-trash"></i></button>
                         </td>
                     </tr>
@@ -49,7 +49,7 @@
         $('.btn-delete').click(function() {
             if (confirm('Bạn có chắc chắn muốn xóa?')) {
                 var clientId = $(this).data('id');
-                var deleteUrl = '{{ route('admin.client.delete', ['id' => ':id']) }}';
+                var deleteUrl = '{{ route('admin.client.destroy', ':id') }}';
                 deleteUrl = deleteUrl.replace(':id', clientId);
 
                 $.ajax({

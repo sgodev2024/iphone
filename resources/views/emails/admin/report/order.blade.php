@@ -188,7 +188,7 @@
                                                         <td>{{ $order->created_at->format('d/m/y') }}</td>
                                                         <td>
                                                             <a style="color:black"
-                                                                href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
+                                                                href="{{ route('admin.client.show', $order->client) }}">
                                                                 {{ $order->client->name ?? '' }}
                                                             </a>
                                                         </td>

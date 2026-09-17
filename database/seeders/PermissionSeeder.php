@@ -33,8 +33,10 @@ class PermissionSeeder extends Seeder
         'category.delete',
         'category.update',
         'category.view',
+        'client.create',
         'client.delete',
         'client.export',
+        'client.import',
         'client.search',
         'client.update',
         'client.view',
@@ -172,6 +174,11 @@ class PermissionSeeder extends Seeder
             ],
             [
                 'module' => 'Client',
+                'permission_key' => 'client.create',
+                'description' => 'Thêm khách hàng',
+            ],
+            [
+                'module' => 'Client',
                 'permission_key' => 'client.search',
                 'description' => 'Tìm kiếm khách hàng',
             ],
@@ -189,6 +196,11 @@ class PermissionSeeder extends Seeder
                 'module' => 'Client',
                 'permission_key' => 'client.export',
                 'description' => 'Xuất Excel khách hàng',
+            ],
+            [
+                'module' => 'Client',
+                'permission_key' => 'client.import',
+                'description' => 'Import Excel khách hàng',
             ],
 
             // Client Group

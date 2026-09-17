@@ -162,7 +162,7 @@
                         <div class="">
                             <div id="basic-datatables_wrapper" class="dataTables_wrapper container-fluid dt-bootstrap4">
 
-                                <form id="editclient" action="{{ route('admin.client.update', ['id' => $client->id]) }}" method="POST"
+                                <form id="editclient" action="{{ route('admin.client.update', $client) }}" method="POST"
                                     enctype="multipart/form-data">
                                     @method('PUT')
                                     @csrf

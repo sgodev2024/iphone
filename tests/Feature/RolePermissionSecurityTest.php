@@ -382,8 +382,9 @@ SQL);
         $firstAdminStoreKeys = $this->pivotPermissionKeys(Roles::ADMIN_STORE_ID);
 
         $this->assertSame([], $this->pivotPermissionIds(Roles::ADMINISTRATOR_ID));
-        $this->assertCount(115, $firstAdminStoreKeys);
+        $this->assertCount(117, $firstAdminStoreKeys);
         $this->assertSame($expectedAdminStoreKeys, $firstAdminStoreKeys);
+        $this->assertContains('client.import', $firstAdminStoreKeys);
         $this->assertSame($staffBefore, $this->pivotPermissionIds(Roles::STAFF_ID));
         $this->assertTrue($administrator->hasFullAccess());
         $this->assertTrue($administrator->hasPermission('permission.not.in.pivot'));

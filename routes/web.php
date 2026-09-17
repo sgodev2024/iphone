@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\GenericBankVoucherController;
 use App\Http\Controllers\Admin\CategorieController;
 use App\Http\Controllers\Admin\CheckInventoryController;
 use App\Http\Controllers\Admin\ClientController;
+use App\Http\Controllers\Admin\ClientImportController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\ConfigController;
 use App\Http\Controllers\Admin\CustomerDebtPaymentController;
@@ -500,45 +501,6 @@ Route::middleware(['auth'])
                 Route::delete('{id}', 'delete')
                     ->middleware('permission:brand.update')
                     ->name('delete');
-            });
-
-        /*
-        |--------------------------------------------------------------------------
-        | CLIENT
-        |--------------------------------------------------------------------------
-        */
-
-        Route::prefix('client')
-            ->name('client.')
-            ->group(function () {
-
-                Route::get('/', [ClientController::class, 'index'])
-                    ->middleware('permission:client.view')
-                    ->name('index');
-
-                Route::get('/detail/{id}', [ClientController::class, 'edit'])
-                    ->middleware('permission:client.update')
-                    ->name('detail');
-
-                Route::put('/update/{id}', [ClientController::class, 'update'])
-                    ->middleware('permission:client.update')
-                    ->name('update');
-
-                Route::delete('/delete/{id}', [ClientController::class, 'delete'])
-                    ->middleware('permission:client.delete')
-                    ->name('delete');
-
-                Route::get('/filter', [ClientController::class, 'findClient'])
-                    ->middleware('permission:client.search')
-                    ->name('filter');
-
-                Route::get('/clientgroup', [ClientController::class, 'clientgroup'])
-                    ->middleware('permission:client_group.view')
-                    ->name('clientgroup.index');
-
-                Route::get('export', [ClientController::class, 'export'])
-                    ->middleware('permission:client.export')
-                    ->name('export');
             });
 
         /*
@@ -1203,6 +1165,51 @@ Route::middleware(['auth'])
                         ->name('list');
                 });
         });
+
+        /*
+        |--------------------------------------------------------------------------
+        | CUSTOMER MANAGEMENT
+        |--------------------------------------------------------------------------
+        | Kept outside the Administrator/Admin Store role group so Staff access is
+        | determined by explicit permissions. BranchContext still scopes every row.
+        */
+        Route::prefix('clients')
+            ->name('client.')
+            ->group(function () {
+                Route::get('/', [ClientController::class, 'index'])
+                    ->middleware('permission:client.view')
+                    ->name('index');
+                Route::get('create', [ClientController::class, 'create'])
+                    ->middleware('permission:client.create')
+                    ->name('create');
+                Route::post('/', [ClientController::class, 'store'])
+                    ->middleware('permission:client.create')
+                    ->name('store');
+                Route::get('export', [ClientController::class, 'export'])
+                    ->middleware('permission:client.export')
+                    ->name('export');
+                Route::get('import/template', [ClientImportController::class, 'template'])
+                    ->middleware('permission:client.import')
+                    ->name('import.template');
+                Route::post('import', [ClientImportController::class, 'store'])
+                    ->middleware('permission:client.import')
+                    ->name('import');
+                Route::get('client-groups', [ClientController::class, 'clientgroup'])
+                    ->middleware('permission:client_group.view')
+                    ->name('clientgroup.index');
+                Route::get('{client}', [ClientController::class, 'show'])
+                    ->middleware('permission:client.view')
+                    ->name('show');
+                Route::get('{client}/edit', [ClientController::class, 'edit'])
+                    ->middleware('permission:client.update')
+                    ->name('edit');
+                Route::put('{client}', [ClientController::class, 'update'])
+                    ->middleware('permission:client.update')
+                    ->name('update');
+                Route::delete('{client}', [ClientController::class, 'destroy'])
+                    ->middleware('permission:client.delete')
+                    ->name('destroy');
+            });
 
     });
 

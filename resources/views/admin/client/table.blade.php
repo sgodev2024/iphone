@@ -1,70 +1,67 @@
-<div class="client-table-hint">Vuốt ngang để xem đầy đủ bảng</div>
+@php($showBranchColumn = $showBranchColumn ?? auth()->user()->isAdministrator())
+<div class="client-table-hint d-none mb-2 small text-muted">Vuốt ngang để xem đầy đủ bảng</div>
 
 <div class="table-responsive client-table-scroll">
-    <table class="table table-hover table-striped table-bordered align-middle mt-3 client-table">
+    <table class="table table-hover table-striped table-bordered align-middle mb-3 client-table">
         <thead>
             <tr>
-                <th style="width: 3%">
-                    <input type="checkbox" id="check-all">
-                </th>
-
-                <th style="width: 12%"># | Ngày tạo</th>
-                <th style="width: 18%">Tên khách hàng</th>
-                <th style="width: 12%">Số điện thoại</th>
-                <th style="width: 20%">Email</th>
+                <th>#</th>
+                <th>Họ tên</th>
+                <th>Số điện thoại</th>
+                <th>Email</th>
                 <th>Địa chỉ</th>
-                <th style="width: 10%" class="text-center">
-                    Hành động
-                </th>
+                @if ($showBranchColumn)
+                    <th>Cửa hàng</th>
+                @endif
+                <th>Ngày tạo</th>
+                <th class="text-center">Hành động</th>
             </tr>
         </thead>
-
         <tbody>
             @forelse ($clients as $client)
                 <tr>
-                    <td>
-                        <input type="checkbox" class="checked-item" value="{{ $client->id }}">
-                    </td>
-
-                    <td>
-                        {{ $clients->firstItem() + $loop->index }}
-                        |
-                        {{ $client->created_at?->format('d/m/Y') ?? '---' }}
-                    </td>
-
-                    <td>
-                        {{ $client->name ?? 'Chưa có tên' }}
-                    </td>
-
-                    <td>
-                        {{ $client->phone ?? '---' }}
-                    </td>
-
-                    <td>
-                        {{ $client->email ?? '---' }}
-                    </td>
-
-                    <td>
-                        {{ $client->address ?? '-----' }}
-                    </td>
-
-                    <td>
-                        <div class="d-flex gap-2 justify-content-center client-row-actions">
-                            <a href="{{ route('admin.client.detail', ['id' => $client->id]) }}"
-                                class="btn btn-warning btn-sm" title="Sửa khách hàng">
-                                <i class="fa-solid fa-pen-to-square"></i>
-                            </a>
-
-                            <button type="button" class="btn btn-danger btn-sm btn-delete"
-                                data-id="{{ $client->id }}" title="Ngừng hoạt động khách hàng">
-                                <i class="fa-solid fa-ban"></i>
-                            </button>
+                    <td>{{ $clients->firstItem() + $loop->index }}</td>
+                    <td>{{ $client->name }}</td>
+                    <td>{{ $client->phone }}</td>
+                    <td>{{ $client->email ?: '---' }}</td>
+                    <td>{{ $client->address ?: '---' }}</td>
+                    @if ($showBranchColumn)
+                        <td>
+                            @if ($client->branch)
+                                <span class="badge bg-info text-dark">{{ $client->branch->name }}</span>
+                            @else
+                                <span class="badge bg-secondary">Chưa xác định</span>
+                            @endif
+                        </td>
+                    @endif
+                    <td>{{ $client->created_at?->format('d/m/Y H:i') ?? '---' }}</td>
+                    <td class="text-center">
+                        <div class="d-inline-flex gap-1 client-row-actions">
+                            @can('client.view')
+                                <a href="{{ route('admin.client.show', $client) }}" class="btn btn-info btn-sm"
+                                    title="Xem khách hàng" aria-label="Xem khách hàng">
+                                    <i class="fa-solid fa-eye"></i>
+                                </a>
+                            @endcan
+                            @can('client.update')
+                                <a href="{{ route('admin.client.edit', $client) }}" class="btn btn-warning btn-sm"
+                                    title="Sửa khách hàng" aria-label="Sửa khách hàng">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </a>
+                            @endcan
+                            @can('client.delete')
+                                <button type="button" class="btn btn-danger btn-sm btn-delete-client"
+                                    data-url="{{ route('admin.client.destroy', $client) }}"
+                                    title="Ngừng hoạt động khách hàng" aria-label="Ngừng hoạt động khách hàng">
+                                    <i class="fa-solid fa-ban"></i>
+                                </button>
+                            @endcan
                         </div>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td class="text-center py-4" colspan="7">
+                    <td class="text-center py-4" colspan="{{ $showBranchColumn ? 8 : 7 }}">
                         Không có khách hàng nào
                     </td>
                 </tr>

@@ -6,10 +6,12 @@ use App\Exports\ClientsExport;
 use App\Models\Branch;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\Order;
 use App\Models\Storage;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
@@ -705,6 +707,27 @@ class AdminCrudAuditTest extends TestCase
             'name' => 'Blocked',
         ])->assertForbidden();
     }
+    public function test_client_dob_rule_still_rejects_out_of_range_values(): void
+    {
+        $this->travelTo(\Carbon\Carbon::parse('2026-09-16 12:00:00'));
+
+        foreach ([
+            [null, null],
+            ['2016-09-16', null],
+            ['2016-09-17', 'Khách hàng phải từ đủ 10 tuổi trở lên.'],
+            ['2025-09-16', 'Khách hàng phải từ đủ 10 tuổi trở lên.'],
+            ['2026-09-17', 'Khách hàng phải từ đủ 10 tuổi trở lên.'],
+            ['1906-09-16', null],
+            ['1906-09-15', 'Ngày sinh không hợp lệ. Tuổi khách hàng không được vượt quá 120.'],
+            ['not-a-date', 'Ngày sinh không đúng định dạng.'],
+        ] as [$dob, $error]) {
+            $validator = \Illuminate\Support\Facades\Validator::make(
+                ['dob' => $dob],
+                ['dob' => ['nullable', new \App\Support\ClientDob()]]
+            );
+            $this->assertSame($error, $validator->errors()->first('dob') ?: null);
+        }
+    }
     public function test_client_update_validation_and_authorization(): void
     {
         $admin = $this->createUser(roleId: 1);
@@ -712,32 +735,49 @@ class AdminCrudAuditTest extends TestCase
         $client = $this->createClient($admin, $groupId);
         $otherClient = $this->createClient($admin, $groupId, 'other@example.com', '0906000002');
 
-        $this->actingAs($admin)->get("/admin/client/detail/{$client->id}")->assertOk();
+        $this->actingAs($admin)->get("/admin/clients/{$client->id}")
+            ->assertOk()
+            ->assertDontSee('<th>Mã bưu điện</th>', false)
+            ->assertDontSee('<th>Giới tính</th>', false)
+            ->assertDontSee('<th>Ngày sinh</th>', false)
+            ->assertDontSee('<th>Nhóm khách hàng</th>', false)
+            ->assertSee('Lịch sử đơn hàng');
+        $this->actingAs($admin)->get("/admin/clients/{$client->id}/edit")
+            ->assertOk()
+            ->assertSee('action="'.route('admin.client.update', $client).'"', false)
+            ->assertSee('name="_method" value="PUT"', false)
+            ->assertDontSee('name="dob"', false)
+            ->assertDontSee('name="gender"', false)
+            ->assertDontSee('name="zip_code"', false)
+            ->assertDontSee('name="clientgroup_id"', false);
 
         $this->actingAs($admin)
-            ->from("/admin/client/detail/{$client->id}")
-            ->put("/admin/client/update/{$client->id}", [
+            ->from("/admin/clients/{$client->id}/edit")
+            ->put("/admin/clients/{$client->id}", [
                 'name' => 'Khach hang Update',
                 'phone' => '0906000001',
                 'email' => 'client@example.com',
+                'address' => 'Sai Gon',
                 'gender' => 'Female',
                 'dob' => '1990-01-01',
-                'address' => 'Sai Gon',
                 'zip_code' => '70000',
-                'clientgroup_id' => $groupId,
+                'clientgroup_id' => 999,
             ])
-            ->assertRedirect('/admin/client');
+            ->assertRedirect("/admin/clients/{$client->id}");
 
         $this->assertDatabaseHas('clients', [
             'id' => $client->id,
             'name' => 'Khach hang Update',
-            'gender' => 'Female',
+            'gender' => 'Male',
+            'dob' => '1991-01-01',
+            'zip_code' => '10000',
+            'clientgroup_id' => $groupId,
             'user_id' => $admin->id,
         ]);
 
         $this->actingAs($admin)
-            ->from("/admin/client/detail/{$client->id}")
-            ->put("/admin/client/update/{$client->id}", [
+            ->from("/admin/clients/{$client->id}/edit")
+            ->put("/admin/clients/{$client->id}", [
                 'name' => '',
                 'phone' => $otherClient->phone,
                 'email' => $otherClient->email,
@@ -745,10 +785,10 @@ class AdminCrudAuditTest extends TestCase
                 'dob' => 'not-a-date',
                 'clientgroup_id' => 999,
             ])
-            ->assertSessionHasErrors(['name', 'phone', 'email', 'gender', 'dob', 'clientgroup_id']);
+            ->assertSessionHasErrors(['name', 'phone']);
 
         $staff = $this->createUser('staff6@example.com', '0906000006', 3);
-        $this->actingAs($staff)->put("/admin/client/update/{$client->id}", [
+        $this->actingAs($staff)->put("/admin/clients/{$client->id}", [
             'name' => 'Blocked',
         ])->assertForbidden();
     }
@@ -783,20 +823,20 @@ class AdminCrudAuditTest extends TestCase
 
         $html = $this->actingAs($storeA)
             ->withHeader('X-Requested-With', 'XMLHttpRequest')
-            ->get('/admin/client?s=client')
+            ->get('/admin/clients?s=client')
             ->assertOk()
             ->json('html');
         $this->assertStringContainsString($clientA->email, $html);
         $this->assertStringNotContainsString($clientB->email, $html);
         $this->assertStringNotContainsString($legacy->email, $html);
 
-        $this->actingAs($storeA)->get("/admin/client/detail/{$clientB->id}")->assertNotFound();
-        $this->actingAs($storeA)->put("/admin/client/update/{$clientB->id}", [
+        $this->actingAs($storeA)->get("/admin/clients/{$clientB->id}")->assertNotFound();
+        $this->actingAs($storeA)->put("/admin/clients/{$clientB->id}", [
             'name' => 'Tampered',
             'phone' => $clientB->phone,
             'email' => $clientB->email,
         ])->assertNotFound();
-        $this->actingAs($storeA)->delete("/admin/client/delete/{$clientB->id}")->assertNotFound();
+        $this->actingAs($storeA)->delete("/admin/clients/{$clientB->id}")->assertNotFound();
 
         $posClients = $this->actingAs($staffA)
             ->getJson('/ban-hang/get-clients?searchText=Khach')
@@ -814,12 +854,322 @@ class AdminCrudAuditTest extends TestCase
 
         $globalHtml = $this->actingAs($administrator)
             ->withHeader('X-Requested-With', 'XMLHttpRequest')
-            ->get('/admin/client?s=client')
+            ->get('/admin/clients?s=client')
             ->assertOk()
             ->json('html');
         $this->assertStringContainsString($clientA->email, $globalHtml);
         $this->assertStringContainsString($clientB->email, $globalHtml);
         $this->assertStringContainsString($legacy->email, $globalHtml);
+    }
+
+    public function test_administrator_can_filter_and_create_customers_for_a_branch(): void
+    {
+        $administrator = $this->createUser();
+        $storeA = $this->createUser('client-filter-a@example.com', '0908110001', 2, null, $administrator->id);
+        $storeB = $this->createUser('client-filter-b@example.com', '0908110002', 2, null, $administrator->id);
+        $branchA = Branch::create([
+            'user_id' => $administrator->id,
+            'admin_store_user_id' => $storeA->id,
+            'name' => 'Customer Branch A',
+            'address' => 'A',
+        ]);
+        $branchB = Branch::create([
+            'user_id' => $administrator->id,
+            'admin_store_user_id' => $storeB->id,
+            'name' => 'Customer Branch B',
+            'address' => 'B',
+        ]);
+        $storeA->update(['branch_id' => $branchA->id]);
+        $storeB->update(['branch_id' => $branchB->id]);
+        $groupId = $this->createClientGroup();
+        $clientA = $this->createClient($storeA, $groupId, 'filter-a@example.com', '0908110011', $branchA->id);
+        $clientB = $this->createClient($storeB, $groupId, 'filter-b@example.com', '0908110012', $branchB->id);
+
+        $this->actingAs($administrator)->get('/admin/clients/create')
+            ->assertOk()
+            ->assertSee('action="'.route('admin.client.store').'"', false)
+            ->assertSee('name="branch_id"', false)
+            ->assertDontSee('name="dob"', false)
+            ->assertDontSee('name="gender"', false)
+            ->assertDontSee('name="zip_code"', false)
+            ->assertDontSee('name="clientgroup_id"', false);
+
+        $allHtml = $this->actingAs($administrator)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients')
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString($clientA->email, $allHtml);
+        $this->assertStringContainsString($clientB->email, $allHtml);
+        $this->assertStringContainsString($branchA->name, $allHtml);
+
+        $filteredHtml = $this->actingAs($administrator)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients?branch_id='.$branchA->id)
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString($clientA->email, $filteredHtml);
+        $this->assertStringNotContainsString($clientB->email, $filteredHtml);
+
+        $this->actingAs($administrator)->post('/admin/clients', [
+            'branch_id' => $branchB->id,
+            'name' => 'Administrator Created',
+            'phone' => '0908110099',
+            'email' => 'administrator-created@example.com',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('clients', [
+            'name' => 'Administrator Created',
+            'branch_id' => $branchB->id,
+        ]);
+
+        $this->actingAs($administrator)->postJson('/admin/clients', [
+            'name' => 'Missing Branch',
+            'phone' => '0908110098',
+        ])->assertUnprocessable()->assertJsonValidationErrors('branch_id');
+    }
+
+    public function test_client_import_uses_selected_or_current_branch_and_pos_scope(): void
+    {
+        $administrator = $this->createUser();
+        $storeA = $this->createUser('import-store-a@example.com', '0908140001', 2, null, $administrator->id);
+        $storeB = $this->createUser('import-store-b@example.com', '0908140002', 2, null, $administrator->id);
+        $branchA = Branch::create(['user_id' => $administrator->id, 'admin_store_user_id' => $storeA->id, 'name' => 'Import A', 'address' => 'A']);
+        $branchB = Branch::create(['user_id' => $administrator->id, 'admin_store_user_id' => $storeB->id, 'name' => 'Import B', 'address' => 'B']);
+        $storeA->update(['branch_id' => $branchA->id]);
+        $storeB->update(['branch_id' => $branchB->id]);
+        $storageA = Storage::create(['user_id' => $storeA->id, 'branch_id' => $branchA->id, 'name' => 'Import POS A']);
+        $staffA = $this->createUser('import-staff-a@example.com', '0908140003', 3, $branchA->id, $storeA->id);
+        $staffA->update(['storage_id' => $storageA->id]);
+
+        $this->actingAs($storeA)->get('/admin/clients')->assertOk()
+            ->assertSee('Import Excel')
+            ->assertSee('Thêm khách hàng')
+            ->assertSee('Xuất Excel')
+            ->assertDontSee('id="import-branch-id"', false);
+        $this->actingAs($administrator)->get('/admin/clients')->assertOk()
+            ->assertSee('id="import-branch-id"', false);
+        $this->actingAs($storeA)->get('/admin/clients/import/template')
+            ->assertOk()->assertDownload('mau-import-khach-hang.xlsx');
+        $this->assertSame(
+            ['Họ tên', 'Số điện thoại', 'Email', 'Địa chỉ'],
+            (new \App\Exports\ClientImportTemplateExport())->headings()
+        );
+
+        $this->actingAs($storeA)->post('/admin/clients/import', [
+            'file' => $this->clientImportFile([
+                ['Store A One', '0908140011', 'import-a1@example.com', 'Hà Nội'],
+                ['Store A Two', '0908140012', null, null],
+            ]),
+        ])->assertRedirect('/admin/clients');
+        $this->assertDatabaseHas('clients', ['phone' => '0908140011', 'branch_id' => $branchA->id]);
+        $this->assertDatabaseHas('clients', ['phone' => '0908140012', 'branch_id' => $branchA->id, 'email' => null]);
+
+        $this->actingAs($administrator)->post('/admin/clients/import', [
+            'branch_id' => $branchB->id,
+            'file' => $this->clientImportFile([
+                ['Store B One', '0908140011', 'import-b1@example.com', 'Sài Gòn'],
+            ], ['Họ tên', 'Số điện thoại', 'Email', 'Địa chỉ'], 'xls'),
+        ])->assertRedirect('/admin/clients');
+        $this->assertDatabaseHas('clients', ['phone' => '0908140011', 'branch_id' => $branchB->id]);
+
+        $storeHtml = $this->actingAs($storeA)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients')->assertOk()->json('html');
+        $this->assertStringContainsString('Store A One', $storeHtml);
+        $this->assertStringNotContainsString('Store B One', $storeHtml);
+        $posClients = $this->actingAs($staffA)->getJson('/ban-hang/get-clients?searchText=Store')
+            ->assertOk()->json();
+        $this->assertContains('Store A One', array_column($posClients, 'name'));
+        $this->assertNotContains('Store B One', array_column($posClients, 'name'));
+
+        $this->actingAs($storeA)->postJson('/admin/clients/import', [
+            'branch_id' => $branchB->id,
+            'file' => $this->clientImportFile([['Spoofed', '0908140013', null, null]]),
+        ])->assertUnprocessable()->assertJsonValidationErrors('branch_id');
+        $this->assertDatabaseMissing('clients', ['phone' => '0908140013']);
+        $this->actingAs($administrator)->postJson('/admin/clients/import', [
+            'file' => $this->clientImportFile([['Missing branch', '0908140014', null, null]]),
+        ])->assertUnprocessable()->assertJsonValidationErrors('branch_id');
+    }
+
+    public function test_client_import_rejects_invalid_rows_atomically_and_requires_permission(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser('import-validation@example.com', '0908150001', 2, null, $administrator->id);
+        $branch = Branch::create(['user_id' => $administrator->id, 'admin_store_user_id' => $store->id, 'name' => 'Import Validation', 'address' => 'A']);
+        $store->update(['branch_id' => $branch->id]);
+
+        foreach ([
+            [['Valid row', '0908150011', null, null], [null, '0908150012', null, null]],
+            [['Valid row', '0908150011', null, null], ['Missing phone', null, null, null]],
+            [['Valid row', '0908150011', null, null], ['Bad email', '0908150012', 'invalid-email', null]],
+            [['Valid row', '0908150011', null, null], ['Duplicate', '0908150011', null, null]],
+        ] as $rows) {
+            $response = $this->actingAs($store)->postJson('/admin/clients/import', [
+                'file' => $this->clientImportFile($rows),
+            ])->assertUnprocessable()->assertJsonValidationErrors('file');
+            $this->assertStringContainsString('Dòng 3:', implode(' ', $response->json('errors.file')));
+            $this->assertDatabaseMissing('clients', ['phone' => '0908150011']);
+        }
+
+        $this->actingAs($store)->postJson('/admin/clients/import', [
+            'file' => $this->clientImportFile(
+                [['Spoofed column', '0908150013', null, null, $branch->id]],
+                ['Họ tên', 'Số điện thoại', 'Email', 'Địa chỉ', 'branch_id']
+            ),
+        ])->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->assertDatabaseMissing('clients', ['phone' => '0908150013']);
+
+        $this->createClient($store, $this->createClientGroup(), 'duplicate@example.com', '0908150020', $branch->id);
+        $duplicate = $this->actingAs($store)->postJson('/admin/clients/import', [
+            'file' => $this->clientImportFile([
+                ['Valid before duplicate', '0908150021', null, null],
+                ['Existing phone', '0908150020', null, null],
+            ]),
+        ])->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->assertStringContainsString('Dòng 3: Số điện thoại đã tồn tại trong cửa hàng.', implode(' ', $duplicate->json('errors.file')));
+        $this->assertDatabaseMissing('clients', ['phone' => '0908150021']);
+
+        $this->revokeRolePermission(2, 'client.import');
+        $this->actingAs($store)->get('/admin/clients')->assertOk()
+            ->assertDontSee('client-import-modal');
+        $this->actingAs($store)->get('/admin/clients/import/template')->assertForbidden();
+        $this->actingAs($store)->post('/admin/clients/import', [
+            'file' => $this->clientImportFile([['Forbidden', '0908150014', null, null]]),
+        ])->assertForbidden();
+    }
+
+    public function test_admin_store_create_and_crud_are_strictly_branch_scoped(): void
+    {
+        $administrator = $this->createUser();
+        $storeA = $this->createUser('client-crud-a@example.com', '0908120001', 2, null, $administrator->id);
+        $storeB = $this->createUser('client-crud-b@example.com', '0908120002', 2, null, $administrator->id);
+        $branchA = Branch::create(['user_id' => $administrator->id, 'admin_store_user_id' => $storeA->id, 'name' => 'CRUD A', 'address' => 'A']);
+        $branchB = Branch::create(['user_id' => $administrator->id, 'admin_store_user_id' => $storeB->id, 'name' => 'CRUD B', 'address' => 'B']);
+        $storeA->update(['branch_id' => $branchA->id]);
+        $storeB->update(['branch_id' => $branchB->id]);
+        $groupId = $this->createClientGroup();
+        $clientB = $this->createClient($storeB, $groupId, 'crud-b@example.com', '0908120099', $branchB->id);
+
+        $this->actingAs($storeA)->post('/admin/clients', [
+            'branch_id' => $branchB->id,
+            'name' => 'Spoofed Customer',
+            'phone' => '0908120010',
+        ])->assertSessionHasErrors('branch_id');
+
+        $this->actingAs($storeA)->post('/admin/clients', [
+            'name' => 'Store A Customer',
+            'phone' => $clientB->phone,
+            'email' => 'crud-a@example.com',
+        ])->assertRedirect();
+        $clientA = Client::query()->where('email', 'crud-a@example.com')->firstOrFail();
+        $this->assertSame($branchA->id, (int) $clientA->branch_id);
+
+        $storeHtml = $this->actingAs($storeA)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients?branch_id='.$branchB->id)
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString($clientA->email, $storeHtml);
+        $this->assertStringNotContainsString($clientB->email, $storeHtml);
+
+        $this->actingAs($storeA)->get("/admin/clients/{$clientB->id}")->assertNotFound();
+        $this->actingAs($storeA)->get("/admin/clients/{$clientB->id}/edit")->assertNotFound();
+        $this->actingAs($storeA)->put("/admin/clients/{$clientB->id}", [
+            'name' => 'Cross Branch',
+            'phone' => $clientB->phone,
+        ])->assertNotFound();
+        $this->actingAs($storeA)->delete("/admin/clients/{$clientB->id}")->assertNotFound();
+
+        $this->actingAs($administrator)->putJson("/admin/clients/{$clientA->id}", [
+            'branch_id' => $branchB->id,
+            'name' => $clientA->name,
+            'phone' => $clientA->phone,
+        ])->assertUnprocessable()->assertJsonValidationErrors('branch_id');
+        $this->assertSame($branchA->id, (int) $clientA->fresh()->branch_id);
+
+        $modelUpdateBlocked = false;
+        try {
+            $clientA->update(['branch_id' => $branchB->id]);
+        } catch (\LogicException) {
+            $modelUpdateBlocked = true;
+        }
+        $this->assertTrue($modelUpdateBlocked);
+        $this->assertSame($branchA->id, (int) $clientA->fresh()->branch_id);
+    }
+
+    public function test_staff_permissions_fail_closed_and_soft_delete_preserves_order_history(): void
+    {
+        $administrator = $this->createUser();
+        $store = $this->createUser('client-permission-store@example.com', '0908130001', 2, null, $administrator->id);
+        $staff = $this->createUser('client-permission-staff@example.com', '0908130002', 3, null, $store->id);
+        $branch = Branch::create([
+            'user_id' => $administrator->id,
+            'admin_store_user_id' => $store->id,
+            'name' => 'Permission Branch',
+            'address' => 'A',
+        ]);
+        $store->update(['branch_id' => $branch->id]);
+        $staff->update(['branch_id' => $branch->id]);
+        $client = $this->createClient($store, $this->createClientGroup(), 'permission-client@example.com', '0908130010', $branch->id);
+
+        $this->revokeRolePermission(3, 'client.view');
+        $this->actingAs($staff)->get("/admin/clients/{$client->id}")->assertForbidden();
+        $this->grantRolePermission(3, 'client.view');
+        $this->actingAs($staff)->get("/admin/clients/{$client->id}")->assertOk();
+
+        $this->revokeRolePermission(3, 'client.update');
+        $this->actingAs($staff)->get("/admin/clients/{$client->id}/edit")->assertForbidden();
+        $this->actingAs($staff)->put("/admin/clients/{$client->id}", [
+            'name' => 'Forbidden update',
+            'phone' => $client->phone,
+        ])->assertForbidden();
+        $this->revokeRolePermission(3, 'client.delete');
+        $this->actingAs($staff)->delete("/admin/clients/{$client->id}")->assertForbidden();
+
+        $viewOnlyHtml = $this->actingAs($staff)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients')
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString('fa-eye', $viewOnlyHtml);
+        $this->assertStringNotContainsString('fa-pen-to-square', $viewOnlyHtml);
+        $this->assertStringNotContainsString('btn-delete-client', $viewOnlyHtml);
+
+        $unassignedStaff = $this->createUser('client-null-branch@example.com', '0908130003', 3, null, $store->id);
+        $this->actingAs($unassignedStaff)
+            ->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->get('/admin/clients')
+            ->assertForbidden();
+
+        $this->revokeRolePermission(2, 'client.delete');
+        $this->actingAs($store)->postJson('/admin/bulk/delete', [
+            'ids' => [$client->id],
+            'model' => 'Client',
+        ])->assertForbidden();
+        $this->grantRolePermission(2, 'client.delete');
+
+        $orderId = DB::table('orders')->insertGetId([
+            'user_id' => $store->id,
+            'client_id' => $client->id,
+            'branch_id' => $branch->id,
+            'total_money' => 1500000,
+            'debt_amount' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($store)
+            ->get("/admin/clients/{$client->id}")
+            ->assertOk()
+            ->assertSee('#'.$orderId);
+
+        $this->actingAs($store)
+            ->deleteJson("/admin/clients/{$client->id}")
+            ->assertOk();
+        $this->assertSoftDeleted('clients', ['id' => $client->id]);
+        $this->assertDatabaseHas('orders', ['id' => $orderId, 'client_id' => $client->id]);
+        $this->assertSame($client->id, Order::findOrFail($orderId)->client->id);
     }
 
     public function test_company_and_supplier_crud_and_import_selection_are_branch_scoped(): void
@@ -1596,6 +1946,37 @@ class AdminCrudAuditTest extends TestCase
         $this->assertSame($branch->id, (int) $adminStore->fresh()->branch_id);
     }
 
+    private function clientImportFile(
+        array $rows,
+        array $headings = ['Họ tên', 'Số điện thoại', 'Email', 'Địa chỉ'],
+        string $extension = 'xlsx'
+    ): UploadedFile
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray(array_merge([$headings], $rows));
+        foreach ($rows as $index => $row) {
+            if (($row[1] ?? null) !== null) {
+                $sheet->setCellValueExplicit(
+                    'B'.($index + 2),
+                    (string) $row[1],
+                    \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                );
+            }
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'client-import-');
+        $writer = $extension === 'xls'
+            ? new \PhpOffice\PhpSpreadsheet\Writer\Xls($spreadsheet)
+            : new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($path);
+        $contents = file_get_contents($path);
+        unlink($path);
+        $spreadsheet->disconnectWorksheets();
+
+        return UploadedFile::fake()->createWithContent('customers.'.$extension, $contents);
+    }
+
     private function createSchema(): void
     {
         Schema::dropAllTables();
@@ -1711,6 +2092,7 @@ class AdminCrudAuditTest extends TestCase
             $table->unsignedBigInteger('client_id')->nullable();
             $table->unsignedBigInteger('branch_id')->nullable();
             $table->unsignedBigInteger('total_money')->nullable();
+            $table->unsignedBigInteger('debt_amount')->default(0);
             $table->boolean('notification')->default(false);
             $table->boolean('status')->default(true);
             $table->timestamps();
@@ -1765,7 +2147,7 @@ class AdminCrudAuditTest extends TestCase
             $table->string('phone');
             $table->string('zip_code')->nullable();
             $table->string('address')->nullable();
-            $table->string('email');
+            $table->string('email')->nullable();
             $table->string('gender')->nullable();
             $table->date('dob')->nullable();
             $table->unsignedBigInteger('clientgroup_id')->nullable();

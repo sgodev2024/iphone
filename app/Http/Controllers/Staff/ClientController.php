@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Client;
 use App\Services\SaleStorageResolver;
+use App\Support\ClientDob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -38,7 +39,7 @@ class ClientController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'max:255'],
             'gender' => ['nullable', 'in:Male,Female'],
-            'dob' => ['nullable', 'date'],
+            'dob' => ['nullable', new ClientDob()],
             'clientgroup_id' => ['nullable', 'integer', 'exists:client_group,id'],
             'branch_id' => ['prohibited'],
         ], __('request.messages'), [

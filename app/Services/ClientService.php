@@ -90,12 +90,12 @@ class ClientService
         }
     }
 
-    public function deleteClient($id): void
+    public function deleteClient($id, ?int $branchId = null): void
     {
-        $this->deleteClients([$id]);
+        $this->deleteClients([$id], $branchId);
     }
 
-    public function deleteClients(array $ids): int
+    public function deleteClients(array $ids, ?int $branchId = null): int
     {
         $ids = collect($ids)
             ->map(fn ($id) => (int) $id)
@@ -107,8 +107,9 @@ class ClientService
             throw new DomainException('Không có khách hàng hợp lệ để ngừng hoạt động.');
         }
 
-        return DB::transaction(function () use ($ids): int {
+        return DB::transaction(function () use ($ids, $branchId): int {
             $clients = Client::query()
+                ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
                 ->whereIn('id', $ids->all())
                 ->lockForUpdate()
                 ->get();

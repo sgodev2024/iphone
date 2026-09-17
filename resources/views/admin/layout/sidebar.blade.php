@@ -214,15 +214,22 @@
                 @endcanany
 
                 {{-- Báo cáo --}}
+                @can('client.view')
+                    <li class="nav-item {{ request()->routeIs('admin.client.*') ? 'active' : '' }}">
+                        <a href="{{ route('admin.client.index') }}">
+                            <i class="fas fa-users"></i>
+                            <p>Khách hàng</p>
+                        </a>
+                    </li>
+                @endcan
+
                 @canany([
                     'order.view',
-                    'client.view',
                     'report.profit.view',
                 ])
                     <li
                         class="nav-item {{ request()->routeIs(
                             'admin.order.*',
-                            'admin.client.*',
                             'admin.profit.*'
                         ) ? 'active' : '' }}"
                     >
@@ -232,7 +239,6 @@
                             role="button"
                             aria-expanded="{{ request()->routeIs(
                                 'admin.order.*',
-                                'admin.client.*',
                                 'admin.profit.*'
                             ) ? 'true' : 'false' }}"
                             aria-controls="reportMenu"
@@ -246,7 +252,6 @@
                             id="reportMenu"
                             class="collapse {{ request()->routeIs(
                                 'admin.order.*',
-                                'admin.client.*',
                                 'admin.profit.*'
                             ) ? 'show' : '' }}"
                             data-bs-parent="#adminSidebarMenu"
@@ -256,14 +261,6 @@
                                     <li class="{{ request()->routeIs('admin.order.*') ? 'active' : '' }}">
                                         <a href="{{ route('admin.order.index') }}">
                                             <span class="sub-item">Đơn hàng</span>
-                                        </a>
-                                    </li>
-                                @endcan
-
-                                @can('client.view')
-                                    <li class="{{ request()->routeIs('admin.client.*') ? 'active' : '' }}">
-                                        <a href="{{ route('admin.client.index') }}">
-                                            <span class="sub-item">Khách hàng</span>
                                         </a>
                                     </li>
                                 @endcan

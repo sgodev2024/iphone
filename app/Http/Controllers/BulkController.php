@@ -76,6 +76,13 @@ class BulkController extends Controller
             );
         }
 
+        if ($type === 'delete' && $modelClass === Client::class) {
+            abort_unless(
+                $request->user()?->hasPermission('client.delete'),
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
         if (in_array($modelClass, [Client::class, Company::class], true)) {
             $allowed = $this->branchContext
                 ->scope($modelClass::query(), Auth::user())
@@ -143,7 +150,10 @@ class BulkController extends Controller
 
         if ($type === 'delete' && $modelClass === Client::class) {
             try {
-                $this->clientService->deleteClients($ids);
+                $branchId = Auth::user()->isAdministrator()
+                    ? null
+                    : $this->branchContext->branchId(Auth::user());
+                $this->clientService->deleteClients($ids, $branchId);
 
                 return response()->json([
                     'message' => 'Ngừng hoạt động khách hàng thành công!',

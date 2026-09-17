@@ -82,7 +82,7 @@
                                                     <td>
                                                         @if ($order->client && !$order->client->trashed())
                                                             <a style="color:black"
-                                                                href="{{ route('admin.client.detail', ['id' => $order->client->id]) }}">
+                                                                href="{{ route('admin.client.show', $order->client) }}">
                                                                 {{ $order->customer_display_name }}
                                                             </a>
                                                         @else

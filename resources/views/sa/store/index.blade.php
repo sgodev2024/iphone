@@ -205,7 +205,7 @@
                                                                         tiết</a>
                                                                     {{-- <a onclick="return confirm('Bạn có chắc chắn muốn xóa?')"
                                                                         class="btn btn-danger"
-                                                                        href="{{ route('admin.client.delete', ['id' => $value->id]) }}">Xóa</a> --}}
+                                                                        href="{{ route('admin.client.destroy', $value) }}">Xóa</a> --}}
                                                                 </td>
                                                             </tr>
                                                         @endif

@@ -40,7 +40,7 @@
                                             </a>
                                         </div>
                                         <div class="col-sm-12 col-md-6 d-flex justify-content-end">
-                                            <form action="{{ route('admin.client.filter') }}" method="GET" class="d-flex">
+                                            <form action="{{ route('admin.client.index') }}" method="GET" class="d-flex">
                                                 <label class="mr-2" style="align-self: center;">Tìm kiếm:</label>
                                                 <input type="text" name="phone" class="form-control form-control-sm"
                                                     placeholder="Nhập số điện thoại" value="{{ old('phone') }}">

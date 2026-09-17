@@ -189,7 +189,7 @@
                                                         <td>{{ $import->created_at->format('d/m/y') }}</td>
                                                         <td>
                                                             <a style="color:black"
-                                                                href="{{ route('admin.client.detail', ['id' => $import->company->id]) }}">
+                                                                href="{{ route('admin.company.show', $import->company) }}">
                                                                 {{ $import->company->name ?? '' }}
                                                             </a>
                                                         </td>
