@@ -21,8 +21,8 @@ jobs:
         run: |
           mkdir -p ~/.ssh
 
-          printf '%s' "${{ secrets.PROD_SSH_KEY }}" \
-            | tr -d '\r' \
+          printf '%s' "${{ secrets.PROD_SSH_KEY_B64 }}" \
+            | base64 --decode \
             > ~/.ssh/id_ed25519
 
           chmod 600 ~/.ssh/id_ed25519
@@ -47,16 +47,19 @@ jobs:
             cd /usr/share/nginx/html/demo_aicrm
 
             echo "===== UPDATE SOURCE ====="
+
             git fetch origin viet_dev
             git reset --hard origin/viet_dev
 
             echo "===== COMPOSER ====="
+
             composer install \
               --no-interaction \
               --prefer-dist \
               --optimize-autoloader
 
             echo "===== FRONTEND ====="
+
             if [ -f package-lock.json ]; then
               npm ci
             else
@@ -66,6 +69,7 @@ jobs:
             npm run build
 
             echo "===== LARAVEL ====="
+
             php artisan optimize:clear
             php artisan optimize
 
