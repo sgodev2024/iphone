@@ -1,4 +1,4 @@
-name: Deploy Viet Dev
+name: CI CD Viet Dev
 
 on:
   push:
@@ -8,15 +8,121 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-viet-dev
+  group: ci-cd-viet-dev
   cancel-in-progress: false
 
+
 jobs:
-  deploy:
-    name: Deploy to Server
+
+  # =========================
+  # CI - KIỂM TRA CODE
+  # =========================
+  ci:
+    name: CI - Test and Build
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Lấy source code từ GitHub
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+
+      # 2. Tạo file .env dùng riêng cho CI
+      - name: Create CI environment
+        run: |
+          cp .env.example .env
+
+
+      # 3. Cài PHP giống server của bạn
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, bcmath, pdo_sqlite, sqlite3
+          coverage: none
+
+
+      # 4. Cài thư viện PHP
+      - name: Install Composer dependencies
+        run: |
+          composer install \
+            --no-interaction \
+            --prefer-dist \
+            --optimize-autoloader
+
+
+      # 5. Tạo APP_KEY cho Laravel CI
+      - name: Generate Laravel key
+        run: |
+          php artisan key:generate
+
+
+      # 6. Tạo database SQLite tạm thời
+      # Không dùng database production
+      - name: Create SQLite database
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
+
+      # 7. Kiểm tra migration
+      - name: Run database migrations
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+        run: |
+          php artisan migrate --force
+
+
+      # 8. Chạy Laravel tests
+      - name: Run Laravel tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+        run: |
+          php artisan test
+
+
+      # 9. Cài Node.js giống server hiện tại
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+
+      # 10. Cài package frontend
+      - name: Install frontend dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+
+      # 11. Kiểm tra Vite/frontend build được không
+      - name: Build frontend
+        run: |
+          npm run build
+
+
+
+  # =========================
+  # CD - DEPLOY SERVER
+  # =========================
+  deploy:
+    name: CD - Deploy to Server
+
+    runs-on: ubuntu-latest
+
+    # QUAN TRỌNG:
+    # CI phải thành công thì job deploy mới chạy
+    needs: ci
+
+    steps:
+
+      # 1. Tạo SSH key để GitHub vào server
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -35,28 +141,36 @@ jobs:
             -H "${{ secrets.PROD_HOST }}" \
             >> ~/.ssh/known_hosts
 
+
+      # 2. SSH vào server và deploy
       - name: Deploy Laravel
         run: |
           ssh \
             -i ~/.ssh/id_ed25519 \
             -p "${{ secrets.PROD_PORT }}" \
-            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" << 'EOF'
+            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" \
+            "DEPLOY_SHA='${{ github.sha }}' bash -s" << 'EOF'
 
             set -e
 
             cd /usr/share/nginx/html/demo_aicrm
 
+
             echo "===== UPDATE SOURCE ====="
 
             git fetch origin viet_dev
-            git reset --hard origin/viet_dev
+
+            git reset --hard "$DEPLOY_SHA"
+
 
             echo "===== COMPOSER ====="
 
             composer install \
+              --no-dev \
               --no-interaction \
               --prefer-dist \
               --optimize-autoloader
+
 
             echo "===== FRONTEND ====="
 
@@ -68,10 +182,15 @@ jobs:
 
             npm run build
 
+
             echo "===== LARAVEL ====="
 
             php artisan optimize:clear
+
             php artisan optimize
+
+            php artisan queue:restart || true
+
 
             echo "===== DEPLOY SUCCESS ====="
 
