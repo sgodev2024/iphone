@@ -21,8 +21,14 @@ jobs:
         run: |
           mkdir -p ~/.ssh
 
-          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s' "${{ secrets.PROD_SSH_KEY }}" \
+            | tr -d '\r' \
+            > ~/.ssh/id_ed25519
+
           chmod 600 ~/.ssh/id_ed25519
+
+          echo "Checking SSH private key..."
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
 
           ssh-keyscan \
             -p "${{ secrets.PROD_PORT }}" \
