@@ -69,6 +69,7 @@
                 <span>Từ ngày {{ $startDate }} đến ngày  {{ $endDate }}</span>
                 @else
                 <span>
+                    @if ($filter == 'all') Tất cả thời gian @endif
                     @if ($filter == 1)  Hôm nay    @endif
                     @if ($filter == 2)  Tuần này    @endif
                     @if ($filter == 3)  Tháng này    @endif
@@ -79,11 +80,11 @@
 
             </div>
             <div class="font-size">
-                <span>Chi nhánh : {{ $storage }}</span>
+                <span>Kho: {{ $storage }}</span>
             </div>
         </div>
         <div class="mb-2sss" style="text-align: right;">
-            <i style="font-size: 12px;  ">(Đã phân bổ giảm giá hóa đơn , giảm giá phiếu trả)</i>
+            <i style="font-size: 12px;  ">(Doanh thu bán đã phân bổ giảm giá hóa đơn; hàng trả completed trừ theo ngày lập phiếu. Giá vốn hàng không IMEI dùng giá hiện tại vì chưa có snapshot lịch sử. Phí phiếu trả chưa phân bổ theo sản phẩm.)</i>
         </div>
         <table class="table table-hover" id="reportTable">
             <thead>

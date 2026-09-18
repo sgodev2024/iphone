@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Responses\ApiResponse;
 use App\Models\ImportCoupon;
 use App\Models\ImportDetail;
 use App\Models\OrderDetail;
@@ -12,27 +11,25 @@ use App\Models\ProductStorage;
 use App\Models\Storage;
 use App\Services\ProductService;
 use App\Services\ProductStorageService;
-use App\Services\ProfitService;
+use App\Services\ProfitReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class ReportController extends Controller
 {
     protected $productStorageService;
     protected $productService;
-    protected $profitService;
-    public function __construct(ProductStorageService $productStorageService, ProductService $productService, ProfitService $profitService)
+
+    public function __construct(ProductStorageService $productStorageService, ProductService $productService)
     {
         $this->productStorageService = $productStorageService;
         $this->productService = $productService;
-        $this->profitService = $profitService;
     }
 
     public function index()
@@ -266,164 +263,76 @@ class ReportController extends Controller
 
     public function profitIndex()
     {
-        try {
-            $title = 'Báo cáo lợi nhuận';
-            $storages = $this->inventoryStorageQuery()->orderBy('name', 'asc')->get();
-            $storage = $this->resolveInitialInventoryStorage($storages);
-            $profits = $storage
-                ? $this->profitService->profitReport(Auth::user(), 1, $storage->id)
-                : [];
-            return view('admin.profit.index', compact('title', 'profits', 'storages'));
-        } catch (Exception $e) {
-            Log::error('Failed to get Profit Report: ' . $e->getMessage());
-            return ApiResponse::error('Failed to get Profit Report', 500);
-        }
+        $title = 'Báo cáo lợi nhuận';
+        $storages = $this->inventoryStorageQuery()->orderBy('name')->get();
+        $initialStorage = $this->resolveInitialInventoryStorage($storages);
+
+        return view('admin.profit.index', compact('title', 'storages', 'initialStorage'));
     }
 
-    public function getProfitReportByFilter(Request $request)
+
+    public function getProfitReport(Request $request)
     {
-        try {
-            $storage_id = $request->input('storage_id');
-            $filter = $request->input('filter');
-            $start_date = $request->input('start_date');
-            $end_date = $request->input('end_date');
+        $data = $this->validatedProfitInput($request, false);
+        $service = app(ProfitReportService::class);
+        $storage = isset($data['storage_id'])
+            ? $service->storage(Auth::user(), (int) $data['storage_id'])
+            : null;
 
-            // Kiểm tra các giá trị đầu vào
-            if ($filter == 6 && ($start_date === null || $end_date === null)) {
-                return response()->json(['error' => 'Vui lòng chọn ngày bắt đầu và kết thúc'], 400);
-            }
-
-            $storage = $this->inventoryStorageQuery()->findOrFail((int) $storage_id);
-            $profits = $this->profitService->profitReport(Auth::user(), $filter, $storage->id, $start_date, $end_date);
-
-            return response()->json([
-                'profits' => $profits,
-            ]);
-        } catch (Exception $e) {
-            Log::error('Failed to get Profit Report: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to get Profit report'], 500);
-        }
-    }
-
-    public function getProfitReport()
-    {
-        try {
-            return response()->json([
-                'product' => $this->aggregateProfitByProduct($this->profitDetailsQuery()->get()),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Failed to get Profit Report: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to get Profit report'], 500);
-        }
+        return response()->json([
+            'product' => $service->report(
+                Auth::user(), $storage, $data['filter'] ?? 'all',
+                $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
+            ),
+        ]);
     }
 
 
     public function getProfitReportByFilterNew(Request $request)
     {
-        try {
-            return response()->json([
-                'product' => $this->aggregateProfitByProduct(
-                    $this->filteredProfitDetails($request)
-                ),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Failed to get Profit Report: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to get Profit report'], 500);
-        }
+        $data = $this->validatedProfitInput($request, true);
+        $service = app(ProfitReportService::class);
+        $storage = $service->storage(Auth::user(), (int) $data['storage_id']);
+
+        return response()->json([
+            'product' => $service->report(
+                Auth::user(), $storage, $data['filter'],
+                $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
+            ),
+        ]);
     }
 
     public function getProfitReportByFilterPDF(Request $request)
     {
-        try {
-            $storage = $this->inventoryStorageQuery()->findOrFail($request->input('storage_id'));
-            $filter = (string) $request->input('filter');
-            $pdf = PDF::loadView('admin.profit.myPDF', [
-                'listprofit' => $this->aggregateProfitByProduct($this->filteredProfitDetails($request)),
-                'startDate' => $request->startDate,
-                'endDate' => $request->endDate,
-                'storage' => $storage->name,
-                'filter' => $filter,
-            ]);
+        $data = $this->validatedProfitInput($request, true);
+        $service = app(ProfitReportService::class);
+        $storage = $service->storage(Auth::user(), (int) $data['storage_id']);
+        $rows = $service->report(
+            Auth::user(), $storage, $data['filter'],
+            $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
+        );
+        $pdf = Pdf::loadView('admin.profit.myPDF', [
+            'listprofit' => $rows,
+            'startDate' => $data['startDate'] ?? null,
+            'endDate' => $data['endDate'] ?? null,
+            'storage' => $storage->name,
+            'filter' => $data['filter'],
+        ]);
 
-            return $pdf->download('profit_report.pdf');
-        } catch (Exception $e) {
-            Log::error('Failed to get Profit Report: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to get Profit report'], 500);
-        }
+        return $pdf->download('profit_report.pdf');
     }
 
-    private function filteredProfitDetails(Request $request): Collection
+    private function validatedProfitInput(Request $request, bool $requireStorage): array
     {
-        $storage = $this->inventoryStorageQuery()->findOrFail((int) $request->input('storage_id'));
-        $query = $this->profitDetailsQuery()
-            ->where('storage_id', $storage->id)
-            ->whereHas('order', fn ($orderQuery) => $orderQuery->where('branch_id', $storage->branch_id));
-
-        match ((string) $request->input('filter')) {
-            '1' => $query->whereDate('created_at', Carbon::today()),
-            '2' => $query->whereBetween('created_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]),
-            '3' => $query->whereBetween('created_at', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()]),
-            '4' => $query->whereBetween('created_at', [Carbon::now()->startOfQuarter(), Carbon::now()->endOfQuarter()]),
-            '5' => $query->whereBetween('created_at', [Carbon::now()->startOfYear(), Carbon::now()->endOfYear()]),
-            '6' => $query->whereBetween('created_at', [
-                Carbon::parse($request->startDate)->startOfDay(),
-                Carbon::parse($request->endDate)->endOfDay(),
-            ]),
-            default => null,
-        };
-
-        return $query->get();
+        return $request->validate([
+            'storage_id' => [$requireStorage ? 'required' : 'nullable', 'integer', 'min:1'],
+            'filter' => [$requireStorage ? 'required' : 'sometimes', Rule::in(['all', '1', '2', '3', '4', '5', '6'])],
+            'startDate' => ['required_if:filter,6', 'prohibited_unless:filter,6', 'nullable', 'date_format:Y-m-d'],
+            'endDate' => ['required_if:filter,6', 'prohibited_unless:filter,6', 'nullable', 'date_format:Y-m-d', 'after_or_equal:startDate'],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
     }
 
-    private function profitDetailsQuery()
-    {
-        return OrderDetail::query()
-            ->whereHas('order', function ($query): void {
-                $query->where('status', 1);
-                app(\App\Support\BranchContext::class)->scope($query, Auth::user());
-            })
-            ->with(['product', 'productImei.importDetail', 'order.orderDetails']);
-    }
 
-    private function aggregateProfitByProduct(Collection $details): array
-    {
-        return $details
-            ->groupBy('product_id')
-            ->map(function (Collection $productDetails): array {
-                $product = $productDetails->first()->product;
-                $quantity = 0;
-                $revenue = 0.0;
-                $cost = 0.0;
 
-                foreach ($productDetails as $detail) {
-                    $lineQuantity = (int) $detail->quantity;
-                    $lineGross = (float) $detail->price * $lineQuantity;
-                    $orderSubtotal = (float) $detail->order?->orderDetails->sum(
-                        fn ($orderDetail) => (float) $orderDetail->price * (int) $orderDetail->quantity
-                    );
-                    $unitCost = $detail->productImei?->importDetail?->price
-                        ?? $detail->product?->price_buy
-                        ?? 0;
-
-                    $quantity += $lineQuantity;
-                    $revenue += $orderSubtotal > 0
-                        ? (float) $detail->order->total_money * ($lineGross / $orderSubtotal)
-                        : 0;
-                    $cost += (float) $unitCost * $lineQuantity;
-                }
-
-                $profit = $revenue - $cost;
-
-                return [
-                    'product' => $product,
-                    'quantity' => $quantity,
-                    'revenue' => $revenue,
-                    'cost' => $cost,
-                    'profit' => $profit,
-                    'rate' => $revenue > 0 ? ($profit / $revenue) * 100 : 0,
-                ];
-            })
-            ->values()
-            ->all();
-    }
 }
