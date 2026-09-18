@@ -18,6 +18,7 @@ class OrderDetail extends Model
         'quantity',
         'cost_unit_snapshot',
         'cost_total_snapshot',
+        'cost_snapshot_source',
     ];
 
     protected $appends = ['product'];

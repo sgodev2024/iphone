@@ -257,6 +257,7 @@ class SaleService
                     'quantity' => $item['quantity'],
                     'cost_unit_snapshot' => $item['cost_unit_snapshot'],
                     'cost_total_snapshot' => $item['cost_total_snapshot'],
+                    'cost_snapshot_source' => 'sale',
                 ]);
 
                 if ($item['tracking_type'] === Product::INVENTORY_TRACKING_IMEI) {

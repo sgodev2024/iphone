@@ -6,6 +6,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
@@ -26,7 +27,7 @@ class ProfitReportTest extends TestCase
         Carbon::setTestNow('2026-09-18 12:00:00');
 
         foreach (['order_return_details', 'order_returns', 'order_details', 'orders',
-            'product_imeis', 'import_detail', 'products', 'storages', 'branches',
+            'product_imeis', 'import_detail', 'import_coupon', 'products', 'storages', 'branches',
             'user_infos', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
@@ -68,11 +69,17 @@ class ProfitReportTest extends TestCase
             $table->string('code');
             $table->string('name');
             $table->unsignedBigInteger('price');
-            $table->unsignedBigInteger('price_buy');
+            $table->unsignedBigInteger('price_buy')->nullable();
             $table->timestamps();
+        });
+        Schema::create('import_coupon', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('storage_id');
         });
         Schema::create('import_detail', function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('import_id')->nullable();
+            $table->unsignedBigInteger('product_id')->nullable();
             $table->unsignedBigInteger('price');
         });
         Schema::create('product_imeis', function (Blueprint $table): void {
@@ -99,6 +106,7 @@ class ProfitReportTest extends TestCase
             $table->unsignedBigInteger('price');
             $table->decimal('cost_unit_snapshot', 20, 2)->nullable();
             $table->decimal('cost_total_snapshot', 20, 2)->nullable();
+            $table->string('cost_snapshot_source', 16)->nullable();
             $table->timestamps();
         });
         Schema::create('order_returns', function (Blueprint $table): void {
@@ -393,6 +401,103 @@ class ProfitReportTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_backfill_uses_current_product_and_real_imei_import_cost_without_touching_complete_rows(): void
+    {
+        DB::table('order_details')->where('id', 2)->update([
+            'cost_unit_snapshot' => 100000,
+            'cost_total_snapshot' => 100000,
+            'cost_snapshot_source' => 'sale',
+        ]);
+        DB::table('import_coupon')->insert(['id' => 1, 'storage_id' => 1]);
+        DB::table('import_detail')->insert([
+            'id' => 1, 'import_id' => 1, 'product_id' => 1, 'price' => 70000,
+        ]);
+        DB::table('product_imeis')->insert([
+            'id' => 1, 'product_id' => 1, 'import_detail_id' => 1,
+        ]);
+        $this->sale(3, 3, 1, 1, 1, 100000, '2026-09-17 10:00:00');
+        DB::table('order_details')->where('id', 3)->update(['product_imei_id' => 1]);
+
+        $this->assertSame(0, Artisan::call('profit:backfill-cost-snapshots', ['--dry-run' => true]));
+        $this->assertStringContainsString('Validated 2 order details', Artisan::output());
+        $this->assertNull(DB::table('order_details')->where('id', 1)->value('cost_unit_snapshot'));
+
+        $this->assertSame(0, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertStringContainsString('Updated 2 order details', Artisan::output());
+        $this->assertSame(0, DB::table('order_details')->whereNull('cost_unit_snapshot')->orWhereNull('cost_total_snapshot')->count());
+        $this->assertDatabaseHas('order_details', [
+            'id' => 1, 'cost_unit_snapshot' => 150000, 'cost_total_snapshot' => 600000,
+            'cost_snapshot_source' => 'backfill',
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'id' => 2, 'cost_unit_snapshot' => 100000, 'cost_total_snapshot' => 100000,
+            'cost_snapshot_source' => 'sale',
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'id' => 3, 'cost_unit_snapshot' => 70000, 'cost_total_snapshot' => 70000,
+            'cost_snapshot_source' => 'backfill',
+        ]);
+
+        DB::table('products')->where('id', 1)->update(['price_buy' => 999999]);
+        DB::table('import_detail')->where('id', 1)->update(['price' => 900000]);
+        $this->actingAs($this->storeOne)
+            ->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()
+            ->assertJsonPath('product.0.quantity', 4)
+            ->assertJsonPath('product.0.cost', 520000)
+            ->assertJsonPath('has_legacy_cost', false);
+
+        $this->assertSame(0, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertStringContainsString('Updated 0 order details', Artisan::output());
+    }
+
+    public function test_imei_without_import_cost_falls_back_to_current_product_cost(): void
+    {
+        $this->sale(3, 3, 1, 1, 1, 100000, '2026-09-17 10:00:00');
+        DB::table('product_imeis')->insert([
+            'id' => 1, 'product_id' => 1, 'import_detail_id' => null,
+        ]);
+        DB::table('order_details')->where('id', 3)->update(['product_imei_id' => 1]);
+
+        $this->assertSame(0, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertDatabaseHas('order_details', [
+            'id' => 3, 'cost_unit_snapshot' => 150000, 'cost_total_snapshot' => 150000,
+            'cost_snapshot_source' => 'backfill',
+        ]);
+    }
+    public function test_backfill_rolls_back_every_row_when_product_or_cost_is_missing(): void
+    {
+        DB::table('products')->where('id', 2)->update(['price_buy' => null]);
+        $this->assertSame(1, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertStringContainsString('Order detail 2: cost is missing', Artisan::output());
+        $this->assertNull(DB::table('order_details')->where('id', 1)->value('cost_unit_snapshot'));
+        $this->assertNull(DB::table('order_details')->where('id', 2)->value('cost_unit_snapshot'));
+
+        DB::table('products')->where('id', 2)->delete();
+        $this->assertSame(1, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertStringContainsString('Order detail 2: product 2 is missing', Artisan::output());
+        $this->assertNull(DB::table('order_details')->where('id', 1)->value('cost_unit_snapshot'));
+    }
+
+    public function test_backfill_completes_partial_snapshots_without_changing_existing_cost_values(): void
+    {
+        DB::table('order_details')->where('id', 1)->update(['cost_unit_snapshot' => 150000]);
+        DB::table('order_details')->where('id', 2)->update(['cost_total_snapshot' => 100000]);
+
+        $this->assertSame(0, Artisan::call('profit:backfill-cost-snapshots'));
+        $this->assertDatabaseHas('order_details', [
+            'id' => 1, 'cost_unit_snapshot' => 150000, 'cost_total_snapshot' => 600000,
+            'cost_snapshot_source' => 'backfill',
+        ]);
+        $this->assertDatabaseHas('order_details', [
+            'id' => 2, 'cost_unit_snapshot' => 100000, 'cost_total_snapshot' => 100000,
+            'cost_snapshot_source' => 'backfill',
+        ]);
+        $this->actingAs($this->storeOne)
+            ->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()->assertJsonPath('product.0.cost', 450000)
+            ->assertJsonPath('has_legacy_cost', false);
+    }
     private function sale(
         int $orderId, int $detailId, int $branchId, int $storageId,
         int $quantity, int $price, string $date
