@@ -1,0 +1,68 @@
+name: Deploy Viet Dev
+
+on:
+  push:
+    branches:
+      - viet_dev
+
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-viet-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+
+          echo "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan \
+            -p "${{ secrets.PROD_PORT }}" \
+            -H "${{ secrets.PROD_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+      - name: Deploy Laravel
+        run: |
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -p "${{ secrets.PROD_PORT }}" \
+            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" << 'EOF'
+
+            set -e
+
+            cd /usr/share/nginx/html/demo_aicrm
+
+            echo "===== UPDATE SOURCE ====="
+            git fetch origin viet_dev
+            git reset --hard origin/viet_dev
+
+            echo "===== COMPOSER ====="
+            composer install \
+              --no-interaction \
+              --prefer-dist \
+              --optimize-autoloader
+
+            echo "===== FRONTEND ====="
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+
+            npm run build
+
+            echo "===== LARAVEL ====="
+            php artisan optimize:clear
+            php artisan optimize
+
+            echo "===== DEPLOY SUCCESS ====="
+
+          EOF
