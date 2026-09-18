@@ -11,39 +11,56 @@ concurrency:
   group: ci-cd-viet-dev
   cancel-in-progress: false
 
-
 jobs:
 
-  # =========================
-  # CI - KIỂM TRA CODE
-  # =========================
+  # ==================================
+  # CI - TEST CODE TRƯỚC KHI DEPLOY
+  # ==================================
   ci:
     name: CI - Test and Build
     runs-on: ubuntu-latest
 
+    # MySQL tạm thời dành riêng cho CI
+    services:
+      mysql:
+        image: mysql:8.0
+
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ci_test
+
+        ports:
+          - 3306:3306
+
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     steps:
 
-      # 1. Lấy source code từ GitHub
+      # 1. Lấy source code
       - name: Checkout source code
         uses: actions/checkout@v4
 
 
-      # 2. Tạo file .env dùng riêng cho CI
+      # 2. Cài PHP
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, bcmath, pdo_mysql
+          coverage: none
+
+
+      # 3. Tạo .env cho CI
       - name: Create CI environment
         run: |
           cp .env.example .env
 
 
-      # 3. Cài PHP giống server của bạn
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, xml, bcmath, pdo_sqlite, sqlite3
-          coverage: none
-
-
-      # 4. Cài thư viện PHP
+      # 4. Cài Composer
       - name: Install Composer dependencies
         run: |
           composer install \
@@ -52,46 +69,46 @@ jobs:
             --optimize-autoloader
 
 
-      # 5. Tạo APP_KEY cho Laravel CI
+      # 5. Tạo APP_KEY
       - name: Generate Laravel key
         run: |
           php artisan key:generate
 
 
-      # 6. Tạo database SQLite tạm thời
-      # Không dùng database production
-      - name: Create SQLite database
-        run: |
-          mkdir -p database
-          touch database/database.sqlite
-
-
-      # 7. Kiểm tra migration
+      # 6. Chạy migration trên MySQL tạm
       - name: Run database migrations
         env:
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: ci_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
         run: |
           php artisan migrate --force
 
 
-      # 8. Chạy Laravel tests
+      # 7. Chạy Laravel test
       - name: Run Laravel tests
         env:
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: ci_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
         run: |
           php artisan test
 
 
-      # 9. Cài Node.js giống server hiện tại
+      # 8. Cài Node
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
 
-      # 10. Cài package frontend
+      # 9. Cài frontend dependencies
       - name: Install frontend dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -101,28 +118,25 @@ jobs:
           fi
 
 
-      # 11. Kiểm tra Vite/frontend build được không
+      # 10. Build frontend
       - name: Build frontend
         run: |
           npm run build
 
 
 
-  # =========================
-  # CD - DEPLOY SERVER
-  # =========================
+  # ==================================
+  # CD - CHỈ CHẠY KHI CI THÀNH CÔNG
+  # ==================================
   deploy:
     name: CD - Deploy to Server
-
     runs-on: ubuntu-latest
 
-    # QUAN TRỌNG:
-    # CI phải thành công thì job deploy mới chạy
     needs: ci
 
     steps:
 
-      # 1. Tạo SSH key để GitHub vào server
+      # 1. Chuẩn bị SSH
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -133,7 +147,6 @@ jobs:
 
           chmod 600 ~/.ssh/id_ed25519
 
-          echo "Checking SSH private key..."
           ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
 
           ssh-keyscan \
@@ -142,7 +155,7 @@ jobs:
             >> ~/.ssh/known_hosts
 
 
-      # 2. SSH vào server và deploy
+      # 2. Deploy lên server
       - name: Deploy Laravel
         run: |
           ssh \
@@ -155,11 +168,9 @@ jobs:
 
             cd /usr/share/nginx/html/demo_aicrm
 
-
             echo "===== UPDATE SOURCE ====="
 
             git fetch origin viet_dev
-
             git reset --hard "$DEPLOY_SHA"
 
 
@@ -186,7 +197,6 @@ jobs:
             echo "===== LARAVEL ====="
 
             php artisan optimize:clear
-
             php artisan optimize
 
             php artisan queue:restart || true
