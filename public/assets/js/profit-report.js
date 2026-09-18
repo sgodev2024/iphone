@@ -75,7 +75,7 @@
             const tr = document.createElement('tr');
             cell(tr, item.product && item.product.code);
             cell(tr, item.product && item.product.name);
-            cell(tr, item.quantity, 'text-center');
+            cell(tr, item.quantity, 'text-end');
             cell(tr, money.format(Number(item.revenue)), 'text-end');
             cell(tr, money.format(Number(item.cost)), 'text-end');
             cell(tr, money.format(Number(item.profit)), 'text-end');

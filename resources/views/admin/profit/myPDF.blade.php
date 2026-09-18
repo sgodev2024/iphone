@@ -49,6 +49,42 @@
             font-size: 13px;
         }
 
+        #reportTable th:nth-child(1),
+        #reportTable td:nth-child(1),
+        #reportTable th:nth-child(2),
+        #reportTable td:nth-child(2) {
+            text-align: left;
+        }
+
+        #reportTable th:nth-child(3),
+        #reportTable td:nth-child(3),
+        #reportTable th:nth-child(4),
+        #reportTable td:nth-child(4),
+        #reportTable th:nth-child(5),
+        #reportTable td:nth-child(5),
+        #reportTable th:nth-child(6),
+        #reportTable td:nth-child(6),
+        #reportTable th:nth-child(7),
+        #reportTable td:nth-child(7) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #reportTable th:nth-child(1),
+        #reportTable td:nth-child(1) { width: 14%; }
+        #reportTable th:nth-child(2),
+        #reportTable td:nth-child(2) { width: 28%; }
+        #reportTable th:nth-child(3),
+        #reportTable td:nth-child(3) { width: 10%; }
+        #reportTable th:nth-child(4),
+        #reportTable td:nth-child(4),
+        #reportTable th:nth-child(5),
+        #reportTable td:nth-child(5),
+        #reportTable th:nth-child(6),
+        #reportTable td:nth-child(6) { width: 14%; }
+        #reportTable th:nth-child(7),
+        #reportTable td:nth-child(7) { width: 6%; }
+
         .font-size{
             font-size: 13px
         }
@@ -100,7 +136,7 @@
                     <th>Doanh thu</th>
                     <th>Tổng vốn</th>
                     <th>Lới nhuận</th>
-                    <th>Tỷ suất </th>
+                    <th>Tỷ suất</th>
                 </tr>
             </thead>
             <tbody id="reportTableBody">

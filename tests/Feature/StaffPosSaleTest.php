@@ -2648,6 +2648,7 @@ class StaffPosSaleTest extends TestCase
             'quantity' => 2,
             'cost_unit_snapshot' => 250000,
             'cost_total_snapshot' => 500000,
+            'cost_snapshot_source' => 'sale',
         ]);
         $quantityProduct->update(['price_buy' => 900000]);
         $this->assertSame(500000, (int) $quantityProduct->orderDetails()->sole()->cost_total_snapshot);
@@ -3561,6 +3562,7 @@ class StaffPosSaleTest extends TestCase
             $table->decimal('price', 12, 2)->default(0);
             $table->decimal('cost_unit_snapshot', 20, 2)->nullable();
             $table->decimal('cost_total_snapshot', 20, 2)->nullable();
+            $table->string('cost_snapshot_source', 16)->nullable();
             $table->integer('quantity')->default(0);
             $table->timestamps();
         });

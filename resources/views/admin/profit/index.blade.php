@@ -66,6 +66,56 @@
             -webkit-overflow-scrolling: touch;
         }
 
+        .profit-page .profit-table {
+            width: 100%;
+            min-width: 960px;
+            table-layout: fixed;
+        }
+
+        .profit-page .profit-table th,
+        .profit-page .profit-table td {
+            vertical-align: middle;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .profit-page .profit-table th:nth-child(1),
+        .profit-page .profit-table td:nth-child(1),
+        .profit-page .profit-table th:nth-child(2),
+        .profit-page .profit-table td:nth-child(2) {
+            text-align: left;
+        }
+
+        .profit-page .profit-table th:nth-child(3),
+        .profit-page .profit-table td:nth-child(3),
+        .profit-page .profit-table th:nth-child(4),
+        .profit-page .profit-table td:nth-child(4),
+        .profit-page .profit-table th:nth-child(5),
+        .profit-page .profit-table td:nth-child(5),
+        .profit-page .profit-table th:nth-child(6),
+        .profit-page .profit-table td:nth-child(6),
+        .profit-page .profit-table th:nth-child(7),
+        .profit-page .profit-table td:nth-child(7) {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .profit-page .profit-table th:nth-child(1),
+        .profit-page .profit-table td:nth-child(1) { width: 14%; }
+        .profit-page .profit-table th:nth-child(2),
+        .profit-page .profit-table td:nth-child(2) {
+            width: 28%;
+            overflow-wrap: anywhere;
+        }
+        .profit-page .profit-table th:nth-child(3),
+        .profit-page .profit-table td:nth-child(3) { width: 10%; }
+        .profit-page .profit-table th:nth-child(4),
+        .profit-page .profit-table td:nth-child(4),
+        .profit-page .profit-table th:nth-child(5),
+        .profit-page .profit-table td:nth-child(5),
+        .profit-page .profit-table th:nth-child(6),
+        .profit-page .profit-table td:nth-child(6) { width: 14%; }
+        .profit-page .profit-table th:nth-child(7),
+        .profit-page .profit-table td:nth-child(7) { width: 6%; }
         .profit-page .profit-date-field input {
             flex: 1 1 0;
             min-width: 0;
@@ -267,8 +317,8 @@
             .profit-page .profit-table {
                 display: table !important;
                 width: 100% !important;
-                min-width: 1000px;
-                table-layout: auto;
+                min-width: 960px;
+                table-layout: fixed;
             }
 
             .profit-page .profit-table th,
@@ -332,6 +382,25 @@
                 text-align: right;
             }
 
+            .profit-page .profit-table th:nth-child(1),
+            .profit-page .profit-table td:nth-child(1),
+            .profit-page .profit-table th:nth-child(2),
+            .profit-page .profit-table td:nth-child(2) {
+                text-align: left;
+            }
+
+            .profit-page .profit-table th:nth-child(3),
+            .profit-page .profit-table td:nth-child(3),
+            .profit-page .profit-table th:nth-child(4),
+            .profit-page .profit-table td:nth-child(4),
+            .profit-page .profit-table th:nth-child(5),
+            .profit-page .profit-table td:nth-child(5),
+            .profit-page .profit-table th:nth-child(6),
+            .profit-page .profit-table td:nth-child(6),
+            .profit-page .profit-table th:nth-child(7),
+            .profit-page .profit-table td:nth-child(7) {
+                text-align: right;
+            }
             .profit-page #pagination {
                 display: flex !important;
                 align-items: center;
