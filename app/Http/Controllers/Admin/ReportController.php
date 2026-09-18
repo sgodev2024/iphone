@@ -279,11 +279,14 @@ class ReportController extends Controller
             ? $service->storage(Auth::user(), (int) $data['storage_id'])
             : null;
 
+        $rows = $service->report(
+            Auth::user(), $storage, $data['filter'] ?? 'all',
+            $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
+        );
+
         return response()->json([
-            'product' => $service->report(
-                Auth::user(), $storage, $data['filter'] ?? 'all',
-                $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
-            ),
+            'product' => $rows,
+            'has_legacy_cost' => collect($rows)->contains('legacy_cost', true),
         ]);
     }
 
@@ -294,11 +297,14 @@ class ReportController extends Controller
         $service = app(ProfitReportService::class);
         $storage = $service->storage(Auth::user(), (int) $data['storage_id']);
 
+        $rows = $service->report(
+            Auth::user(), $storage, $data['filter'],
+            $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
+        );
+
         return response()->json([
-            'product' => $service->report(
-                Auth::user(), $storage, $data['filter'],
-                $data['startDate'] ?? null, $data['endDate'] ?? null, trim($data['search'] ?? '')
-            ),
+            'product' => $rows,
+            'has_legacy_cost' => collect($rows)->contains('legacy_cost', true),
         ]);
     }
 
@@ -313,6 +319,7 @@ class ReportController extends Controller
         );
         $pdf = Pdf::loadView('admin.profit.myPDF', [
             'listprofit' => $rows,
+            'hasLegacyCost' => collect($rows)->contains('legacy_cost', true),
             'startDate' => $data['startDate'] ?? null,
             'endDate' => $data['endDate'] ?? null,
             'storage' => $storage->name,

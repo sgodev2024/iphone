@@ -16,6 +16,8 @@ class OrderDetail extends Model
         'product_imei_id',
         'price',
         'quantity',
+        'cost_unit_snapshot',
+        'cost_total_snapshot',
     ];
 
     protected $appends = ['product'];

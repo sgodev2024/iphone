@@ -2563,6 +2563,7 @@ class StaffPosSaleTest extends TestCase
         ]);
         ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
         $imei = $this->createImeiInStorage($product, $storage, '123456789012349');
+        ImportDetail::query()->whereKey($imei->import_detail_id)->update(['price' => 10000000]);
 
         $this->actingAs($staff)
             ->postJson('/ban-hang/order', $this->orderPayload([
@@ -2582,7 +2583,11 @@ class StaffPosSaleTest extends TestCase
             'storage_id' => $storage->id,
             'quantity' => 1,
             'price' => 11000000,
+            'cost_unit_snapshot' => 10000000,
+            'cost_total_snapshot' => 10000000,
         ]);
+        ImportDetail::query()->whereKey($imei->import_detail_id)->update(['price' => 16000000]);
+        $this->assertSame('10000000', (string) (int) $product->orderDetails()->sole()->cost_unit_snapshot);
         $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
         $this->assertDatabaseHas('product_storage', [
             'product_id' => $product->id,
@@ -2634,12 +2639,18 @@ class StaffPosSaleTest extends TestCase
             'product_id' => $imeiProduct->id,
             'product_imei_id' => $imei->id,
             'quantity' => 1,
+            'cost_unit_snapshot' => 12000000,
+            'cost_total_snapshot' => 12000000,
         ]);
         $this->assertDatabaseHas('order_details', [
             'product_id' => $quantityProduct->id,
             'product_imei_id' => null,
             'quantity' => 2,
+            'cost_unit_snapshot' => 250000,
+            'cost_total_snapshot' => 500000,
         ]);
+        $quantityProduct->update(['price_buy' => 900000]);
+        $this->assertSame(500000, (int) $quantityProduct->orderDetails()->sole()->cost_total_snapshot);
         $this->assertSame(ProductImei::STATUS_SOLD, $imei->fresh()->status);
         $this->assertDatabaseHas('product_storage', [
             'product_id' => $imeiProduct->id,
@@ -2651,6 +2662,55 @@ class StaffPosSaleTest extends TestCase
             'storage_id' => $storage->id,
             'quantity' => 3,
         ]);
+    }
+
+    public function test_missing_imei_import_cost_rolls_back_sale_and_stock(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'price' => 200000,
+            'price_buy' => 120000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, 'IMEI-NO-COST');
+        $imei->forceFill(['import_detail_id' => null])->save();
+
+        $this->actingAs($staff);
+        $this->assertValidationFailure(fn () => $this->createServiceSale(
+            $staff, $product, $storage->id, 'cash', $imei
+        ));
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Transaction::query()->count());
+        $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
+        $this->assertSame(1, (int) ProductStorage::query()
+            ->where('product_id', $product->id)
+            ->where('storage_id', $storage->id)
+            ->value('quantity'));
+    }
+
+    public function test_imei_cost_source_from_another_branch_cannot_be_used(): void
+    {
+        $this->seedAccounts();
+        [$storage, , $staff] = $this->createStaffContext();
+        $foreignStorage = $this->createStorage(['name' => 'Other branch', 'branch_id' => 2]);
+        $product = $this->createProduct([
+            'inventory_tracking' => Product::INVENTORY_TRACKING_IMEI,
+            'price' => 200000,
+            'price_buy' => 120000,
+        ]);
+        ProductStorage::create(['product_id' => $product->id, 'storage_id' => $storage->id, 'quantity' => 1]);
+        $imei = $this->createImeiInStorage($product, $storage, 'IMEI-FOREIGN-COST');
+        $importId = ImportDetail::query()->whereKey($imei->import_detail_id)->value('import_id');
+        DB::table('import_coupon')->where('id', $importId)->update(['storage_id' => $foreignStorage->id]);
+
+        $this->actingAs($staff);
+        $this->assertValidationFailure(fn () => $this->createServiceSale(
+            $staff, $product, $storage->id, 'cash', $imei
+        ));
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(ProductImei::STATUS_IN_STOCK, $imei->fresh()->status);
     }
 
     public function test_checkout_late_failure_rolls_back_imei_order_stock_and_accounting(): void
@@ -3499,6 +3559,8 @@ class StaffPosSaleTest extends TestCase
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('product_imei_id')->nullable();
             $table->decimal('price', 12, 2)->default(0);
+            $table->decimal('cost_unit_snapshot', 20, 2)->nullable();
+            $table->decimal('cost_total_snapshot', 20, 2)->nullable();
             $table->integer('quantity')->default(0);
             $table->timestamps();
         });

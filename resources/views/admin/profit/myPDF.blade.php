@@ -83,8 +83,13 @@
                 <span>Kho: {{ $storage }}</span>
             </div>
         </div>
+        @if ($hasLegacyCost)
+        <div style="font-size: 12px; color: #8a5200;">
+            Một số dòng bán cũ chưa có giá vốn snapshot; giá vốn của các dòng đó có thể không phản ánh đúng thời điểm bán.
+        </div>
+        @endif
         <div class="mb-2sss" style="text-align: right;">
-            <i style="font-size: 12px;  ">(Doanh thu bán đã phân bổ giảm giá hóa đơn; hàng trả completed trừ theo ngày lập phiếu. Giá vốn hàng không IMEI dùng giá hiện tại vì chưa có snapshot lịch sử. Phí phiếu trả chưa phân bổ theo sản phẩm.)</i>
+            <i style="font-size: 12px;">(Doanh thu bán đã phân bổ giảm giá hóa đơn; hàng trả completed trừ theo ngày lập phiếu. Phí phiếu trả chưa phân bổ theo sản phẩm.)</i>
         </div>
         <table class="table table-hover" id="reportTable">
             <thead>

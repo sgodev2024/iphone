@@ -421,8 +421,10 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        <p class="alert alert-warning" id="legacyCostWarning" hidden>
+                            Một số dòng bán cũ chưa có giá vốn snapshot; giá vốn của các dòng đó được tính theo dữ liệu hiện tại và có thể không phản ánh đúng giá vốn lúc bán.
+                        </p>
                         <p class="alert alert-warning">
-                            Giá vốn hàng không IMEI đang dùng giá vốn sản phẩm hiện tại vì chưa có snapshot lúc bán.
                             Phiếu trả completed được ghi nhận theo ngày lập phiếu; phí và điều chỉnh của phiếu trả chưa được phân bổ theo sản phẩm.
                         </p>
                         <div class="form-group row profit-filter-row">

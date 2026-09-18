@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Client;
+use App\Models\ImportDetail;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Product;
@@ -103,6 +104,7 @@ class SaleService
                         ->orWhere('status', '1')
                         ->orWhere('status', 'published');
                 })
+                ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
 
@@ -132,7 +134,8 @@ class SaleService
                         $item,
                         $imeis,
                         $products,
-                        $storageId
+                        $storageId,
+                        $branchId
                         // $existingImeiOrderDetails
                     )
                     : $this->prepareQuantityOrderItem($item, $products);
@@ -252,6 +255,8 @@ class SaleService
                     'storage_id' => $storageId,
                     'price' => $item['price'],
                     'quantity' => $item['quantity'],
+                    'cost_unit_snapshot' => $item['cost_unit_snapshot'],
+                    'cost_total_snapshot' => $item['cost_total_snapshot'],
                 ]);
 
                 if ($item['tracking_type'] === Product::INVENTORY_TRACKING_IMEI) {
@@ -407,6 +412,7 @@ class SaleService
         Collection $imeis,
         Collection $products,
         int $storageId,
+        int $branchId,
         // Collection $existingImeiOrderDetails
     ): array {
         $imei = $imeis->get((int) $item['product_imei_id']);
@@ -457,6 +463,16 @@ class SaleService
         // }
 
         $price = (float) $item['unit_price'];
+        $importCost = ImportDetail::query()
+            ->join('import_coupon', 'import_coupon.id', '=', 'import_detail.import_id')
+            ->join('storages as import_storage', 'import_storage.id', '=', 'import_coupon.storage_id')
+            ->whereKey($imei->import_detail_id)
+            ->where('import_detail.product_id', $activeProduct->id)
+            ->where('import_storage.branch_id', $branchId)
+            ->select('import_detail.price')
+            ->lockForUpdate()
+            ->first()?->price;
+        $unitCost = $this->requiredCost($importCost, 'IMEI thiếu giá vốn phiếu nhập hợp lệ; không thể hoàn tất đơn hàng.');
 
         return [
             'tracking_type' => Product::INVENTORY_TRACKING_IMEI,
@@ -466,6 +482,8 @@ class SaleService
             'quantity' => 1,
             'price' => $price,
             'total' => $price,
+            'cost_unit_snapshot' => $unitCost,
+            'cost_total_snapshot' => $unitCost,
         ];
     }
 
@@ -489,6 +507,7 @@ class SaleService
 
         $quantity = (int) $item['quantity'];
         $price = (float) $item['unit_price'];
+        $unitCost = $this->requiredCost($product->price_buy, 'Sản phẩm thiếu giá vốn hiện tại; không thể hoàn tất đơn hàng.');
 
         return [
             'tracking_type' => Product::INVENTORY_TRACKING_QUANTITY,
@@ -498,7 +517,18 @@ class SaleService
             'quantity' => $quantity,
             'price' => $price,
             'total' => $price * $quantity,
+            'cost_unit_snapshot' => $unitCost,
+            'cost_total_snapshot' => number_format((float) $unitCost * $quantity, 2, '.', ''),
         ];
+    }
+
+    private function requiredCost(mixed $value, string $message): string
+    {
+        if ($value === null || ! is_numeric($value) || (float) $value < 0) {
+            throw ValidationException::withMessages(['items' => $message]);
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     private function ensureStockIsAvailable(

@@ -132,7 +132,7 @@ class ProfitReportService
                 continue;
             }
             $id = (int) $detail->product_id;
-            $rows[$id] ??= ['product' => $product, 'quantity' => 0, 'revenue' => 0.0, 'cost' => 0.0];
+            $rows[$id] ??= ['product' => $product, 'quantity' => 0, 'revenue' => 0.0, 'cost' => 0.0, 'legacy_cost' => false];
             $quantity = (int) $detail->quantity;
             $gross = (float) $detail->price * $quantity;
             $subtotal = (float) $detail->order?->orderDetails->sum(
@@ -140,7 +140,10 @@ class ProfitReportService
             );
             $rows[$id]['quantity'] += $quantity;
             $rows[$id]['revenue'] += $subtotal > 0 ? (float) $detail->order->total_money * $gross / $subtotal : 0;
-            $rows[$id]['cost'] += $this->unitCost($detail) * $quantity;
+            $rows[$id]['cost'] += $this->hasSnapshot($detail)
+                ? (float) $detail->cost_total_snapshot
+                : $this->unitCost($detail) * $quantity;
+            $rows[$id]['legacy_cost'] = $rows[$id]['legacy_cost'] || ! $this->hasSnapshot($detail);
         }
 
         foreach ($returns as $return) {
@@ -150,11 +153,12 @@ class ProfitReportService
                 continue;
             }
             $id = (int) $return->product_id;
-            $rows[$id] ??= ['product' => $product, 'quantity' => 0, 'revenue' => 0.0, 'cost' => 0.0];
+            $rows[$id] ??= ['product' => $product, 'quantity' => 0, 'revenue' => 0.0, 'cost' => 0.0, 'legacy_cost' => false];
             $quantity = (int) $return->quantity;
             $rows[$id]['quantity'] -= $quantity;
             $rows[$id]['revenue'] -= (float) $return->return_amount;
             $rows[$id]['cost'] -= $this->unitCost($originalDetail) * $quantity;
+            $rows[$id]['legacy_cost'] = $rows[$id]['legacy_cost'] || ! $this->hasSnapshot($originalDetail);
         }
 
         return collect($rows)
@@ -167,9 +171,22 @@ class ProfitReportService
             })->values()->all();
     }
 
+    private function hasSnapshot(OrderDetail $detail): bool
+    {
+        if (($detail->cost_unit_snapshot === null) !== ($detail->cost_total_snapshot === null)) {
+            throw new \RuntimeException("Incomplete cost snapshot on order detail {$detail->id}.");
+        }
+
+        return $detail->cost_unit_snapshot !== null;
+    }
+
     private function unitCost(OrderDetail $detail): float
     {
-        // Non-IMEI order details have no historical cost snapshot yet.
+        if ($this->hasSnapshot($detail)) {
+            return (float) $detail->cost_unit_snapshot;
+        }
+
+        // Legacy sale lines have no historical snapshot.
         return (float) ($detail->productImei?->importDetail?->price
             ?? $detail->getRelation('product')?->price_buy
             ?? 0);

@@ -14,6 +14,7 @@
     const pagination = document.getElementById('pagination');
     const loader = document.getElementById('loader');
     const error = document.getElementById('profitFilterError');
+    const legacyCostWarning = document.getElementById('legacyCostWarning');
     const initialStorage = storage.value;
     let rows = [];
     let currentPage = 1;
@@ -120,6 +121,7 @@
             if (activeRequest) activeRequest.abort();
             requestNumber++;
             rows = [];
+            legacyCostWarning.hidden = true;
             render();
             loader.style.display = 'none';
             if (exportPdf) exportPdf.disabled = true;
@@ -151,11 +153,13 @@
             }
             if (thisRequest !== requestNumber) return;
             rows = Array.isArray(result.product) ? result.product : [];
+            legacyCostWarning.hidden = !result.has_legacy_cost;
             currentPage = 1;
             render();
         } catch (failure) {
             if (failure.name === 'AbortError' || thisRequest !== requestNumber) return;
             rows = [];
+            legacyCostWarning.hidden = true;
             render();
             showError(failure.message || 'Không thể tải báo cáo.');
         } finally {

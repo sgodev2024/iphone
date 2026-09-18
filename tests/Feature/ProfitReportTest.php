@@ -79,6 +79,7 @@ class ProfitReportTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('product_id');
             $table->unsignedBigInteger('import_detail_id')->nullable();
+            $table->softDeletes();
         });
         Schema::create('orders', function (Blueprint $table): void {
             $table->id();
@@ -96,6 +97,8 @@ class ProfitReportTest extends TestCase
             $table->unsignedBigInteger('storage_id');
             $table->unsignedInteger('quantity');
             $table->unsignedBigInteger('price');
+            $table->decimal('cost_unit_snapshot', 20, 2)->nullable();
+            $table->decimal('cost_total_snapshot', 20, 2)->nullable();
             $table->timestamps();
         });
         Schema::create('order_returns', function (Blueprint $table): void {
@@ -273,13 +276,120 @@ class ProfitReportTest extends TestCase
                 return $data['listprofit'][0]['quantity'] === $expected[0]['quantity']
                     && (float) $data['listprofit'][0]['revenue'] === (float) $expected[0]['revenue']
                     && $data['storage'] === 'Storage One'
-                    && $data['filter'] === '3';
+                    && $data['filter'] === '3'
+                    && $data['hasLegacyCost'] === true;
             }))
             ->andReturn($pdf);
 
         $this->withoutExceptionHandling();
         $this->post('/admin/profit/profit-report-pdf', [
             'storage_id' => 1, 'filter' => '3', 'search' => 'SP-ONE',
+        ])->assertOk();
+    }
+
+    public function test_snapshot_cost_survives_price_change_and_partial_return(): void
+    {
+        DB::table('order_details')->where('id', 1)->update([
+            'cost_unit_snapshot' => 150000,
+            'cost_total_snapshot' => 600000,
+        ]);
+        DB::table('products')->where('id', 1)->update(['price_buy' => 999999]);
+
+        $this->actingAs($this->storeOne)
+            ->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()
+            ->assertJsonPath('product.0.quantity', 3)
+            ->assertJsonPath('product.0.cost', 450000)
+            ->assertJsonPath('product.0.profit', -150000)
+            ->assertJsonPath('has_legacy_cost', false);
+
+        $this->postJson('/admin/profit/profit-report', [
+            'storage_id' => 1, 'filter' => '6',
+            'startDate' => '2026-09-16', 'endDate' => '2026-09-16',
+        ])->assertOk()
+            ->assertJsonPath('product.0.quantity', -1)
+            ->assertJsonPath('product.0.cost', -150000)
+            ->assertJsonPath('has_legacy_cost', false);
+    }
+
+    public function test_quantity_two_keeps_checkout_cost_after_product_price_changes(): void
+    {
+        $this->sale(3, 3, 1, 1, 2, 500, '2026-09-17 10:00:00');
+        DB::table('order_details')->where('id', 3)->update([
+            'cost_unit_snapshot' => 100,
+            'cost_total_snapshot' => 200,
+        ]);
+        DB::table('products')->where('id', 1)->update(['price_buy' => 300]);
+
+        $this->actingAs($this->storeOne)->postJson('/admin/profit/profit-report', [
+            'storage_id' => 1, 'filter' => '6',
+            'startDate' => '2026-09-17', 'endDate' => '2026-09-17',
+        ])->assertOk()
+            ->assertJsonPath('product.0.quantity', 2)
+            ->assertJsonPath('product.0.cost', 200)
+            ->assertJsonPath('has_legacy_cost', false);
+    }
+
+    public function test_legacy_warning_only_appears_for_rows_in_selected_result(): void
+    {
+        $this->actingAs($this->storeOne)
+            ->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()->assertJsonPath('has_legacy_cost', true);
+
+        $this->postJson('/admin/profit/profit-report', [
+            'storage_id' => 1, 'filter' => 'all', 'search' => 'nothing-matches',
+        ])->assertOk()->assertJsonPath('has_legacy_cost', false);
+
+        DB::table('order_details')->where('id', 1)->update([
+            'cost_unit_snapshot' => 150000,
+            'cost_total_snapshot' => 600000,
+        ]);
+        $this->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()->assertJsonPath('has_legacy_cost', false);
+        $this->assertNull(DB::table('order_details')->where('id', 2)->value('cost_unit_snapshot'));
+    }
+
+    public function test_imei_snapshot_overrides_changed_import_cost(): void
+    {
+        DB::table('import_detail')->insert(['id' => 1, 'price' => 120000]);
+        DB::table('product_imeis')->insert(['id' => 1, 'product_id' => 1, 'import_detail_id' => 1]);
+        DB::table('order_details')->where('id', 1)->update([
+            'product_imei_id' => 1,
+            'quantity' => 1,
+            'cost_unit_snapshot' => 120000,
+            'cost_total_snapshot' => 120000,
+        ]);
+        DB::table('orders')->where('id', 1)->update(['total_money' => 100000]);
+        DB::table('import_detail')->where('id', 1)->update(['price' => 900000]);
+
+        $this->actingAs($this->storeOne)
+            ->postJson('/admin/profit/profit-report', ['storage_id' => 1, 'filter' => 'all'])
+            ->assertOk()->assertJsonCount(0, 'product')
+            ->assertJsonPath('has_legacy_cost', false);
+        $this->postJson('/admin/profit/profit-report', [
+            'storage_id' => 1, 'filter' => '6',
+            'startDate' => '2026-09-10', 'endDate' => '2026-09-10',
+        ])->assertOk()->assertJsonPath('product.0.cost', 120000);
+    }
+
+    public function test_pdf_hides_legacy_warning_when_filtered_rows_have_snapshots(): void
+    {
+        DB::table('order_details')->where('id', 1)->update([
+            'cost_unit_snapshot' => 150000,
+            'cost_total_snapshot' => 600000,
+        ]);
+        $pdf = Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdf->shouldReceive('download')->once()->with('profit_report.pdf')->andReturn(response('pdf', 200));
+        Pdf::shouldReceive('loadView')->once()
+            ->with('admin.profit.myPDF', Mockery::on(fn (array $data): bool =>
+                $data['hasLegacyCost'] === false
+                && $data['listprofit'][0]['quantity'] === 3
+                && (float) $data['listprofit'][0]['cost'] === 450000.0
+            ))
+            ->andReturn($pdf);
+
+        $this->actingAs($this->storeOne)->post('/admin/profit/profit-report-pdf', [
+            'storage_id' => 1, 'filter' => 'all',
         ])->assertOk();
     }
 
