@@ -170,10 +170,13 @@ jobs:
       - name: Deploy Laravel
         run: |
           ssh \
-            -i ~/.ssh/id_ed25519 \
-            -p "${{ secrets.PROD_PORT }}" \
-            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" \
-            "DEPLOY_SHA='${{ github.sha }}' bash -s" << 'EOF'
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=10 \
+  -o TCPKeepAlive=yes \
+  -i ~/.ssh/id_ed25519 \
+  -p "${{ secrets.PROD_PORT }}" \
+  "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" \
+  "DEPLOY_SHA='${{ github.sha }}' bash -s" << 'EOF'
 
             set -e
 
