@@ -228,10 +228,10 @@ class AuthorizationFlowTest extends TestCase
 
     private function createAuthorizationSchema(): void
     {
-        Schema::dropIfExists('role_permission');
-        Schema::dropIfExists('permissions');
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('roles');
+        $this->dropFixtureTables(['role_permission']);
+        $this->dropFixtureTables(['permissions']);
+        $this->dropFixtureTables(['users']);
+        $this->dropFixtureTables(['roles']);
 
         Schema::create('roles', function (Blueprint $table): void {
             $table->id();

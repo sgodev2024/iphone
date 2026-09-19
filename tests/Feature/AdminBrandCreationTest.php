@@ -142,8 +142,8 @@ class AdminBrandCreationTest extends TestCase
 
     private function createSchema(): void
     {
-        Schema::dropIfExists('brands');
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables(['brands']);
+        $this->dropFixtureTables(['users']);
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();

@@ -20,11 +20,13 @@ class AccountStatusSessionEnforcementTest extends TestCase
     {
         parent::setUp();
 
-        Schema::dropIfExists('user_info');
-        Schema::dropIfExists('config');
-        Schema::dropIfExists('storages');
-        Schema::dropIfExists('branches');
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables([
+            'user_info',
+            'config',
+            'storages',
+            'branches',
+            'users',
+        ]);
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();

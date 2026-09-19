@@ -29,7 +29,7 @@ class ProfitReportTest extends TestCase
         foreach (['order_return_details', 'order_returns', 'order_details', 'orders',
             'product_imeis', 'import_detail', 'import_coupon', 'products', 'storages', 'branches',
             'user_infos', 'users'] as $table) {
-            Schema::dropIfExists($table);
+            $this->dropFixtureTables([$table]);
         }
 
         Schema::create('users', function (Blueprint $table): void {

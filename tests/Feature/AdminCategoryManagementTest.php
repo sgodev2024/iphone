@@ -111,8 +111,8 @@ class AdminCategoryManagementTest extends TestCase
 
     private function createSchema(): void
     {
-        Schema::dropIfExists('categories');
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables(['categories']);
+        $this->dropFixtureTables(['users']);
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();

@@ -11,7 +11,7 @@ class HistoricalCostSnapshotMigrationTest extends TestCase
 {
     public function test_migration_adds_nullable_snapshots_without_backfilling_legacy_sales(): void
     {
-        Schema::dropIfExists('order_details');
+        $this->dropFixtureTables(['order_details']);
         Schema::create('order_details', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('price');
@@ -37,7 +37,7 @@ class HistoricalCostSnapshotMigrationTest extends TestCase
     }
     public function test_source_migration_preserves_existing_snapshots(): void
     {
-        Schema::dropIfExists('order_details');
+        $this->dropFixtureTables(['order_details']);
         Schema::create('order_details', function (Blueprint $table): void {
             $table->id();
             $table->decimal('cost_unit_snapshot', 20, 2)->nullable();

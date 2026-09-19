@@ -37,7 +37,7 @@ class CustomerDebtReportTest extends TestCase
             'accounts',
             'users',
         ] as $table) {
-            Schema::dropIfExists($table);
+            $this->dropFixtureTables([$table]);
         }
 
         Schema::create('users', function (Blueprint $table): void {

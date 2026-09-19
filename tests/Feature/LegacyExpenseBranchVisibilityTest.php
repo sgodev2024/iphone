@@ -19,7 +19,7 @@ class LegacyExpenseBranchVisibilityTest extends TestCase
         parent::setUp();
 
         foreach (['supplier_debts', 'expense', 'companies', 'users'] as $table) {
-            Schema::dropIfExists($table);
+            $this->dropFixtureTables([$table]);
         }
         Schema::create('users', function (Blueprint $table): void {
             $table->id();

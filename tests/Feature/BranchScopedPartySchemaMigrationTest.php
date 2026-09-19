@@ -11,9 +11,9 @@ class BranchScopedPartySchemaMigrationTest extends TestCase
 {
     public function test_party_branch_columns_can_be_added_without_backfill(): void
     {
-        Schema::dropIfExists('clients');
-        Schema::dropIfExists('companies');
-        Schema::dropIfExists('branches');
+        $this->dropFixtureTables(['clients']);
+        $this->dropFixtureTables(['companies']);
+        $this->dropFixtureTables(['branches']);
 
         Schema::create('branches', function (Blueprint $table): void {
             $table->id();

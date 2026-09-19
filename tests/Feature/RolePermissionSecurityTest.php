@@ -482,10 +482,10 @@ SQL);
 
     private function createRoleSecuritySchema(): void
     {
-        Schema::dropIfExists('orders');
-        Schema::dropIfExists('config');
-        Schema::dropIfExists('user_info');
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables(['orders']);
+        $this->dropFixtureTables(['config']);
+        $this->dropFixtureTables(['user_info']);
+        $this->dropFixtureTables(['users']);
 
         Schema::table('roles', function (Blueprint $table): void {
             $table->text('description')->nullable();

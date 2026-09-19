@@ -13,7 +13,7 @@ class RoleRenameMigrationTest extends TestCase
 {
     public function test_role_rename_preserves_ids_users_permissions_and_rolls_back(): void
     {
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables(['users']);
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
             $table->string('name');

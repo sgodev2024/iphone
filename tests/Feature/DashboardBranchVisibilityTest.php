@@ -309,7 +309,7 @@ class DashboardBranchVisibilityTest extends TestCase
             'clients',
             'users',
         ] as $table) {
-            Schema::dropIfExists($table);
+            $this->dropFixtureTables([$table]);
         }
 
         Schema::create('users', function (Blueprint $table): void {

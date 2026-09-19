@@ -56,7 +56,7 @@ class BackfillCustomerSalesCommandTest extends TestCase
         parent::setUp();
 
         foreach (['transaction_entries', 'transactions', 'order_details', 'orders', 'clients', 'accounts', 'users'] as $table) {
-            Schema::dropIfExists($table);
+            $this->dropFixtureTables([$table]);
         }
 
         $this->createSchema();
