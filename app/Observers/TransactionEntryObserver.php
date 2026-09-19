@@ -6,6 +6,7 @@ use App\Models\Transaction;
 use App\Models\TransactionEntry;
 use App\Services\Accounting\CustomerDebtSnapshotInvalidator;
 use App\Services\Accounting\SupplierDebtSnapshotInvalidator;
+use Illuminate\Support\Facades\Schema;
 
 class TransactionEntryObserver
 {
@@ -47,9 +48,16 @@ class TransactionEntryObserver
     private function contribution(array $attributes): array
     {
         $transactionId = (int) ($attributes['transaction_id'] ?? 0);
+        $hasBranchId = Schema::hasColumn('transactions', 'branch_id');
+        $columns = ['transaction_date', 'status', 'user_id'];
+
+        if ($hasBranchId) {
+            $columns[] = 'branch_id';
+        }
+
         $transaction = Transaction::query()
             ->whereKey($transactionId)
-            ->first(['transaction_date', 'status', 'user_id', 'branch_id']);
+            ->first($columns);
 
         return [
             'accountId' => (int) ($attributes['account_id'] ?? 0),
@@ -58,7 +66,7 @@ class TransactionEntryObserver
             'transactionDate' => $transaction?->transaction_date,
             'transactionStatus' => $transaction?->status,
             'transactionOwnerId' => $transaction?->user_id,
-            'transactionBranchId' => $transaction?->branch_id,
+            'transactionBranchId' => $hasBranchId ? $transaction?->branch_id : null,
         ];
     }
 }

@@ -113,7 +113,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: |
-              php artisan test tests/Feature/GenericCashVoucherTest.php --stop-on-failure --stop-on-error
+          php artisan test --stop-on-failure --stop-on-error
 
 
       # 8. Cài Node
