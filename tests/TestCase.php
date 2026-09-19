@@ -18,6 +18,20 @@ abstract class TestCase extends BaseTestCase
         $this->createAuthorizationTablesForTests();
     }
 
+    /** @param array<int, string> $tables */
+    protected function dropFixtureTables(array $tables): void
+    {
+        Schema::disableForeignKeyConstraints();
+
+        try {
+            foreach ($tables as $table) {
+                Schema::dropIfExists($table);
+            }
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
+    }
+
     protected function createAuthorizationTablesForTests(): void
     {
         Schema::disableForeignKeyConstraints();

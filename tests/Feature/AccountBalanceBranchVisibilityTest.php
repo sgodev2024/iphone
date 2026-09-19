@@ -16,12 +16,14 @@ class AccountBalanceBranchVisibilityTest extends TestCase
     {
         parent::setUp();
 
-        Schema::dropIfExists('transaction_entries');
-        Schema::dropIfExists('transactions');
-        Schema::dropIfExists('accounts');
-        Schema::dropIfExists('config');
-        Schema::dropIfExists('user_info');
-        Schema::dropIfExists('users');
+        $this->dropFixtureTables([
+            'transaction_entries',
+            'transactions',
+            'accounts',
+            'config',
+            'user_info',
+            'users',
+        ]);
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
@@ -68,9 +70,11 @@ class AccountBalanceBranchVisibilityTest extends TestCase
             $table->unsignedBigInteger('tableable_id')->nullable();
         });
 
-        $pdo = DB::connection()->getPdo();
-        $pdo->sqliteCreateFunction('CONCAT', static fn (...$values): string => implode('', $values), -1);
-        $pdo->sqliteCreateFunction('GREATEST', static fn (...$values): float => max($values), -1);
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $pdo = DB::connection()->getPdo();
+            $pdo->sqliteCreateFunction('CONCAT', static fn (...$values): string => implode('', $values), -1);
+            $pdo->sqliteCreateFunction('GREATEST', static fn (...$values): float => max($values), -1);
+        }
     }
 
     public function test_balance_sums_after_branch_filter_and_is_global_for_both_administrators(): void

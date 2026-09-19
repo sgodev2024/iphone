@@ -16,7 +16,7 @@ class TransactionPurchaseBusinessKeyConstraintTest extends TestCase
     {
         parent::setUp();
 
-        Schema::dropIfExists('transactions');
+        $this->dropFixtureTables(['transactions']);
         Schema::create('transactions', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id');

@@ -22,11 +22,13 @@ class ImportCouponCanonicalAccountingTest extends TestCase
     {
         parent::setUp();
 
-        Schema::dropIfExists('transaction_entries');
-        Schema::dropIfExists('transactions');
-        Schema::dropIfExists('import_coupon');
-        Schema::dropIfExists('accounts');
-        Schema::dropIfExists('companies');
+        $this->dropFixtureTables([
+            'transaction_entries',
+            'transactions',
+            'import_coupon',
+            'accounts',
+            'companies',
+        ]);
 
         Schema::create('companies', function (Blueprint $table): void {
             $table->id();
