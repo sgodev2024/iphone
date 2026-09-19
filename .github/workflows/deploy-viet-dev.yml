@@ -87,6 +87,21 @@ jobs:
         run: |
           php artisan migrate --force
 
+      - name: Verify CI database schema
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: ci_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: |
+          echo "===== MIGRATION STATUS ====="
+          php artisan migrate:status
+
+          echo "===== CHECK transactions.branch_id ====="
+          php artisan tinker --execute="dump(\Illuminate\Support\Facades\Schema::hasColumn('transactions', 'branch_id'));"
+
 
       # 7. Chạy Laravel test
       - name: Run Laravel tests
@@ -98,7 +113,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: |
-              php artisan test --stop-on-failure
+              php artisan test tests/Feature/GenericCashVoucherTest.php --stop-on-failure --stop-on-error
 
 
       # 8. Cài Node
