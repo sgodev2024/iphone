@@ -98,7 +98,7 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: |
-          php artisan test
+              php artisan test --stop-on-failure
 
 
       # 8. Cài Node
